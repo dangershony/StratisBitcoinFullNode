@@ -80,36 +80,36 @@ A new op code is proposed for the withdraw lock (perhaps it might be same as the
 
 ## jurney
 
-on parent chain we create a withdraw that locks coins to a sidechain (assume the sidechain was voted and approved) and to a specific address
+on parent chain we create a withdraw that locks coins to a sidechain (assume the sidechain was voted and approved) and to a specific address  
 
-structure of withdraw:
-scriptsig=<sig> <pubkey>
-scriptpubkey=op_withdraw op_drop <address> <sidechain-genesis>
+structure of withdraw:  
+scriptsig=<sig> <pubkey>  
+scriptpubkey=op_withdraw op_drop <address> <sidechain-genesis>  
 
-on the sidecahin voting starts for that withdraw, once approved
+on the sidecahin voting starts for that withdraw, once approved  
 
-note: we assume coins have been locked on the sidechain, as a sidechain can only have one parnet the coins must be locked to that parent.
-structure of locked coins in sidechain genesis:
-scriptsig=<empty>
-scriptpubkey=op_deposit <parent-genesis>
+note: we assume coins have been locked on the sidechain, as a sidechain can only have one parnet the coins must be locked to that parent.  
+structure of locked coins in sidechain genesis:  
+scriptsig=<empty>  
+scriptpubkey=op_deposit <parent-genesis>  
 
-create a trx on the sidechain that spends locked coins (with two outputs one to the target address second to lock the rest of the coins)
+create a trx on the sidechain that spends locked coins (with two outputs one to the target address second to lock the rest of the coins)  
 Its importantt to note that the script language is not enough to verify the trx
 in the consensus rules a check must be made that the trx in the parent (in the op_return data) is indeed successfuly voted on and the address is correct
-structure the deposit trx:
-scriptsig= <parent-genesis> op_equal op_return <voted-trxid-index-parent-chain>
-scriptpubkey=op_dup op_hash160 <pubkeyhash> op_equalverify op_checksig
-scriptpubkey=op_deposit <parent-genesis>
+structure the deposit trx:  
+scriptsig= <parent-genesis> op_equal op_return <voted-trxid-index-parent-chain>  
+scriptpubkey=op_dup op_hash160 <pubkeyhash> op_equalverify op_checksig  
+scriptpubkey=op_deposit <parent-genesis>  
 
-to send coins back to the parent we lock the coins to a deposit trx 
-scriptsig=<sig> <pubkey>
-scriptpubkey=op_deposit op_drop <address> <parent-genesis>
+to send coins back to the parent we lock the coins to a deposit trx   
+scriptsig=<sig> <pubkey>  
+scriptpubkey=op_deposit op_drop <address> <parent-genesis>  
 
 on the parent the trx is voted on and if success we pick one or several of the locked outputs to that sidechain
-again script language alone is not enough to verify the trx additional checks must be made  in the consensus rules
-scriptsig=<sidechain-genesis> op_equal op_return <voted-trxid-index-parent-chain>
-scriptsig=<sidechain-genesis> op_equal op_return <voted-trxid-index-parent-chain>
-scriptpubkey=op_dup op_hash160 <pubkeyhash> op_equalverify op_checksig
-scriptpubkey=op_withdraw <sidechain-genesis>
+again script language alone is not enough to verify the trx additional checks must be made  in the consensus rules  
+scriptsig=<sidechain-genesis> op_equal op_return <voted-trxid-index-parent-chain>  
+scriptsig=<sidechain-genesis> op_equal op_return <voted-trxid-index-parent-chain>  
+scriptpubkey=op_dup op_hash160 <pubkeyhash> op_equalverify op_checksig  
+scriptpubkey=op_withdraw <sidechain-genesis>  
 
 in the consensus rules if anh of the op codes are detected op_withdraw/op_deposit this is a sidechain trx and must get extra validation
