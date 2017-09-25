@@ -1,6 +1,6 @@
 
 ## [draft]
-Text surrounded with [this] are comments about changes/uncetainty in the draft proposal
+Text surrounded with [this] are comments about changes/uncertainty in the draft proposal
 still missing 
 - specific db field size
 - verification of the script language in the new op codes
@@ -21,7 +21,7 @@ Locking coins in a parent/child chain is called a 'withdraw'
 Unlocking coins on parent/child is called a 'deposit'
 
 The economy of sidechains can get very complicated so we stick to the following rules:
-- A tree chain structure - a parent chain with sidechains that are children of that parent, sidechain can also have children of thier own, transfers are only allowed between parent and child.
+- A tree chain structure - a parent chain with sidechains that are children of that parent, sidechain can also have children of their own, transfers are only allowed between parent and child.
 - Transfers from parent are locked to the sidechain they where sent to (i.e the locked coins can only be unlocked with transfers back from the chain they where sent to)
 - Chains that want to allow one way withdraw pegs can enable locking coins to a sidechian that was not voted (this is only for withdraw a deposit must have a sucessfuly voted chain)
 
@@ -34,7 +34,7 @@ OP_SIDECHAINVOTE <vote-type> <vote-data>
 ```
 
 ## voting on a sidechain
-For a parent chain to accept sidechain deposits, the sidechain itself needs to first be succesfuly voted in to the parent chain.
+For a parent chain to accept sidechain deposits, the sidechain itself needs to first be successfully voted in to the parent chain.
 This solves the problem of the parent chain that does not know about a later created sidechain, sidechains can just add a rule to add the parent chain when creating the sidechain.
 
 Sidechain db D1:
@@ -46,14 +46,14 @@ Sidechain DB D1 structure:
 - sidechain name 
 - sidechain identifier [can this just be the genesis]
 - genesis of the sidechain
-- number of blocks a withdraw must be burried under before it can be voted on
+- number of blocks a withdraw must be buried under before it can be voted on
 - denomination of the currency [to avoid complexity we may say this will always be 1:1]
 - voting start block - the block height from when voting will start (this is to allow miner to prepare)
 - voting period - how many blocks to vote on (do we need this? should there be a minimum?)
 - votes - how many positive votes the sidechain got
 - deposited period - the window allowed where the deposit can be added to the blockchain (after that the entry in D2 will be deleted)
 
-Voting on a sidechain is either yes or no. it should not be hard to vote on a sidechain so we propose that an absent of a vote counts as a yes and 95% of votes in the voting period must be yes (this can of course be configurable) then the parent chain can accept deposites from that sidechain.
+Voting on a sidechain is either yes or no. it should not be hard to vote on a sidechain so we propose that an absent of a vote counts as a yes and 95% of votes in the voting period must be yes (this can of course be configurable) then the parent chain can accept deposits from that sidechain.
 
 **Messages** Two types of messages in coinbase (this may use OP_RETURN as well)
 ```
@@ -72,14 +72,14 @@ If by the end of the voting period the sidechain is not approved it will be dele
 ## Voting on deposits
 
 A sidechain will be created with X amount of locked coins.
-**Note:** Its important to remember this, later we see that we must make sure there is a available locked coins on the sidechain, thats why only one M3 message is allowed per sidechain and only miners can create M3.
+**Note:** Its important to remember this, later we see that we must make sure there is a available locked coins on the sidechain, that’s why only one M3 message is allowed per sidechain and only miners can create M3.
 
 Two new op codes are suggested
 op_withdraw - this is an op that represents coins locked on a parent chain that are withdrawn
 op_deposit [explain more]
 
 Coins that are locked in a sidechain use OP_DEPOSIT op code with the parent genesis. this means only a deposit from that parent can unlock the coins, when coins are locked back (send to the parent chain) they are sent back to an OP_DEPOSIT.
-Coins that are locked in a parent use OP_WITHDRAW lock that specifies the address and target sidechain, this can only be unlocked with deposits from that sdeichain.
+Coins that are locked in a parent use OP_WITHDRAW lock that specifies the address and target sidechain, this can only be unlocked with deposits from that sidechain.
 
 **SPV Proof**
 An SPV Proof is a way of verifying a transaction is part of a block. 
@@ -108,7 +108,7 @@ OP_SIDECHAINVOTE <M4> <identifier, vote[1,0,-1]>
 OP_SIDECHAINVOTE <M4> <identifier, vote[1,0,-1],identifier, vote[1,0,-1], etc...> 
 ```
 
-An M3 will create an entry in D2 where vote count is zero, if vote failed after the vote perioud the entry will be deleted, if the vote is success the entry will be deleted with whent he trx is broadast or the deposti period is reached.
+An M3 will create an entry in D2 where vote count is zero, if vote failed after the vote period the entry will be deleted, if the vote is success the entry will be deleted with when the trx is broadcast or the deposit period is reached.
 There can only be 1 M3 per 
 An M4 message will change the value of vote count (a vote goes bellow 0 it will stay zero)
 
@@ -122,18 +122,18 @@ The condition to include such a trx in a block is the existence of a success vot
 Note: A withdraw lock must specify the address on the target chain and the target chain genesis.
 A withdraw that is locked to a sidechain can only be unlocked by deposits from that same chain.
 
-**Note:** The trx must spend any remaining locked coins to a new locked output with the remaning amount.
+**Note:** The trx must spend any remaining locked coins to a new locked output with the remaining amount.
 
 
-## Reorg implcations
+## Reorg implications
 
 [todo]
 How DB D1 and D2 should behave in a reorg 
 
-## Interaction of tranactions between two chains
+## Interaction of transactions between two chains
 
 **Send to sidechain**
-On the parent chain, firt make sure there are available locked deposits, then create a withdraw that locks coins to a sidechain and to a specific address  [consider only allowing 1 withdraw lock per block]
+On the parent chain, first make sure there are available locked deposits, then create a withdraw that locks coins to a sidechain and to a specific address [consider only allowing 1 withdraw lock per block]
 
 Structure of withdraw:  
 ```
@@ -141,7 +141,7 @@ scriptsig=<sig> <pubkey>
 scriptpubkey=<address> op_drop <sidechain-genesis> op_withdraw 
 ```
 
-Now on the sidecahin M3 is added to a coinbase and an entry in D2 voting starts for that withdraw.
+Now on the sidechain M3 is added to a coinbase and an entry in D2 voting starts for that withdraw.
 Once enough M4 messages have approved the M3 entry we can deposit.
 
 Note: Coins have to be locked on the sidechain, as a sidechain can only have one parent the coins must be locked to that parent.  
@@ -152,7 +152,7 @@ scriptpubkey=<parent-genesis> op_deposit
 ```
 
 Now we can create a trx on the sidechain that spends locked coins (the trx will have two outputs one to the target address second to lock the rest of the coins) and will have a reference to the M3 entry in D2. 
-Its importantt to note that the script language is not enough to verify the trx, in the consensus rules some validation must be done to check that the referenced trx is indeed successfuly voted on and the address is correct.
+Its important to note that the script language is not enough to verify the trx, in the consensus rules some validation must be done to check that the referenced trx is indeed successfully voted on and the address is correct.
 Structure the deposit trx:  
 ```
 scriptsig=<M3 entry> op_drop <parent-genesis> 
@@ -178,7 +178,7 @@ scriptsig=<M3 entry> op_drop <sidechain-genesis> op_equal   [do we need an op co
 scriptpubkey=op_dup op_hash160 <pubkeyhash> op_equalverify op_checksig  
 scriptpubkey=op_withdraw <sidechain-genesis>  
 ```
-Consnensu rules: if any of the op codes are detected op_withdraw/op_deposit this is a sidechain trx and must get extra validation (i.e. check athat the corect M3 exists in the D2 db.
+Consensus rules: if any of the op codes are detected op_withdraw/op_deposit this is a sidechain trx and must get extra validation (i.e. check that the correct M3 exists in the D2 db.
 
 
 
