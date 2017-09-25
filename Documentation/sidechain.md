@@ -1,6 +1,9 @@
 
 ## [draft]
 Text surrounded with [this] are comments about changes/uncetainty in the draft proposal
+still missing 
+- specific db field size
+- verification of the script language in the new op codes
 
 Sidechain technical proposal 
 ------------------------------
@@ -72,7 +75,7 @@ A sidechain will be created with X amount of locked coins.
 **Note:** Its important to remember this, later we see that we must make sure there is a available locked coins on the sidechain, thats why only one M3 message is allowed per sidechain and only miners can create M3.
 
 Two new op codes are suggested
-op_withdraw [explain more]
+op_withdraw - this is an op that represents coins locked on a parent chain that are withdrawn
 op_deposit [explain more]
 
 Coins that are locked in a sidechain use OP_DEPOSIT op code with the parent genesis. this means only a deposit from that parent can unlock the coins, when coins are locked back (send to the parent chain) they are sent back to an OP_DEPOSIT.
@@ -135,7 +138,7 @@ On the parent chain, firt make sure there are available locked deposits, then cr
 Structure of withdraw:  
 ```
 scriptsig=<sig> <pubkey>  
-scriptpubkey=op_withdraw op_drop <address> <sidechain-genesis>  
+scriptpubkey=<address> op_drop <sidechain-genesis> op_withdraw 
 ```
 
 Now on the sidecahin M3 is added to a coinbase and an entry in D2 voting starts for that withdraw.
@@ -145,33 +148,37 @@ Note: Coins have to be locked on the sidechain, as a sidechain can only have one
 Structure of locked coins in sidechain genesis:  
 ```
 scriptsig=<empty>  
-scriptpubkey=op_deposit <parent-genesis>  
+scriptpubkey=<parent-genesis> op_deposit
 ```
 
 Now we can create a trx on the sidechain that spends locked coins (the trx will have two outputs one to the target address second to lock the rest of the coins) and will have a reference to the M3 entry in D2. 
-Its importantt to note that the script language is not enough to verify the trx, in the consensus rules some validation must be done to check that the referenced (in the op_return data) is indeed successfuly voted on and the address is correct.
+Its importantt to note that the script language is not enough to verify the trx, in the consensus rules some validation must be done to check that the referenced trx is indeed successfuly voted on and the address is correct.
 Structure the deposit trx:  
 ```
-scriptsig= <parent-genesis> op_equal <M3 entry> [do we need an op code?]
+scriptsig=<M3 entry> op_drop <parent-genesis> 
 scriptpubkey=op_dup op_hash160 <pubkeyhash> op_equalverify op_checksig  
-scriptpubkey=op_deposit <parent-genesis>  
+scriptpubkey=<parent-genesis> op_deposit
 ```
 
 **Send to parent**
-Assuming a sidechain was voted successfully
+Assuming a sidechain was voted successfully on the parent chain
 
-to send coins back to the parent we lock the coins to a deposit trx   
+Sending coins back to the parent we lock the coins to a deposit trx   
 ```
 scriptsig=<sig> <pubkey>  
-scriptpubkey=op_deposit op_drop <address> <parent-genesis>  
+scriptpubkey=op_drop <address> <parent-genesis> op_deposit
 ```
 
-on the parent the trx is voted on and if success we pick one or several of the locked outputs to that sidechain
-again script language alone is not enough to verify the trx additional checks must be made  in the consensus rules  
+Now on the parent chain an M3 is added in coinbase and to D2 db.
+On the parent chain trx is voted on and if success we pick one or several of the locked outputs to that sidechain.
+Note: again script language alone is not enough to verify the trx additional checks must be made  in the consensus rules  
 ```
-scriptsig=<sidechain-genesis> op_equal op_return <voted-trxid-index-parent-chain>  
-scriptsig=<sidechain-genesis> op_equal op_return <voted-trxid-index-parent-chain>  
+scriptsig=<M3 entry> op_drop <sidechain-genesis> op_equal   [do we need an op code?]  
+scriptsig=<M3 entry> op_drop <sidechain-genesis> op_equal   [do we need an op code?]  
 scriptpubkey=op_dup op_hash160 <pubkeyhash> op_equalverify op_checksig  
 scriptpubkey=op_withdraw <sidechain-genesis>  
 ```
-in the consensus rules if anh of the op codes are detected op_withdraw/op_deposit this is a sidechain trx and must get extra validation
+Consnensu rules: if any of the op codes are detected op_withdraw/op_deposit this is a sidechain trx and must get extra validation (i.e. check athat the corect M3 exists in the D2 db.
+
+
+
