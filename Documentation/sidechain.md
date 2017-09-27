@@ -1,47 +1,56 @@
 
-## [draft]
-Text surrounded with [this] are comments about changes/uncertainty in the draft proposal
+## [Draft]
+Text in [brakets] are comments
+
 still missing 
-- specific db field size
-- verification of the script language in the new op codes
+- DB field size
+- Reorg
+- Issues
 
 Sidechain technical proposal 
 ------------------------------
 
-A proposal that is based on the Blockstream two way peg and the drivechain approach.  
+This proposal is based on the Blockstream two way peg and drivechain.  
 
-In this spec we describe a mechanism of miner voting.   
-Miners will vote on two types of messages 1. adding a sidechain 2. deposits from a sidechain   
+**In this spec we describe a way to move coins between two chains using miners vote.**   
+
+Miners will vote on two types of messages: 
+1. Adding a sidechain 
+2. Deposits from a sidechain   
+
 The voting processes is done for a fixed amount of blocks and a percentage of positive votes indicate success.  
 Note: This model will work for both POS and POW (as oppose to SPV Proofs that use work to verify a withdraw is valid)  
 
-[drivechain has a nice sections on why miner voting is a fine perhaps adding some links here is a good idea]
+[drivechain has a nice sections on why miner voting is a fine share?]
 
-Locking coins in a parent/child chain is called a 'withdraw'  
-Unlocking coins on parent/child is called a 'deposit'  
+We describe two concepts in the context of sidechains.  
+- A 'withdraw' - Locking coins in a parent chain.    
+- A 'deposit' - Unlocking coins on a child chain.     
 
 The economy of sidechains can get very complicated so we stick to the following rules:
-- A tree chain structure - a parent chain with sidechains that are children of that parent, sidechain can also have children of their own, transfers are only allowed between parent and child.  
-- Transfers from parent are locked to the sidechain they where sent to (i.e the locked coins can only be unlocked with transfers back from the chain they where sent to)  
-- Chains that want to allow one way withdraw pegs can enable locking coins to a sidechian that was not voted (this is only for withdraw a deposit must have a sucessfuly voted chain)  
+- A tree chain structure - a parent chain with sidechains that are children of that parent, sidechain can also have children of their own, transfers are only allowed between parent and its direct child.  
+- Transfers are locked to the sidechain they where sent to (i.e the locked coins can only be unlocked with transfers back from the chain they where sent to)  
+- One way transfer - to support one way transfers a parent can lock coins to a sidechain that has not been voted on (the sidechain has not been added to the parent db)  
 
-## How voting may work
-One solution is to use the OP_RETURN in the coinbase when voting on messages in to the chain, this might not be enough as I propose some votes will need more data then OP_RETURN is allowed.  
-If the OP_RETURN is not enough a new op code may be used for sidechain voting OP_SIDECHAINVOTE, consensus rules will enforce it to be located as a coinbase output with zero value, and contain voting data, it will act similar to OP_RETURN and return false from the stack.  
-An example of an OP_SIDECHAINVOTE  
+## How voting will work
+Voting messages will be added to the coinbase by miners as an output, there are two ways vote messages can be added to coinbase
+1. Either use the OP_RETURN, this might not be enough as I propose some votes will need more data then is allowed in the OP_RETURN.  
+2. In that case a new sidechain op code is proposed OP_SIDECHAIN, consensus rules will enforce it to be inside a coinbase output with zero value, and contain voting data, it will behave similar to OP_RETURN, return false from the stack.  
+An example of an OP_SIDECHAIN  
 ```
-OP_SIDECHAINVOTE <vote-type> <vote-data>
+OP_SIDECHAIN <vote-type> <vote-data>
 ```
 
-## Voting on a sidechain
-For a parent chain to accept sidechain deposits, the sidechain itself needs to first be successfully voted in to the parent chain.
-This solves the problem of the parent chain that does not know about a later created sidechain, sidechains can just add a rule to add the parent chain when creating the sidechain.
+## Voting to add a sidechain
+For a parent and child chains to accept sidechain deposits, the sidechain itself needs to first be successfully voted on.  
+This solves the problem of the parent chain that does not know about a later created sidechain.  
+To avoid voting on a parent a new child chains can just add a parent at creation of the chain (i.e chains in the genesis block are included without voting).
 
-Sidechain db D1:
+Sidechain store:
 Voted sidechain will go in the D1 and will stay there as an entry.
 [WIP] we may decide to add the ability to delete a sidechain.
 
-Sidechain DB D1 structure:
+The SidechainStore structure:
 
 - sidechain name 
 - sidechain identifier [can this just be the genesis]
