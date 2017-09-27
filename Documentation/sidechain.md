@@ -14,7 +14,7 @@ This proposal is based on the Blockstream two way peg and drivechain.
 
 **In this spec we describe a way to move coins between two chains using miners vote.**   
 
-#####Miners will vote on two types of messages: 
+##### Miners will vote on two types of messages: 
 1. Adding a sidechain 
 2. Deposits from a sidechain   
 
@@ -23,7 +23,7 @@ The voting processes is done for a fixed amount of blocks and a percentage of po
 
 [drivechain has a nice sections on why miner voting is a fine share?]
 
-#####We describe two concepts in the context of sidechains.  
+##### We describe two concepts in the context of sidechains.  
 - A 'withdraw' - Locking coins in a parent chain.    
 - A 'deposit' - Unlocking coins on a child chain.     
 
