@@ -34,112 +34,129 @@ The economy of sidechains can get very complicated so we stick to the following 
 
 ## How voting will work
 Voting messages will be added to the coinbase by miners as an output, there are two ways vote messages can be added to coinbase
-1. Either use the OP_RETURN, this might not be enough as I propose some votes will need more data then is allowed in the OP_RETURN.  
-2. In that case a new sidechain op code is proposed OP_SIDECHAIN, consensus rules will enforce it to be inside a coinbase output with zero value, and contain voting data, it will behave similar to OP_RETURN, return false from the stack.  
+1. Either use the OP_RETURN.  
+This might not be enough as I propose some votes will need more data then is allowed in the OP_RETURN.  
+2. Use a new OP_SIDECHAIN.  
+In that case a new sidechain op code is proposed OP_SIDECHAIN, consensus rules will enforce it to be inside a coinbase output with zero value, and contain voting data, it will behave similar to OP_RETURN, return false from the stack.  
 An example of an OP_SIDECHAIN  
 ```
 OP_SIDECHAIN <vote-type> <vote-data>
 ```
 
-## Voting to add a sidechain
+## The vote to add a sidechain
 For a parent and child chains to accept sidechain deposits, the sidechain itself needs to first be successfully voted on.  
-This solves the problem of the parent chain that does not know about a later created sidechain.  
-To avoid voting on a parent a new child chains can just add a parent at creation of the chain (i.e chains in the genesis block are included without voting).
+*This solves the problem of the parent chain that does not know about a later created sidechain.*  
+To avoid the need to vote a parent on a new child chains we add a parent to genesis (i.e chains in the genesis block are included without voting).
 
 Sidechain store:
-Voted sidechain will go in the D1 and will stay there as an entry.
-[WIP] we may decide to add the ability to delete a sidechain.
+The sidechain store will be a direct reflection of its relevant messages in coinbase.
 
 The SidechainStore structure:
 
-- sidechain name 
-- sidechain identifier [can this just be the genesis]
-- genesis of the sidechain
-- number of blocks a withdraw must be buried under before it can be voted on
-- denomination of the currency [to avoid complexity we may say this will always be 1:1]
-- voting start block - the block height from when voting will start (this is to allow miner to prepare)
-- voting period - how many blocks to vote on (do we need this? should there be a minimum?)
-- votes - how many positive votes the sidechain got
-- deposited period - the window allowed where the deposit can be added to the blockchain (after that the entry in D2 will be deleted)
+Field | Size | Description
+------------ | -------------
+sidechain name | 50 byts | A useful name for the sidechain
+sidechain identifier | 32 byts | the sidechain genesis hash
+withdraw trashold | uint | how many blocks the withdraw lock must be buried under
+denomination | uint | always 1:[denomination] 
+voting start block | uint | the block the vote will start on
+vote count| uint | yes/no (default: yes)
+deposite period| uint | the window allowed where the deposit can be added to the blockchain 
 
-Voting on a sidechain is either yes or no. it should not be hard to vote on a sidechain so we propose that an absent of a vote counts as a yes and 95% of votes in the voting period must be yes (this can of course be configurable) then the parent chain can accept deposits from that sidechain.  
+**Vote duration and success criteria will be a hard coded values in the chain.**
 
-**Messages:** Two types of messages in coinbase (this may use OP_RETURN as well)
+Voting on a sidechain is either yes or no.  
+It should not be hard to vote on a sidechain so we propose that an absent of a vote counts as a yes and 95% of votes in the voting period must be yes.  
+
+**Message type:**  
+We define two types of messages in coinbase when voting on a sidechain
 ```
-OP_SIDECHAINVOTE <M1> <name,genesis,bureidunder,deno,start,perioud,depositeperioud>
+OP_SIDECHAIN <V1> <name,identifier,trashold,deno,start,perioud,depositeperioud>
 ```
 ```
-OP_SIDECHAINVOTE <M2> <genesis, vote[1,0,none=1]>
-
-[optional approach] 
-OP_SIDECHAINVOTE <M2> <genesis, vote[1,0,none=1], genesis, vote[1,0,none=1], etc...> 
+OP_SIDECHAIN <V2> <genesis, vote[1,0,none=1], genesis, vote[1,0,none=1], etc...> 
 ```
 
-The reason to only allow miners to propose sidechains M1 (not just vote on them is) is miner commitment.
-If by the end of the voting period the sidechain is not approved it will be deleted from D1
+The reason to only allow miners to propose sidechains V1 (not just vote on them) is miner commitment.  
+If by the end of the voting period the sidechain is not approved it will be deleted from SidechainStore.  
 
-## Voting on deposits
+## The vote to remove a sidechain
+[WIP]
 
-A sidechain will be created with X amount of locked coins.
-**Note:** Its important to remember this, later we see that we must make sure there is a available locked coins on the sidechain, that’s why only one M3 message is allowed per sidechain and only miners can create M3.
+## Voting to add a deposit
 
-Two new op codes are suggested
-op_withdraw - this is an op that represents coins locked on a parent chain that are withdrawn
-op_deposit [explain more]
+Sidechains when created will require to add X amount of locked coins in the genesis block (the locked amount depends on the sidechain creator).  
+**Note:** Its important to remember this, later we see that we must make sure there is available locked coins on the sidechain, that’s why only one V3 message is allowed per sidechain and only miners can create a V3.
 
-Coins that are locked in a sidechain use OP_DEPOSIT op code with the parent genesis. this means only a deposit from that parent can unlock the coins, when coins are locked back (send to the parent chain) they are sent back to an OP_DEPOSIT.
+#### We suggest two new op codes for the purpose of transfering coins.   
+
+**op_withdraw** - This is an op that represents coins locked on a parent chain.
+**op_deposit** - This is an op that represents coins locked on a child chain.
+
+The behaviour of the op codes is the sam as op_equiv (check that two items on the stack at the same) however they get thier own op code to mark them as a sidechian message, so additionl consnesus rules can be applied to it to such outputs.
+
+Coins that are locked in a sidechain use OP_DEPOSIT with the parent genesis. this means only a deposit from that parent can unlock the coins, when coins are locked back (send to the parent chain) they are sent back to an OP_DEPOSIT.
 Coins that are locked in a parent use OP_WITHDRAW lock that specifies the address and target sidechain, this can only be unlocked with deposits from that sidechain.
 
 **SPV Proof**
-An SPV Proof is a way of verifying a transaction is part of a block.  
+An SPV Proof is a way of verifying a transaction is included in a block.  
 Having an SPV Proof of the withdraw will remove the need for voting miners to track the full parent/child chain and hopefully bring more miners to participate.  
 
-Sidechain DB D2 structure
-- identifier - the withdraw trx hash and index of the locked output
-- sidechain identifier - one of the entries in D1
-- voting start block 
-- vote count - how many votes this withdraw got
-[SPV Proofs]
-- withdraw transaction 
-- blockheader - of where the trx was confirmed
-- Merkle proof of the existence of the trx in the block
+SidechainDepositStore structure
+Field | Size | Description
+------------ | -------------
+identifier | 32 byts + 4 bytes | trx id and index output that is voted on, we may limit a withdraw to one output and drop to 4 byte.
+sidechain identifier | 32 byts | the sidechain genesis hash
+voting start block | uint | the block the vote will start
+vote count| uint | yes/no/none (default: none)
+withdraw transaction | ? | used for an SPV Proofs
+blockheader| 80 bytes | used for an SPV Proofs
+Merkle proof| ? | used for an SPV Proofs
 
-Miner votes can be yes/no/none no message means a vote of zero
+**Miner votes:**
+- yes - 1 increase the vout count by 1 
+- no - -1 decrrease the votecount by 1
+- none - no vote was found will do nothing to the vout count.
 
-**Messages:** two types of messages in coinbase (this may use OP_RETURN as well)
+**Vote duration and success criteria will be a hard coded values in the chain.**
+
+**Messages types:** 
+We define two types of messages in coinbase when voting on a withdraw
 ```
-OP_SIDECHAINVOTE <M3> <identifier,sidechain-identifier,voting-start,withdraw-transaction,blockheader,merkle-proof>
+OP_SIDECHAIN <V3> <identifier,sidechain-identifier,voting-start,withdraw-transaction,blockheader,merkle-proof>
 ```
 ```
-OP_SIDECHAINVOTE <M4> <identifier, vote[1,0,-1]>
-
-[alternatively a multi vote message] 
-OP_SIDECHAINVOTE <M4> <identifier, vote[1,0,-1],identifier, vote[1,0,-1], etc...> 
+OP_SIDECHAIN <V4> <identifier, vote[1,0,-1],identifier, vote[1,0,-1], etc...> 
 ```
 
-An M3 will create an entry in D2 where vote count is zero, if vote failed after the vote period the entry will be deleted, if the vote is success the entry will be deleted with when the trx is broadcast or the deposit period is reached.  
-There can only be 1 M3 per sidechian vote.  
-An M4 message will change the value of vote count (a vote goes bellow 0 it will stay zero)
+A V3 will create an entry in SidechainDepositStore where vote count will start at zero, if a vote is not passed the success criteria after the vote period the entry will be deleted, if the vote is success the entry will be deleted 1. when the trx is foundin a block or the deposit period is reached.  
+There can only be one V3 per sidechian vote.  
+A V4 message will change the value of vote count (a vote can be negative).  
 
-[suggestion]
-A suggested threshold of 60% can be considered success (the reason for 60% difficulty is such that if a too low value is used this might allow a small group of malicious miners to approve bad withdraws, too high a value will make it very hard to deposit sidechain transactions assuming not all miners will want to track a sidechain)  
+**Possible success criteria**  
+A threshold of 60% can be considered success (the reason for 60% difficulty is such that if a too low value is used this might allow a small group of malicious miners to approve bad withdraws, too high a value will make it very hard to deposit sidechain transactions assuming not all miners will want to track a sidechain)  
 
-Once the vote is success the deposit transaction may be broadcast to the chain within the deposit window.  
-Its important to note that a deposit trx must spend locked coins (coins either locked in genesis or in a past withdraws out of the chain)  
-The condition to include such a trx in a block is the existence of a success vote in D2 (as a result every node can verify that condition)  
+**successful vote**  
+Once the vote is a success the deposit transaction may be included in a block within the deposit window (a user can then broadcast and get it included in a block).  
+It's important to note that a deposit trx must spend locked coins (coins either locked in genesis or in a past withdraw out of the chain)  
+Consensus rules will enforece that such a trx has a succesfuly voted V3 messages in SidechainDepositStore.  
 
 Note: A withdraw lock must specify the address on the target chain and the target chain genesis.  
 A withdraw that is locked to a sidechain can only be unlocked by deposits from that same chain.  
 
-**Note:** The trx must spend any remaining locked coins to a new locked output with the remaining amount.  
-
+The trx must spend any remaining locked coins to a new locked output with the remaining amount minus fee.  
 
 ## Reorg implications
 
 [todo]
-How DB D1 and D2 should behave in a reorg 
+How store should behave in a reorg 
+
+## Issues and considerations 
+Sidehcain is depleted of locked  deposits the withdraw will be stuck on the parent.
 
 ## Interaction of transactions between two chains
+
+We'll go over a transfer example of the script language on each transaction `parent -> child` and `child -> parent`.
 
 **Send to sidechain**
 On the parent chain, first make sure there are available locked deposits, then create a withdraw that locks coins to a sidechain and to a specific address [consider only allowing 1 withdraw lock per block]
