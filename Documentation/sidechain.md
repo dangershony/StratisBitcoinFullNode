@@ -1,6 +1,6 @@
 
 ## [Draft]
-Text in [brakets] are comments
+Text in [brackets] are comments
 
 still missing 
 - DB field size
@@ -10,7 +10,7 @@ still missing
 Sidechain technical proposal 
 ------------------------------
 
-This proposal is based on the Blockstream two way peg and drivechain.  
+This proposal is based on the Blockstream two-way peg and drivechain.  
 
 **In this spec we describe a way to move coins between two chains using miners vote.**   
 
@@ -21,7 +21,7 @@ This proposal is based on the Blockstream two way peg and drivechain.
 The voting processes is done for a fixed amount of blocks and a percentage of positive votes indicate success.  
 *This model will work for both POS and POW (as oppose to SPV Proofs that use work to verify a withdraw is valid)*  
 
-[drivechain has a nice sections on why miner voting is a fine share?]
+[drivechain has a nice section on why miner voting is a fine share?]
 
 ##### We describe two concepts in the context of sidechains.  
 - A 'withdraw' - Locking coins in a parent chain.    
@@ -29,13 +29,13 @@ The voting processes is done for a fixed amount of blocks and a percentage of po
 
 The economy of sidechains can get very complicated so we stick to the following rules:
 - A tree chain structure - a parent chain with sidechains that are children of that parent, sidechain can also have children of their own, transfers are only allowed between parent and its direct child.  
-- Transfers are locked to the sidechain they where sent to (i.e the locked coins can only be unlocked with transfers back from the chain they where sent to)  
-- One way transfer - to support one way transfers a parent can lock coins to a sidechain that has not been voted on (the sidechain has not been added to the parent db)  
+- Transfers are locked to the sidechain they were sent to (i.e. the locked coins can only be unlocked with transfers back from the chain they were sent to)  
+- One-way transfer - to support one way transfers a parent can lock coins to a sidechain that has not been voted on (the sidechain has not been added to the parent db)  
 
 ## How voting will work
 Voting messages will be added to the coinbase by miners as an output, there are two ways vote messages can be added to coinbase
 1. Either use the OP_RETURN.  
-This might not be enough as I propose some votes will need more data then is allowed in the OP_RETURN.  
+This might not be enough as I propose some votes will need more data than is allowed in the OP_RETURN.  
 2. Use a new OP_SIDECHAIN.  
 In that case a new sidechain op code is proposed OP_SIDECHAIN, consensus rules will enforce it to be inside a coinbase output with zero value, and contain voting data, it will behave similar to OP_RETURN, return false from the stack.  
 An example of an OP_SIDECHAIN  
@@ -46,7 +46,7 @@ OP_SIDECHAIN <vote-type> <vote-data>
 ## The vote to add a sidechain
 For a parent and child chains to accept sidechain deposits, the sidechain itself needs to first be successfully voted on.  
 *This solves the problem of the parent chain that does not know about a later created sidechain.*  
-To avoid the need to vote a parent on a new child chains we add a parent to genesis (i.e chains in the genesis block are included without voting).
+To avoid the need to vote a parent on a new child chains we add a parent to genesis (i.e. chains in the genesis block are included without voting).
 
 Sidechain store:
 The sidechain store will be a direct reflection of its relevant messages in coinbase.
@@ -88,12 +88,12 @@ If by the end of the voting period the sidechain is not approved it will be dele
 Sidechains when created will require to add X amount of locked coins in the genesis block (the locked amount depends on the sidechain creator).  
 **Note:** Its important to remember this, later we see that we must make sure there is available locked coins on the sidechain, that’s why only one V3 message is allowed per sidechain and only miners can create a V3.
 
-#### We suggest two new op codes for the purpose of transfering coins.   
+#### We suggest two new op codes for the purpose of transferring coins.   
 
 **op_withdraw** - This is an op that represents coins locked on a parent chain.
 **op_deposit** - This is an op that represents coins locked on a child chain.
 
-The behaviour of the op codes is the sam as OP_EQUAL (check that two items on the stack are the same) however they get thier own op code to mark them as a sidechian message, this will trigger additionl consnesus rules checks.
+The behaviour of the op codes is the same as OP_EQUAL (check that two items on the stack are the same) however they get their own op code to mark them as a sidechain message, this will trigger additionl consnesus rules checks.
 
 Coins that are locked in a sidechain use OP_DEPOSIT with the parent genesis. this means only a deposit from that parent can unlock the coins, when coins are locked back (send to the parent chain) they are sent back to an OP_DEPOSIT.
 Coins that are locked in a parent use OP_WITHDRAW lock that specifies the address and target sidechain, this can only be unlocked with deposits from that sidechain.
@@ -115,9 +115,9 @@ blockheader| 80 bytes | used for an SPV Proofs
 Merkle proof| ? | used for an SPV Proofs
 
 **Miner votes:**
-- yes - 1 increase the vout count by 1 
-- no - -1 decrrease the votecount by 1
-- none - no vote was found will do nothing to the vout count.
+- yes = increase the vote count by 1 
+- no = decrease the vote count by 1
+- none - no vote was found will do nothing to the vote count.
 
 **Vote duration and success criteria will be a hard coded values in the chain.**
 
@@ -130,8 +130,8 @@ OP_SIDECHAIN <V3> <identifier,sidechain-identifier,voting-start,withdraw-transac
 OP_SIDECHAIN <V4> <identifier, vote[1,0,-1],identifier, vote[1,0,-1], etc...> 
 ```
 
-A V3 will create an entry in SidechainDepositStore where vote count will start at zero, if a vote is not passed the success criteria after the vote period the entry will be deleted, if the vote is success the entry will be deleted 1. when the trx is foundin a block or 2. the deposit period is reached.  
-There can only be one V3 per sidechian vote.  
+A V3 will create an entry in SidechainDepositStore where vote count will start at zero, if a vote is not passed the success criteria after the vote period the entry will be deleted, if the vote is success the entry will be deleted 1. when the trx is found in a block or 2. the deposit period is reached.  
+There can only be one V3 per sidechain vote.  
 A V4 message will change the value of vote count (a vote can be negative).  
 
 **Possible success criteria**  
@@ -140,7 +140,7 @@ A threshold of 60% can be considered success (the reason for 60% difficulty is s
 **Successful vote**  
 Once the vote is a success the deposit transaction may be included in a block within the deposit window (a user can then broadcast and get it included in a block).  
 It's important to note that a deposit trx must spend locked coins (coins either locked in genesis or in a past withdraw out of the chain)  
-Consensus rules will enforece that such a trx has a succesfuly voted V3 messages in SidechainDepositStore.  
+Consensus rules will enforce that such a trx has a successfully voted V3 messages in SidechainDepositStore.  
 
 Note: A withdraw lock must specify the address on the target chain and the target chain genesis.  
 A withdraw that is locked to a sidechain can only be unlocked by deposits from that same chain.  
@@ -153,7 +153,7 @@ The trx must spend any remaining locked coins to a new locked output with the re
 How store should behave in a reorg 
 
 ## Issues and considerations 
-Sidehcain is depleted of locked  deposits the withdraw will be stuck on the parent.
+Sidechain is depleted of locked deposits the withdraw will be stuck on the parent.
 
 ## Interaction of transactions between two chains
 
@@ -179,7 +179,7 @@ scriptpubkey=<parent-genesis> op_deposit
 
 **Wait period**  
 We wait on the parent for the trx to be buried under enough blocks.  
-On the sidechain a miner will add a V3 message to a coinbase and an entry into SidechainDepositStore, voting starts for that withdraw.  
+On the sidechain, a miner will add a V3 message to a coinbase and an entry into SidechainDepositStore, voting starts for that withdraw.  
 Once enough V4 messages have approved the V3 entry we can create the deposit transaction.  
 
 **Create a deposit transaction on the sidechain**  
@@ -197,7 +197,7 @@ The P2PKH output can then be spent normally.
 #### Send to parent  
 Assuming a sidechain was voted successfully on the parent chain.  
 
-In order to send coins back to the parent first we lock the coins to a deposit trx   
+To send coins back to the parent first we lock the coins to a deposit trx   
 ```
 scriptsig=<sig> <pubkey>  
 scriptpubkey=<address> op_drop <parent-genesis> op_deposit
@@ -205,9 +205,9 @@ scriptpubkey=<address> op_drop <parent-genesis> op_deposit
 
 **Wait period** 
 We wait on the child for the trx to be buried under enough blocks.  
-On the parent chain an V3 is added in coinbase and to SidechainDepositStore.   
+On the parent chain, an V3 is added in coinbase and to SidechainDepositStore.   
 On the parent chain trx is voted on and if success we pick one or several of the locked outputs to that sidechain.  
-Note: again script language alone is not enough to verify the trx additional checks must be made  in the consensus rules.    
+Note: again, script language alone is not enough to verify the trx additional checks must be made in the consensus rules.    
 ```
 scriptsig=<M3-entry> op_drop <sidechain-genesis>    
 scriptsig=<M3-entry> op_drop <sidechain-genesis>   
@@ -217,6 +217,4 @@ scriptpubkey=op_withdraw <sidechain-genesis>
 
 **Consensus rules:**  
 If any of the op codes op_withdraw/op_deposit are detected this is a sidechain trx and must get extra validation (i.e. check that the correct V3 entry exists in SidechainDepositStore and that the target address in the V3 trx matches the destination address in the chain trx).
-
-
 
