@@ -12,7 +12,7 @@ Sidechain technical proposal
 
 This proposal is based on the Blockstream two-way peg and drivechain.  
 
-**In this spec we describe a way to move coins between two chains using miners vote.**   
+**In this document we describe a way to move coins between two chains using miners to vote on validity of withdrawals.**   
 
 ##### Miners will vote on two types of messages: 
 1. Adding a sidechain 
@@ -24,8 +24,8 @@ The voting processes is done for a fixed amount of blocks and a percentage of po
 [drivechain has a nice section on why miner voting is a fine share?]
 
 ##### We describe two concepts in the context of sidechains.  
-- A 'withdraw' - Locking coins in a parent chain.    
-- A 'deposit' - Unlocking coins on a child chain.     
+- A 'withdraw' - Coins that are locked on a parent chain.    
+- A 'deposit' - Coins that are locked on a child chain.     
 
 The economy of sidechains can get very complicated so we stick to the following rules:
 - A tree chain structure - a parent chain with sidechains that are children of that parent, sidechain can also have children of their own, transfers are only allowed between parent and its direct child.  
