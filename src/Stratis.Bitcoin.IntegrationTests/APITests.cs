@@ -31,7 +31,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             // These tests use Network.Stratis.
             // Ensure that these static flags have the expected value.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
         }
 
         public void Dispose()
@@ -44,7 +44,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             // Here we're resetting the TimeStamp after every test so it doesn't cause any trouble.
 
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
 
             if (client != null)
             {
@@ -61,7 +61,7 @@ namespace Stratis.Bitcoin.IntegrationTests
         {
 
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
 
             try
             {
@@ -192,8 +192,8 @@ namespace Stratis.Bitcoin.IntegrationTests
 
         public ApiTestsFixture()
         {
-            this.initialBlockSignature = Block.BlockSignature;
-            Block.BlockSignature = false;
+            this.initialBlockSignature = PowBlock.BlockSignature;
+            PowBlock.BlockSignature = false;
 
             this.builder = NodeBuilder.Create();
 
@@ -218,7 +218,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             var walletManager = this.stratisPowNode.FullNode.NodeService<IWalletManager>() as WalletManager;
             walletManager.Start();
 
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
 
             this.stratisStakeNode = this.builder.CreateStratisPosNode(false, fullNodeBuilder =>
             {
@@ -241,7 +241,7 @@ namespace Stratis.Bitcoin.IntegrationTests
         public void Dispose()
         {
             this.builder.Dispose();
-            Block.BlockSignature = this.initialBlockSignature;
+            PowBlock.BlockSignature = this.initialBlockSignature;
         }
 
         /// <summary>

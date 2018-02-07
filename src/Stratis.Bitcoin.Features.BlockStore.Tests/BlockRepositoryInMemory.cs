@@ -9,7 +9,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
 {
     public class BlockRepositoryInMemory : IBlockRepository
     {
-        private ConcurrentDictionary<uint256, Block> store;
+        private ConcurrentDictionary<uint256, PowBlock> store;
         public uint256 BlockHash { get; private set; }
         public bool TxIndex { get; private set; }
         public BlockStoreRepositoryPerformanceCounter PerformanceCounter { get; private set; }
@@ -24,7 +24,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
 
         public Task InitializeAsync()
         {
-            this.store = new ConcurrentDictionary<uint256, Block>();
+            this.store = new ConcurrentDictionary<uint256, PowBlock>();
             this.PerformanceCounter = new BlockStoreRepositoryPerformanceCounter(DateTimeProvider.Default);
 
             return Task.FromResult<object>(null);
@@ -32,11 +32,11 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
 
         public Task DeleteAsync(uint256 newlockHash, List<uint256> hashes)
         {
-            Block block = null;
+            PowBlock powBlock = null;
 
             foreach (var hash in hashes)
             {
-                this.store.TryRemove(hash, out block);
+                this.store.TryRemove(hash, out powBlock);
             }
 
             this.SetBlockHashAsync(newlockHash);
@@ -49,12 +49,12 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
             return Task.FromResult(this.store.ContainsKey(hash));
         }
 
-        public Task<Block> GetAsync(uint256 hash)
+        public Task<PowBlock> GetAsync(uint256 hash)
         {
             return Task.FromResult(this.store[hash]);
         }
 
-        public Task PutAsync(uint256 nextBlockHash, List<Block> blocks)
+        public Task PutAsync(uint256 nextBlockHash, List<PowBlock> blocks)
         {
             foreach (var block in blocks)
             {

@@ -307,14 +307,14 @@ namespace Stratis.Bitcoin.Features.BlockStore
             foreach (InventoryVector item in getDataPayload.Inventory.Where(inv => inv.Type.HasFlag(InventoryType.MSG_BLOCK)))
             {
                 // TODO: check if we need to add support for "not found"
-                Block block = await this.blockStoreCache.GetBlockAsync(item.Hash).ConfigureAwait(false);
+                PowBlock powBlock = await this.blockStoreCache.GetBlockAsync(item.Hash).ConfigureAwait(false);
 
-                if (block != null)
+                if (powBlock != null)
                 {
                     this.logger.LogTrace("Sending block '{0}' to peer '{1}'.", item.Hash, peer.RemoteSocketEndpoint);
 
                     //TODO strip block of witness if node does not support
-                    await peer.SendMessageAsync(new BlockPayload(block.WithOptions(peer.SupportedTransactionOptions))).ConfigureAwait(false);
+                    await peer.SendMessageAsync(new BlockPayload(powBlock.WithOptions(peer.SupportedTransactionOptions))).ConfigureAwait(false);
                 }
 
                 // If the peer is syncing using "getblocks" message we are supposed to send 

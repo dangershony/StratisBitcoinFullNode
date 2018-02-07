@@ -50,10 +50,10 @@ namespace Stratis.Bitcoin.Features.Consensus.Interfaces
         /// <summary>
         /// Get transaction identifiers to try to pre-fetch them from cache.
         /// </summary>
-        /// <param name="block">The block containing transactions to fetch.</param>
+        /// <param name="powBlock">The block containing transactions to fetch.</param>
         /// <param name="enforceBIP30"><c>true</c> to enforce BIP30.</param>
         /// <returns>List of transaction ids.</returns>
-        uint256[] GetIdsToFetch(Block block, bool enforceBIP30);
+        uint256[] GetIdsToFetch(PowBlock powBlock, bool enforceBIP30);
 
         /// <summary>
         /// Initialize components in <see cref="Consensus.ConsensusLoop"/>.

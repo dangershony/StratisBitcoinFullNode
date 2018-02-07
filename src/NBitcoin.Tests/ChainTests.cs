@@ -13,7 +13,7 @@ namespace NBitcoin.Tests
             // These flags may get set due to static network initializers
             // which include the initializers for Stratis.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         [Fact]
@@ -491,9 +491,9 @@ namespace NBitcoin.Tests
             ChainedBlock block = mainTip.GetAncestor(branchLength - 1);
             for (int i = 0; i < branchLength; i++)
             {
-                Block newBlock = TestUtils.CreateFakeBlock();
-                newBlock.Header.HashPrevBlock = block.Header.GetHash();
-                block = new ChainedBlock(newBlock.Header, newBlock.Header.GetHash(), block);
+                PowBlock newPowBlock = TestUtils.CreateFakeBlock();
+                newPowBlock.Header.HashPrevBlock = block.Header.GetHash();
+                block = new ChainedBlock(newPowBlock.Header, newPowBlock.Header.GetHash(), block);
             }
             ChainedBlock branchTip = block;
 

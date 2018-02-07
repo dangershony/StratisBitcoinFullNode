@@ -23,7 +23,7 @@ namespace NBitcoin.Tests
             // These flags may get set due to static network initializers
             // which include the initializers for Stratis.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         [Fact]
@@ -70,7 +70,7 @@ namespace NBitcoin.Tests
 
         private ChainedBlock CreateBlock(DateTimeOffset now, int offset, ChainBase chain = null)
         {
-            Block b = new Block(new BlockHeader()
+            PowBlock b = new PowBlock(new BlockHeader()
             {
                 BlockTime = now + TimeSpan.FromMinutes(offset)
             });

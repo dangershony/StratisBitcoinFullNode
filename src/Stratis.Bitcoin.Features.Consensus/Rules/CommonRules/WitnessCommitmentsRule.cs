@@ -15,7 +15,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         public override Task RunAsync(RuleContext context)
         {
             DeploymentFlags deploymentFlags = context.Flags;
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
 
             // Validation for witness commitments.
             // * We compute the witness hash (which is the hash including witnesses) of all the block's transactions, except the
@@ -28,15 +28,15 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
             bool fHaveWitness = false;
             if (deploymentFlags.ScriptFlags.HasFlag(ScriptVerify.Witness))
             {
-                int commitpos = this.GetWitnessCommitmentIndex(block);
+                int commitpos = this.GetWitnessCommitmentIndex(powBlock);
                 if (commitpos != -1)
                 {
-                    uint256 hashWitness = BlockWitnessMerkleRoot(block, out bool malleated);
+                    uint256 hashWitness = BlockWitnessMerkleRoot(powBlock, out bool malleated);
 
                     // The malleation check is ignored; as the transaction tree itself
                     // already does not permit it, it is impossible to trigger in the
                     // witness tree.
-                    WitScript witness = block.Transactions[0].Inputs[0].WitScript;
+                    WitScript witness = powBlock.Transactions[0].Inputs[0].WitScript;
                     if ((witness.PushCount != 1) || (witness.Pushes.First().Length != 32))
                     {
                         this.Logger.LogTrace("(-)[BAD_WITNESS_NONCE_SIZE]");
@@ -48,7 +48,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
                     Buffer.BlockCopy(witness.Pushes.First(), 0, hashed, 32, 32);
                     hashWitness = Hashes.Hash256(hashed);
 
-                    if (!this.EqualsArray(hashWitness.ToBytes(), block.Transactions[0].Outputs[commitpos].ScriptPubKey.ToBytes(true).Skip(6).ToArray(), 32))
+                    if (!this.EqualsArray(hashWitness.ToBytes(), powBlock.Transactions[0].Outputs[commitpos].ScriptPubKey.ToBytes(true).Skip(6).ToArray(), 32))
                     {
                         this.Logger.LogTrace("(-)[WITNESS_MERKLE_MISMATCH]");
                         ConsensusErrors.BadWitnessMerkleMatch.Throw();
@@ -60,9 +60,9 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
 
             if (!fHaveWitness)
             {
-                for (int i = 0; i < block.Transactions.Count; i++)
+                for (int i = 0; i < powBlock.Transactions.Count; i++)
                 {
-                    if (block.Transactions[i].HasWitness)
+                    if (powBlock.Transactions[i].HasWitness)
                     {
                         this.Logger.LogTrace("(-)[UNEXPECTED_WITNESS]");
                         ConsensusErrors.UnexpectedWitness.Throw();
@@ -93,17 +93,17 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         /// <summary>
         /// Gets index of the last coinbase transaction output with SegWit flag.
         /// </summary>
-        /// <param name="block">Block which coinbase transaction's outputs will be checked for SegWit flags.</param>
+        /// <param name="powBlock">Block which coinbase transaction's outputs will be checked for SegWit flags.</param>
         /// <returns>
         /// <c>-1</c> if no SegWit flags were found.
         /// If SegWit flag is found index of the last transaction's output that has SegWit flag is returned.
         /// </returns>
-        private int GetWitnessCommitmentIndex(Block block)
+        private int GetWitnessCommitmentIndex(PowBlock powBlock)
         {
             int commitpos = -1;
-            for (int i = 0; i < block.Transactions[0].Outputs.Count; i++)
+            for (int i = 0; i < powBlock.Transactions[0].Outputs.Count; i++)
             {
-                var scriptPubKey = block.Transactions[0].Outputs[i].ScriptPubKey;
+                var scriptPubKey = powBlock.Transactions[0].Outputs[i].ScriptPubKey;
 
                 if (scriptPubKey.Length >= 38)
                 {
@@ -127,14 +127,14 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         /// <summary>
         /// Calculates merkle root for witness data.
         /// </summary>
-        /// <param name="block">Block which transactions witness data is used for calculation.</param>
+        /// <param name="powBlock">Block which transactions witness data is used for calculation.</param>
         /// <param name="mutated"><c>true</c> if at least one leaf of the merkle tree has the same hash as any subtree. Otherwise: <c>false</c>.</param>
         /// <returns>Merkle root.</returns>
-        public uint256 BlockWitnessMerkleRoot(Block block, out bool mutated)
+        public uint256 BlockWitnessMerkleRoot(PowBlock powBlock, out bool mutated)
         {
             var leaves = new List<uint256>();
             leaves.Add(uint256.Zero); // The witness hash of the coinbase is 0.
-            foreach (Transaction tx in block.Transactions.Skip(1))
+            foreach (Transaction tx in powBlock.Transactions.Skip(1))
                 leaves.Add(tx.GetWitHash());
 
             return BlockMerkleRootRule.ComputeMerkleRoot(leaves, out mutated);

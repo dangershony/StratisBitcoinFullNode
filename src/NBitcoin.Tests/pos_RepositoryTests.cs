@@ -19,7 +19,7 @@ namespace NBitcoin.Tests
             // These tests should be using the Stratis network.
             // Set these expected values accordingly.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
         }
 
         public class RawData : IBitcoinSerializable
@@ -120,11 +120,11 @@ namespace NBitcoin.Tests
             foreach (StoredBlock block in StoredBlock.EnumerateFile(TestDataLocations.DataBlockFolder("blk0001.dat"), network:Network.StratisMain).Take(50))
                 index.Put(block.Item);
 
-            Block genesis = index.Get(uint256.Parse("0x0000066e91e46e5a264d42c89e1204963b2ee6be230b443e9159020539d972af"));
+            PowBlock genesis = index.Get(uint256.Parse("0x0000066e91e46e5a264d42c89e1204963b2ee6be230b443e9159020539d972af"));
             Assert.NotNull(genesis);
 
-            Block invalidBlock = index.Get(uint256.Parse("0x0000066e91e46e5a264d42c89e1204963b2ee6be230b443e9159020539d972ae"));
-            Assert.Null(invalidBlock);
+            PowBlock invalidPowBlock = index.Get(uint256.Parse("0x0000066e91e46e5a264d42c89e1204963b2ee6be230b443e9159020539d972ae"));
+            Assert.Null(invalidPowBlock);
         }
 
         public static IndexedBlockStore CreateIndexedStore([CallerMemberName]string folderName = null)
@@ -185,7 +185,7 @@ namespace NBitcoin.Tests
             int i = 0;
             foreach (StoredBlock b in store.Enumerate(true))
             {
-                Block result = test.Get(b.Item.GetHash());
+                PowBlock result = test.Get(b.Item.GetHash());
                 Assert.Equal(result.GetHash(), b.Item.GetHash());
                 i++;
             }
@@ -236,7 +236,7 @@ namespace NBitcoin.Tests
             BlockRepository blockRepository = CreateBlockRepository();
             StoredBlock firstblk1 = StoredBlock.EnumerateFile(TestDataLocations.DataBlockFolder("blk0001.dat"), network: Network.StratisMain).First();
             blockRepository.WriteBlockHeader(firstblk1.Item.Header);
-            Block result = blockRepository.GetBlock(firstblk1.Item.GetHash());
+            PowBlock result = blockRepository.GetBlock(firstblk1.Item.GetHash());
             Assert.True(result.HeaderOnly);
 
             blockRepository.WriteBlock(firstblk1.Item);
@@ -538,8 +538,8 @@ namespace NBitcoin.Tests
             
             foreach (ChainedBlock item in chain.ToEnumerable(false))
             {
-                Block block = indexStore.Get(item.HashBlock);
-                Assert.True(BlockValidator.CheckBlock(Network.StratisMain.Consensus, block));
+                PowBlock powBlock = indexStore.Get(item.HashBlock);
+                Assert.True(BlockValidator.CheckBlock(Network.StratisMain.Consensus, powBlock));
             }            
         }
 
@@ -570,11 +570,11 @@ namespace NBitcoin.Tests
             var mapStore = new BlockTransactionMapStore();
             foreach (ChainedBlock chainedBlock in chain.ToEnumerable(false).Take(totalblocks))
             {
-                Block block = blockStore.GetBlock(chainedBlock.HashBlock);
-                foreach (Transaction blockTransaction in block.Transactions)
+                PowBlock powBlock = blockStore.GetBlock(chainedBlock.HashBlock);
+                foreach (Transaction blockTransaction in powBlock.Transactions)
                 {
                     trxStore.Put(blockTransaction);
-                    mapStore.PutAsync(blockTransaction.GetHash(), block.GetHash());
+                    mapStore.PutAsync(blockTransaction.GetHash(), powBlock.GetHash());
                 }
             }
 
@@ -588,13 +588,13 @@ namespace NBitcoin.Tests
             // validate the stake trasnaction
             foreach (ChainedBlock item in chain.ToEnumerable(false).Take(totalblocks).ToList())
             {
-                Block block = blockStore.GetBlock(item.HashBlock);
+                PowBlock powBlock = blockStore.GetBlock(item.HashBlock);
                 BlockStake blockStake;
-                Assert.True(BlockValidator.CheckAndComputeStake(blockStore, trxStore, mapStore, stakeChain, chain, item, block, out blockStake));
+                Assert.True(BlockValidator.CheckAndComputeStake(blockStore, trxStore, mapStore, stakeChain, chain, item, powBlock, out blockStake));
                 stakeChain.Set(item.HashBlock, blockStake);
                 if (item.Height == 1125)
                 {
-                    var g = block.ToHex();
+                    var g = powBlock.ToHex();
                 }
 
                 if (client != null)

@@ -18,7 +18,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             // These tests use Network.Main.
             // Ensure that these static flags have the expected values.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         [Fact]

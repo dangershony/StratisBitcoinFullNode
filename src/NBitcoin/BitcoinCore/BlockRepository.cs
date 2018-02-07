@@ -22,23 +22,23 @@ namespace NBitcoin.BitcoinCore
         }
 
 
-        public void WriteBlock(Block block)
+        public void WriteBlock(PowBlock powBlock)
         {
-            WriteBlockHeader(block.Header);
-            _BlockStore.Put(block);
+            WriteBlockHeader(powBlock.Header);
+            _BlockStore.Put(powBlock);
         }
         public void WriteBlockHeader(BlockHeader header)
         {
-            Block block = new Block(header);
-            _HeaderStore.Put(block);
+            PowBlock powBlock = new PowBlock(header);
+            _HeaderStore.Put(powBlock);
         }
 
-        public Block GetBlock(uint256 hash)
+        public PowBlock GetBlock(uint256 hash)
         {
             return _BlockStore.Get(hash) ?? _HeaderStore.Get(hash);
         }
 
-        public async Task<Block> GetBlockAsync(uint256 hash)
+        public async Task<PowBlock> GetBlockAsync(uint256 hash)
         {
             return await _BlockStore.GetAsync(hash).ConfigureAwait(false)
                 ?? await _HeaderStore.GetAsync(hash).ConfigureAwait(false);

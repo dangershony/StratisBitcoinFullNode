@@ -524,12 +524,12 @@ namespace NBitcoin.Tests
             internal set;
         }
 
-        public Block[] Generate(int blockCount, bool includeUnbroadcasted = true, bool broadcast = true)
+        public PowBlock[] Generate(int blockCount, bool includeUnbroadcasted = true, bool broadcast = true)
         {
             var rpc = CreateRPCClient();
             BitcoinSecret dest = GetFirstSecret(rpc);
             var bestBlock = rpc.GetBestBlockHash();
-            List<Block> blocks = new List<Block>();
+            List<PowBlock> blocks = new List<PowBlock>();
             DateTimeOffset now = MockTime == null ? DateTimeOffset.UtcNow : MockTime.Value;
 #if !NOSOCKET
         /*
@@ -570,7 +570,7 @@ namespace NBitcoin.Tests
 #endif
         }
 
-        public void BroadcastBlocks(Block[] blocks)
+        public void BroadcastBlocks(PowBlock[] powBlocks)
         {
         /*
          * TODO: Consider importing to FN.

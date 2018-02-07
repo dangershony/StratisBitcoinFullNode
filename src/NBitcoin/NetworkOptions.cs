@@ -25,8 +25,8 @@ namespace NBitcoin
         {
             get
             {
-                if (this.isProofOfStake != Block.BlockSignature)
-                    throw new InvalidOperationException($"IsProofOfStake { this.isProofOfStake } mismatches expected value { Block.BlockSignature }");
+                if (this.isProofOfStake != PowBlock.BlockSignature)
+                    throw new InvalidOperationException($"IsProofOfStake { this.isProofOfStake } mismatches expected value { PowBlock.BlockSignature }");
 
                 return this.isProofOfStake;
             }

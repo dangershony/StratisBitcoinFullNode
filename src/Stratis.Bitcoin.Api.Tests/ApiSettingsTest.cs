@@ -18,7 +18,7 @@ namespace Stratis.Bitcoin.Api.Tests
             // These flags are being set on an individual test case basis.
             // Assume the default values for the static flags.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         /// <summary>
@@ -52,7 +52,7 @@ namespace Stratis.Bitcoin.Api.Tests
         {
             // Arrange.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             Network network = Network.StratisMain;
             NodeSettings nodeSettings = new NodeSettings(network, loadConfiguration:false);
 
@@ -124,7 +124,7 @@ namespace Stratis.Bitcoin.Api.Tests
         {
             // Arrange.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             string customApiUri = "http://0.0.0.0";
             Network network = Network.StratisMain;
             NodeSettings nodeSettings = new NodeSettings(network, args:new[] { $"-apiuri={customApiUri}" }, loadConfiguration:false);
@@ -242,7 +242,7 @@ namespace Stratis.Bitcoin.Api.Tests
         {
             // Arrange.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             NodeSettings nodeSettings = NodeSettings.Default(Network.StratisMain);
 
             // Act.
@@ -265,7 +265,7 @@ namespace Stratis.Bitcoin.Api.Tests
         {
             // Arrange.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             NodeSettings nodeSettings = NodeSettings.Default(Network.StratisTest);
 
             // Act.

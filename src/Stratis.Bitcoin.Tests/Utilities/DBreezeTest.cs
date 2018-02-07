@@ -29,11 +29,11 @@ namespace Stratis.Bitcoin.Tests.Utilities
         [Fact]
         public void SerializerWithBitcoinSerializableReturnsAsBytes()
         {
-            Block block = new Block();
+            PowBlock powBlock = new PowBlock();
 
-            byte[] result = this.dbreezeSerializer.Serializer(block);
+            byte[] result = this.dbreezeSerializer.Serializer(powBlock);
 
-            Assert.Equal(block.ToBytes(), result);
+            Assert.Equal(powBlock.ToBytes(), result);
         }
 
         [Fact]
@@ -94,7 +94,7 @@ namespace Stratis.Bitcoin.Tests.Utilities
         public void DeserializerWithRewindDataDeserializesObject()
         {
             Network network = Network.RegTest;
-            Block genesis = network.GetGenesis();
+            PowBlock genesis = network.GetGenesis();
             var rewindData = new RewindData(genesis.GetHash());
 
             var result = (RewindData)this.dbreezeSerializer.Deserializer(rewindData.ToBytes(), typeof(RewindData));
@@ -116,11 +116,11 @@ namespace Stratis.Bitcoin.Tests.Utilities
         public void DeserializerWithBlockDeserializesObject()
         {
             Network network = Network.RegTest;
-            Block block = network.GetGenesis();
+            PowBlock powBlock = network.GetGenesis();
 
-            var result = (Block)this.dbreezeSerializer.Deserializer(block.ToBytes(), typeof(Block));
+            var result = (PowBlock)this.dbreezeSerializer.Deserializer(powBlock.ToBytes(), typeof(PowBlock));
 
-            Assert.Equal(block.GetHash(), result.GetHash());
+            Assert.Equal(powBlock.GetHash(), result.GetHash());
         }
 
         [Fact]

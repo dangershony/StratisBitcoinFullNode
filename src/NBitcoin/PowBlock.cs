@@ -63,7 +63,12 @@ namespace NBitcoin
 
         public BlockHeader()
         {
-            this.SetNull();
+            this.version = CurrentVersion;
+            this.hashPrevBlock = 0;
+            this.hashMerkleRoot = 0;
+            this.time = 0;
+            this.bits = 0;
+            this.nonce = 0;
         }
 
         public BlockHeader(string hex)
@@ -79,16 +84,6 @@ namespace NBitcoin
         public static BlockHeader Parse(string hex)
         {
             return new BlockHeader(Encoders.Hex.DecodeData(hex));
-        }
-
-        internal void SetNull()
-        {
-            this.version = CurrentVersion;
-            this.hashPrevBlock = 0;
-            this.hashMerkleRoot = 0;
-            this.time = 0;
-            this.bits = 0;
-            this.nonce = 0;
         }
 
         #region IBitcoinSerializable Members
@@ -216,11 +211,30 @@ namespace NBitcoin
         }
     }
 
-    public partial class Block : IBitcoinSerializable
+    public abstract class Block
+    {
+
+    }
+
+    public class PosPowBlock : PowBlock
+    {
+        public static bool BlockSignature = false;
+
+        // block signature - signed by one of the coin base txout[N]'s owner
+        private BlockSignature blockSignature = new BlockSignature();
+
+        public BlockSignature BlockSignatur
+        {
+            get { return this.blockSignature; }
+            set { this.blockSignature = value; }
+        }
+    }
+
+    public class PowBlock : Block, IBitcoinSerializable
     {
         public const uint MaxBlockSize = 1000 * 1000;
 
-        private BlockHeader header = new BlockHeader();
+        private BlockHeader header;
 
         // network and disk
         private List<Transaction> transactions = new List<Transaction>();
@@ -231,18 +245,17 @@ namespace NBitcoin
             return MerkleNode.GetRoot(this.Transactions.Select(t => t.GetHash()));
         }
 
-        public Block()
+        public PowBlock()
         {
-            this.SetNull();
+            this.header = new BlockHeader();
         }
 
-        public Block(BlockHeader blockHeader)
+        public PowBlock(BlockHeader blockHeader)
         {
-            this.SetNull();
             this.header = blockHeader;
         }
 
-        public Block(byte[] bytes)
+        public PowBlock(byte[] bytes)
         {
             this.ReadWrite(bytes);
         }
@@ -261,12 +274,6 @@ namespace NBitcoin
             {
                 return (this.transactions == null) || (this.transactions.Count == 0);
             }
-        }
-
-        void SetNull()
-        {
-            this.header.SetNull();
-            this.transactions.Clear();
         }
 
         public BlockHeader Header
@@ -307,7 +314,7 @@ namespace NBitcoin
         /// </summary>
         /// <param name="options">Options to keep.</param>
         /// <returns>A new block with only the options wanted.</returns>
-        public Block WithOptions(NetworkOptions options)
+        public PowBlock WithOptions(NetworkOptions options)
         {
             if (this.Transactions.Count == 0)
                 return this;
@@ -318,7 +325,7 @@ namespace NBitcoin
             if ((options == NetworkOptions.None) && !this.Transactions[0].HasWitness)
                 return this;
 
-            var instance = new Block();
+            var instance = new PowBlock();
             var ms = new MemoryStream();
             var bms = new BitcoinStream(ms, true)
             {
@@ -364,22 +371,22 @@ namespace NBitcoin
             return this.Header.HashMerkleRoot == GetMerkleRoot().Hash;
         }
 
-        public Block CreateNextBlockWithCoinbase(BitcoinAddress address, int height)
+        public PowBlock CreateNextBlockWithCoinbase(BitcoinAddress address, int height)
         {
             return this.CreateNextBlockWithCoinbase(address, height, DateTimeOffset.UtcNow);
         }
 
-        public Block CreateNextBlockWithCoinbase(BitcoinAddress address, int height, DateTimeOffset now)
+        public PowBlock CreateNextBlockWithCoinbase(BitcoinAddress address, int height, DateTimeOffset now)
         {
             if (address == null)
                 throw new ArgumentNullException("address");
 
-            Block block = new Block();
-            block.Header.Nonce = RandomUtils.GetUInt32();
-            block.Header.HashPrevBlock = this.GetHash();
-            block.Header.BlockTime = now;
+            PowBlock powBlock = new PowBlock();
+            powBlock.Header.Nonce = RandomUtils.GetUInt32();
+            powBlock.Header.HashPrevBlock = this.GetHash();
+            powBlock.Header.BlockTime = now;
 
-            Transaction tx = block.AddTransaction(new Transaction());
+            Transaction tx = powBlock.AddTransaction(new Transaction());
             tx.AddInput(new TxIn()
             {
                 ScriptSig = new Script(Op.GetPushOp(RandomUtils.GetBytes(30)))
@@ -390,21 +397,21 @@ namespace NBitcoin
                 Value = address.Network.GetReward(height)
             });
 
-            return block;
+            return powBlock;
         }
 
-        public Block CreateNextBlockWithCoinbase(PubKey pubkey, Money value)
+        public PowBlock CreateNextBlockWithCoinbase(PubKey pubkey, Money value)
         {
             return this.CreateNextBlockWithCoinbase(pubkey, value, DateTimeOffset.UtcNow);
         }
 
-        public Block CreateNextBlockWithCoinbase(PubKey pubkey, Money value, DateTimeOffset now)
+        public PowBlock CreateNextBlockWithCoinbase(PubKey pubkey, Money value, DateTimeOffset now)
         {
-            Block block = new Block();
-            block.Header.Nonce = RandomUtils.GetUInt32();
-            block.Header.HashPrevBlock = this.GetHash();
-            block.Header.BlockTime = now;
-            Transaction tx = block.AddTransaction(new Transaction());
+            PowBlock powBlock = new PowBlock();
+            powBlock.Header.Nonce = RandomUtils.GetUInt32();
+            powBlock.Header.HashPrevBlock = this.GetHash();
+            powBlock.Header.BlockTime = now;
+            Transaction tx = powBlock.AddTransaction(new Transaction());
 
             tx.AddInput(new TxIn()
             {
@@ -417,15 +424,15 @@ namespace NBitcoin
                 ScriptPubKey = PayToPubkeyHashTemplate.Instance.GenerateScriptPubKey(pubkey)
             });
 
-            return block;
+            return powBlock;
         }
 
-        public static Block ParseJson(string json)
+        public static PowBlock ParseJson(string json)
         {
             var formatter = new BlockExplorerFormatter();
             JObject block = JObject.Parse(json);
             JArray txs = (JArray)block["tx"];
-            Block blk = new Block();
+            PowBlock blk = new PowBlock();
             blk.Header.Bits = new Target((uint)block["bits"]);
             blk.Header.BlockTime = Utils.UnixTimeToDateTime((uint)block["time"]);
             blk.Header.Nonce = (uint)block["nonce"];
@@ -441,9 +448,9 @@ namespace NBitcoin
             return blk;
         }
 
-        public static Block Parse(string hex)
+        public static PowBlock Parse(string hex)
         {
-            return new Block(Encoders.Hex.DecodeData(hex));
+            return new PowBlock(Encoders.Hex.DecodeData(hex));
         }
 
         public MerkleBlock Filter(params uint256[] txIds)

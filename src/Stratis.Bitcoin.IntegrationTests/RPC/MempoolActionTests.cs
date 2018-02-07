@@ -12,11 +12,11 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         [Fact]
         public async Task CanCall_GetRawMempoolAsync()
         {
-            var initialBlockSignature = Block.BlockSignature;
+            var initialBlockSignature = PowBlock.BlockSignature;
 
             try
             {
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
                 string dir = CreateTestDir(this);
                 IFullNode fullNode = this.BuildServicedNode(dir);
                 MempoolController controller = fullNode.Services.ServiceProvider.GetService<MempoolController>();
@@ -27,7 +27,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             }
             finally
             {
-                Block.BlockSignature = initialBlockSignature;
+                PowBlock.BlockSignature = initialBlockSignature;
             }
         }
     }

@@ -98,7 +98,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.LoopSteps
             this.logger.LogTrace("({0}.{1}:{2})", nameof(downloadedBlock), nameof(downloadedBlock.Length), downloadedBlock.Length);
 
             ChainedBlock chainedBlockToStore = context.DownloadStack.Dequeue();
-            context.Store.Add(new BlockPair(downloadedBlock.Block, chainedBlockToStore));
+            context.Store.Add(new BlockPair(downloadedBlock.PowBlock, chainedBlockToStore));
 
             context.InsertBlockSize += downloadedBlock.Length;
             context.StallCount = 0;
@@ -136,7 +136,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.LoopSteps
         {
             this.logger.LogTrace("()");
 
-            List<Block> blocksToStore = context.Store.Select(bp => bp.Block).ToList();
+            List<PowBlock> blocksToStore = context.Store.Select(bp => bp.PowBlock).ToList();
             await context.BlockStoreLoop.BlockRepository.PutAsync(lastDownloadedBlock.HashBlock, blocksToStore);
             context.BlocksPushedCount += blocksToStore.Count;
             this.logger.LogTrace("{0} blocks pushed to the repository, {1} blocks pushed in total.", blocksToStore.Count, context.BlocksPushedCount);

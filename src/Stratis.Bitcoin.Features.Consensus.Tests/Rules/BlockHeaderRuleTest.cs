@@ -9,7 +9,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests.Rules
     {
         public BlockHeaderRuleTest()
         {
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
             Transaction.TimeStamp = false;
         }
 
@@ -20,7 +20,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests.Rules
             BlockHeaderRule blockHeaderRule = testContext.CreateRule<BlockHeaderRule>();
 
             var context = new RuleContext(new BlockValidationContext(), Network.RegTest.Consensus, testContext.Chain.Tip);
-            context.BlockValidationContext.Block = new Block(new BlockHeader { HashPrevBlock = testContext.Chain.Tip.HashBlock });
+            context.BlockValidationContext.PowBlock = new PowBlock(new BlockHeader { HashPrevBlock = testContext.Chain.Tip.HashBlock });
             await blockHeaderRule.RunAsync(context);
 
             Assert.NotNull(context.BlockValidationContext.ChainedBlock);
@@ -35,7 +35,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests.Rules
             BlockHeaderRule blockHeaderRule = testContext.CreateRule<BlockHeaderRule>();
 
             var context = new RuleContext(new BlockValidationContext(), Network.RegTest.Consensus, testContext.Chain.Tip);
-            context.BlockValidationContext.Block = new Block(new BlockHeader { HashPrevBlock = uint256.Zero });
+            context.BlockValidationContext.PowBlock = new PowBlock(new BlockHeader { HashPrevBlock = uint256.Zero });
             var error = await Assert.ThrowsAsync<ConsensusErrorException>(async () => await blockHeaderRule.RunAsync(context));
 
             Assert.Equal(ConsensusErrors.InvalidPrevTip, error.ConsensusError);

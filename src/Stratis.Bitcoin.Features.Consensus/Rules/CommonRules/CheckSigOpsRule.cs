@@ -9,11 +9,11 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         /// <inheritdoc />
         public override Task RunAsync(RuleContext context)
         {
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
             var options = context.Consensus.Option<PowConsensusOptions>();
 
             long nSigOps = 0;
-            foreach (Transaction tx in block.Transactions)
+            foreach (Transaction tx in powBlock.Transactions)
                 nSigOps += this.GetLegacySigOpCount(tx);
 
             if ((nSigOps * options.WitnessScaleFactor) > options.MaxBlockSigopsCost)

@@ -39,7 +39,7 @@ namespace Stratis.Bitcoin.Features.Consensus
         public ChainedBlock ChainedBlock { get; set; }
 
         /// <summary>Downloaded or mined block to be validated.</summary>
-        public Block Block { get; set; }
+        public PowBlock PowBlock { get; set; }
 
         /// <summary>
         /// The peer this block came from, <c>null</c> if the block was mined.
@@ -256,7 +256,7 @@ namespace Stratis.Bitcoin.Features.Consensus
         /// The block will then be passed to the consensus validation.
         /// </summary>
         /// <remarks>
-        /// If the <see cref="Block"/> returned from the puller is <c>null</c> that means the puller is signaling a reorg was detected.
+        /// If the <see cref="PowBlock"/> returned from the puller is <c>null</c> that means the puller is signaling a reorg was detected.
         /// In this case a rewind of the <see cref="CoinView"/> db will be triggered to roll back consensus until a block is found that is in the best chain.
         /// </remarks>
         private async Task PullerLoopAsync()
@@ -277,7 +277,7 @@ namespace Stratis.Bitcoin.Features.Consensus
                     // This method will block until the next block is downloaded.
                     LookaheadResult lookaheadResult = this.Puller.NextBlock(this.nodeLifetime.ApplicationStopping);
 
-                    if (lookaheadResult.Block == null)
+                    if (lookaheadResult.PowBlock == null)
                     {
                         using (await this.consensusLock.LockAsync(this.nodeLifetime.ApplicationStopping).ConfigureAwait(false))
                         {
@@ -296,7 +296,7 @@ namespace Stratis.Bitcoin.Features.Consensus
                         }
                     }
 
-                    blockValidationContext.Block = lookaheadResult.Block;
+                    blockValidationContext.PowBlock = lookaheadResult.PowBlock;
                     blockValidationContext.Peer = lookaheadResult.Peer;
                 }
 
@@ -365,7 +365,7 @@ namespace Stratis.Bitcoin.Features.Consensus
 
                 if (blockValidationContext.Error != null)
                 {
-                    uint256 rejectedBlockHash = blockValidationContext.Block.GetHash();
+                    uint256 rejectedBlockHash = blockValidationContext.PowBlock.GetHash();
                     this.logger.LogError("Block '{0}' rejected: {1}", rejectedBlockHash, blockValidationContext.Error.Message);
 
                     // Check if the error is a consensus failure.
@@ -430,7 +430,7 @@ namespace Stratis.Bitcoin.Features.Consensus
                         this.logger.LogDebug("Block extends best chain tip to '{0}'.", this.Tip);
                     }
 
-                    this.signals.SignalBlock(blockValidationContext.Block);
+                    this.signals.SignalBlock(blockValidationContext.PowBlock);
                 }
             }
 
@@ -482,7 +482,7 @@ namespace Stratis.Bitcoin.Features.Consensus
             context.Set = new UnspentOutputSet();
             using (new StopwatchDisposable(o => this.Validator.PerformanceCounter.AddUTXOFetchingTime(o)))
             {
-                uint256[] ids = this.GetIdsToFetch(context.BlockValidationContext.Block, context.Flags.EnforceBIP30);
+                uint256[] ids = this.GetIdsToFetch(context.BlockValidationContext.PowBlock, context.Flags.EnforceBIP30);
                 FetchCoinsResponse coins = await this.UTXOSet.FetchCoinsAsync(ids).ConfigureAwait(false);
                 context.Set.SetCoins(coins.UnspentOutputs);
             }
@@ -529,21 +529,21 @@ namespace Stratis.Bitcoin.Features.Consensus
 
             if (this.UTXOSet is CachedCoinView)
             {
-                Block nextBlock = this.Puller.TryGetLookahead(0);
-                if (nextBlock != null)
-                    await this.UTXOSet.FetchCoinsAsync(this.GetIdsToFetch(nextBlock, flags.EnforceBIP30)).ConfigureAwait(false);
+                PowBlock nextPowBlock = this.Puller.TryGetLookahead(0);
+                if (nextPowBlock != null)
+                    await this.UTXOSet.FetchCoinsAsync(this.GetIdsToFetch(nextPowBlock, flags.EnforceBIP30)).ConfigureAwait(false);
             }
 
             this.logger.LogTrace("(-)");
         }
 
         /// <inheritdoc/>
-        public uint256[] GetIdsToFetch(Block block, bool enforceBIP30)
+        public uint256[] GetIdsToFetch(PowBlock powBlock, bool enforceBIP30)
         {
-            this.logger.LogTrace("({0}:'{1}',{2}:{3})", nameof(block), block.GetHash(NetworkOptions.TemporaryOptions), nameof(enforceBIP30), enforceBIP30);
+            this.logger.LogTrace("({0}:'{1}',{2}:{3})", nameof(powBlock), powBlock.GetHash(NetworkOptions.TemporaryOptions), nameof(enforceBIP30), enforceBIP30);
 
             HashSet<uint256> ids = new HashSet<uint256>();
-            foreach (Transaction tx in block.Transactions)
+            foreach (Transaction tx in powBlock.Transactions)
             {
                 if (enforceBIP30)
                 {

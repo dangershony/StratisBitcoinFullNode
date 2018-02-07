@@ -95,41 +95,41 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
             // Simple block creation, nothing special yet:
             PowBlockAssembler blockAssembler = CreatePowBlockAssembler(network, consensus, chain, mempoolLock, mempool, dateTimeProvider, loggerFactory);
             BlockTemplate newBlock = blockAssembler.CreateNewBlock(scriptPubKey);
-            chain.SetTip(newBlock.Block.Header);
-            await consensus.ValidateAndExecuteBlockAsync(new RuleContext(new BlockValidationContext { Block = newBlock.Block }, network.Consensus, consensus.Tip) { CheckPow = false, CheckMerkleRoot = false });
+            chain.SetTip(newBlock.PowBlock.Header);
+            await consensus.ValidateAndExecuteBlockAsync(new RuleContext(new BlockValidationContext { PowBlock = newBlock.PowBlock }, network.Consensus, consensus.Tip) { CheckPow = false, CheckMerkleRoot = false });
 
             List<BlockInfo> blockinfo = CreateBlockInfoList();
 
             // We can't make transactions until we have inputs
             // Therefore, load 100 blocks :)
             int baseheight = 0;
-            List<Block> blocks = new List<Block>();
+            List<PowBlock> blocks = new List<PowBlock>();
             List<Transaction> srcTxs = new List<Transaction>();
             for (int i = 0; i < blockinfo.Count; ++i)
             {
-                Block currentBlock = newBlock.Block.Clone(); // pointer for convenience
-                currentBlock.Header.HashPrevBlock = chain.Tip.HashBlock;
-                currentBlock.Header.Version = 1;
-                currentBlock.Header.Time = Utils.DateTimeToUnixTime(chain.Tip.GetMedianTimePast()) + 1;
-                Transaction txCoinbase = currentBlock.Transactions[0].Clone();
+                PowBlock currentPowBlock = newBlock.PowBlock.Clone(); // pointer for convenience
+                currentPowBlock.Header.HashPrevBlock = chain.Tip.HashBlock;
+                currentPowBlock.Header.Version = 1;
+                currentPowBlock.Header.Time = Utils.DateTimeToUnixTime(chain.Tip.GetMedianTimePast()) + 1;
+                Transaction txCoinbase = currentPowBlock.Transactions[0].Clone();
                 txCoinbase.Inputs.Clear();
                 txCoinbase.Version = 1;
                 txCoinbase.AddInput(new TxIn(new Script(new[] { Op.GetPushOp(blockinfo[i].extraNonce), Op.GetPushOp(chain.Height) })));
                 // Ignore the (optional) segwit commitment added by CreateNewBlock (as the hardcoded nonces don't account for this)
                 txCoinbase.AddOutput(new TxOut(Money.Zero, new Script()));
-                currentBlock.Transactions[0] = txCoinbase;
+                currentPowBlock.Transactions[0] = txCoinbase;
 
                 if (srcTxs.Count == 0)
                     baseheight = chain.Height;
                 if (srcTxs.Count < 4)
-                    srcTxs.Add(currentBlock.Transactions[0]);
-                currentBlock.UpdateMerkleRoot();
+                    srcTxs.Add(currentPowBlock.Transactions[0]);
+                currentPowBlock.UpdateMerkleRoot();
 
-                currentBlock.Header.Nonce = blockinfo[i].nonce;
+                currentPowBlock.Header.Nonce = blockinfo[i].nonce;
 
-                chain.SetTip(currentBlock.Header);
-                await consensus.ValidateAndExecuteBlockAsync(new RuleContext(new BlockValidationContext { Block = currentBlock }, network.Consensus, consensus.Tip) { CheckPow = false, CheckMerkleRoot = false });
-                blocks.Add(currentBlock);
+                chain.SetTip(currentPowBlock.Header);
+                await consensus.ValidateAndExecuteBlockAsync(new RuleContext(new BlockValidationContext { PowBlock = currentPowBlock }, network.Consensus, consensus.Tip) { CheckPow = false, CheckMerkleRoot = false });
+                blocks.Add(currentPowBlock);
             }
 
             // Just to make sure we can still make simple blocks

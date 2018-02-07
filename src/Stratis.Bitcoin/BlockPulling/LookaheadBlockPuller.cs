@@ -23,7 +23,7 @@ namespace Stratis.Bitcoin.BlockPulling
         /// A value of zero will provide the next block, a value of one will provide a block that is 2 blocks ahead.</param>
         /// <returns>The block which height is <paramref name="count"/>+1 higher than current puller's position,
         /// or null if such a block is not downloaded or does not exist.</returns>
-        Block TryGetLookahead(int count);
+        PowBlock TryGetLookahead(int count);
 
         /// <summary>Gets the current location of the puller to a specific block header.</summary>
         ChainedBlock Location { get; }
@@ -53,9 +53,9 @@ namespace Stratis.Bitcoin.BlockPulling
     public class LookaheadResult
     {
         /// <summary>
-        /// The downloaded <see cref="Block"/> that was requested by the puller.
+        /// The downloaded <see cref="PowBlock"/> that was requested by the puller.
         /// </summary>
-        public Block Block { get; set; }
+        public PowBlock PowBlock { get; set; }
 
         /// <summary>
         /// The peer this block came from.
@@ -362,7 +362,7 @@ namespace Stratis.Bitcoin.BlockPulling
         }
 
         /// <inheritdoc />
-        public Block TryGetLookahead(int count)
+        public PowBlock TryGetLookahead(int count)
         {
             this.logger.LogTrace("({0}:{1})", nameof(count), count);
 
@@ -380,8 +380,8 @@ namespace Stratis.Bitcoin.BlockPulling
                 return null;
             }
 
-            this.logger.LogTrace("(-):'{0}'", block.Block);
-            return block.Block;
+            this.logger.LogTrace("(-):'{0}'", block.PowBlock);
+            return block.PowBlock;
         }
 
         /// <inheritdoc />
@@ -535,7 +535,7 @@ namespace Stratis.Bitcoin.BlockPulling
 
             LookaheadResult res = new LookaheadResult();
 
-            while (res.Block == null)
+            while (res.PowBlock == null)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -567,7 +567,7 @@ namespace Stratis.Bitcoin.BlockPulling
                     }
                     this.consumed.Set();
 
-                    res.Block = block.Block;
+                    res.PowBlock = block.PowBlock;
                 }
                 else
                 {

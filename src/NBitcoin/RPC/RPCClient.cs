@@ -958,10 +958,10 @@ namespace NBitcoin.RPC
         /// </summary>
         /// <param name="blockId"></param>
         /// <returns></returns>
-        public async Task<Block> GetBlockAsync(uint256 blockId)
+        public async Task<PowBlock> GetBlockAsync(uint256 blockId)
         {
             RPCResponse resp = await SendCommandAsync(RPCOperations.getblock, blockId.ToString(), false).ConfigureAwait(false);
-            return new Block(Encoders.Hex.DecodeData(resp.Result.ToString()));
+            return new PowBlock(Encoders.Hex.DecodeData(resp.Result.ToString()));
         }
 
         /// <summary>
@@ -969,17 +969,17 @@ namespace NBitcoin.RPC
         /// </summary>
         /// <param name="blockId"></param>
         /// <returns></returns>
-        public Block GetBlock(uint256 blockId)
+        public PowBlock GetBlock(uint256 blockId)
         {
             return GetBlockAsync(blockId).GetAwaiter().GetResult();
         }
 
-        public Block GetBlock(int height)
+        public PowBlock GetBlock(int height)
         {
             return GetBlockAsync(height).GetAwaiter().GetResult();
         }
 
-        public async Task<Block> GetBlockAsync(int height)
+        public async Task<PowBlock> GetBlockAsync(int height)
         {
             uint256 hash = await GetBlockHashAsync(height).ConfigureAwait(false);
             return await GetBlockAsync(hash).ConfigureAwait(false);

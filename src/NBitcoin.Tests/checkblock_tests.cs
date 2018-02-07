@@ -12,16 +12,16 @@ namespace NBitcoin.Tests
             // The tests are related to Bitcoin.
             // Set these expected values accordingly.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         [Fact]
         [Trait("UnitTest", "UnitTest")]
         public void CanCalculateMerkleRoot()
         {
-            Block block = new Block();
-            block.ReadWrite(Encoders.Hex.DecodeData(File.ReadAllText(@"data\block169482.txt")));
-            Assert.Equal(block.Header.HashMerkleRoot, block.GetMerkleRoot().Hash);
+            PowBlock powBlock = new PowBlock();
+            powBlock.ReadWrite(Encoders.Hex.DecodeData(File.ReadAllText(@"data\block169482.txt")));
+            Assert.Equal(powBlock.Header.HashMerkleRoot, powBlock.GetMerkleRoot().Hash);
         }        
     }
 }

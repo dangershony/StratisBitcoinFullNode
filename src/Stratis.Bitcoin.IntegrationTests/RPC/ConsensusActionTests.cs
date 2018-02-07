@@ -15,11 +15,11 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         [Fact]
         public void CanCall_GetBestBlockHash()
         {
-            var initialBlockSignature = Block.BlockSignature;
+            var initialBlockSignature = PowBlock.BlockSignature;
 
             try
             {
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
                 string dir = CreateTestDir(this);
 
                 var fullNode = this.BuildServicedNode(dir);
@@ -31,18 +31,18 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             }
             finally
             {
-                Block.BlockSignature = initialBlockSignature;
+                PowBlock.BlockSignature = initialBlockSignature;
             }
         }
 
         [Fact]
         public void CanCall_GetBlockHash()
         {
-            var initialBlockSignature = Block.BlockSignature;
+            var initialBlockSignature = PowBlock.BlockSignature;
 
             try
             {
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
                 string dir = CreateTestDir(this);
 
                 var fullNode = this.BuildServicedNode(dir);
@@ -54,18 +54,18 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             }
             finally
             {
-                Block.BlockSignature = initialBlockSignature;
+                PowBlock.BlockSignature = initialBlockSignature;
             }
         }
 
         [Fact]
         public void CanCall_IsInitialBlockDownload()
         {
-            var initialBlockSignature = Block.BlockSignature;
+            var initialBlockSignature = PowBlock.BlockSignature;
 
             try
             {
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
                 string dir = CreateTestDir(this);
 
                 var fullNode = this.BuildServicedNode(dir);
@@ -76,7 +76,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             }
             finally
             {
-                Block.BlockSignature = initialBlockSignature;
+                PowBlock.BlockSignature = initialBlockSignature;
             }
         }
     }

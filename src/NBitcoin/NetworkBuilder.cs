@@ -19,7 +19,7 @@ namespace NBitcoin
         internal Consensus Consensus;
         internal List<DNSSeedData> Seeds ;
         internal List<NetworkAddress> FixedSeeds;
-        internal Block Genesis;
+        internal PowBlock Genesis;
         internal long MinTxFee;
         internal long FallbackFee;
         internal long MinRelayTxFee;
@@ -132,7 +132,7 @@ namespace NBitcoin
             return this;
         }
         
-        public NetworkBuilder SetGenesis(Block genesis)
+        public NetworkBuilder SetGenesis(PowBlock genesis)
         {
             this.Genesis = genesis;
             return this;

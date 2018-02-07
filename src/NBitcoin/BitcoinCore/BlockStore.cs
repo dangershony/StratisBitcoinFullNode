@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace NBitcoin.BitcoinCore
 {
-    public class BlockStore : Store<StoredBlock, Block>
+    public class BlockStore : Store<StoredBlock, PowBlock>
     {
         public const int MAX_BLOCKFILE_SIZE = 0x8000000; // 128 MiB
 
@@ -72,7 +72,7 @@ namespace NBitcoin.BitcoinCore
 
         public void SynchronizeStratisChain(ChainBase chain)
         {
-            var blocks = new Dictionary<uint256, Block>();
+            var blocks = new Dictionary<uint256, PowBlock>();
             var chainedBlocks = new Dictionary<uint256, ChainedBlock>();
             var inChain = new HashSet<uint256>();
 
@@ -80,7 +80,7 @@ namespace NBitcoin.BitcoinCore
 
             chainedBlocks.Add(chain.GetBlock(0).HashBlock, chain.GetBlock(0));
 
-            foreach (Block block in this.Enumerate(false).Select(b => b.Item))
+            foreach (PowBlock block in this.Enumerate(false).Select(b => b.Item))
             {
                 uint256 hash = block.GetHash();
                 blocks.TryAdd(hash, block);
@@ -92,7 +92,7 @@ namespace NBitcoin.BitcoinCore
                 // to optimize keep a track of the last block
                 ChainedBlock last = chain.GetBlock(0);
 
-                foreach (KeyValuePair<uint256, Block> block in blocks)
+                foreach (KeyValuePair<uint256, PowBlock> block in blocks)
                 {
                     if (inChain.Contains(block.Value.Header.HashPrevBlock))
                     {
@@ -212,7 +212,7 @@ namespace NBitcoin.BitcoinCore
             return block;
         }
 
-        protected override StoredBlock CreateStoredItem(Block item, DiskBlockPos position)
+        protected override StoredBlock CreateStoredItem(PowBlock item, DiskBlockPos position)
         {
             return new StoredBlock(this.Network.Magic, item, position);
         }

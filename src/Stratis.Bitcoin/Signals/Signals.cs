@@ -12,8 +12,8 @@ namespace Stratis.Bitcoin.Signals
         /// <summary>
         /// Notify subscribers about a new block being available.
         /// </summary>
-        /// <param name="block">Newly added block.</param>
-        void SignalBlock(Block block);
+        /// <param name="powBlock">Newly added block.</param>
+        void SignalBlock(PowBlock powBlock);
 
         /// <summary>
         /// Notify subscribers about a new transaction being available.
@@ -26,7 +26,7 @@ namespace Stratis.Bitcoin.Signals
         /// </summary>
         /// <param name="observer">Observer to be subscribed to receive signaler's messages.</param>
         /// <returns>Disposable object to allow observer to unsubscribe from the signaler.</returns>
-        IDisposable SubscribeForBlocks(IObserver<Block> observer);
+        IDisposable SubscribeForBlocks(IObserver<PowBlock> observer);
 
         /// <summary>
         /// Subscribes to receive notifications when a new transaction is available.
@@ -42,7 +42,7 @@ namespace Stratis.Bitcoin.Signals
         /// <summary>
         /// Initializes the object with newly created instances of signalers.
         /// </summary>
-        public Signals() : this(new Signaler<Block>(), new Signaler<Transaction>())
+        public Signals() : this(new Signaler<PowBlock>(), new Signaler<Transaction>())
         {
         }
 
@@ -51,7 +51,7 @@ namespace Stratis.Bitcoin.Signals
         /// </summary>
         /// <param name="blockSignaler">Signaler providing notifications about newly available blocks to its subscribers.</param>
         /// <param name="transactionSignaler">Signaler providing notifications about newly available transactions to its subscribers.</param>
-        public Signals(ISignaler<Block> blockSignaler, ISignaler<Transaction> transactionSignaler)
+        public Signals(ISignaler<PowBlock> blockSignaler, ISignaler<Transaction> transactionSignaler)
         {
             Guard.NotNull(blockSignaler, nameof(blockSignaler));
             Guard.NotNull(transactionSignaler, nameof(transactionSignaler));
@@ -61,17 +61,17 @@ namespace Stratis.Bitcoin.Signals
         }
 
         /// <summary>Signaler providing notifications about newly available blocks to its subscribers.</summary>
-        private ISignaler<Block> blocks { get; }
+        private ISignaler<PowBlock> blocks { get; }
 
         /// <summary>Signaler providing notifications about newly available transactions to its subscribers.</summary>
         private ISignaler<Transaction> transactions { get; }
 
         /// <inheritdoc />
-        public void SignalBlock(Block block)
+        public void SignalBlock(PowBlock powBlock)
         {
-            Guard.NotNull(block, nameof(block));
+            Guard.NotNull(powBlock, nameof(powBlock));
 
-            this.blocks.Broadcast(block);
+            this.blocks.Broadcast(powBlock);
         }
 
         /// <inheritdoc />
@@ -83,7 +83,7 @@ namespace Stratis.Bitcoin.Signals
         }
 
         /// <inheritdoc />
-        public IDisposable SubscribeForBlocks(IObserver<Block> observer)
+        public IDisposable SubscribeForBlocks(IObserver<PowBlock> observer)
         {
             Guard.NotNull(observer, nameof(observer));
 

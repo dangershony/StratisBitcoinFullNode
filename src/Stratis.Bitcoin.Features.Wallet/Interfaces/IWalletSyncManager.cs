@@ -22,8 +22,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Interfaces
         /// <summary>
         /// Processes a new block.
         /// </summary>
-        /// <param name="block"></param>
-        void ProcessBlock(Block block);
+        /// <param name="powBlock"></param>
+        void ProcessBlock(PowBlock powBlock);
 
         /// <summary>
         /// Processes a new transaction which is in a pending state (not included in a block).

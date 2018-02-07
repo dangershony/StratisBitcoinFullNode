@@ -37,16 +37,16 @@ namespace NBitcoin
             this.ReadWrite(bytes);
         }
 
-        public BlockStake(Block block)
+        public BlockStake(PowBlock powBlock)
         {
             this.StakeModifierV2 = uint256.Zero;
             this.HashProof = uint256.Zero;
 
-            if (IsProofOfStake(block))
+            if (IsProofOfStake(powBlock))
             {
                 this.SetProofOfStake();
-                this.StakeTime = block.Transactions[1].Time;
-                this.PrevoutStake = block.Transactions[1].Inputs[0].PrevOut;
+                this.StakeTime = powBlock.Transactions[1].Time;
+                this.PrevoutStake = powBlock.Transactions[1].Inputs[0].PrevOut;
             }
         }
 
@@ -62,20 +62,20 @@ namespace NBitcoin
             }
         }
 
-        public static bool IsProofOfStake(Block block)
+        public static bool IsProofOfStake(PowBlock powBlock)
         {
-            return block.Transactions.Count > 1 && block.Transactions[1].IsCoinStake;
+            return powBlock.Transactions.Count > 1 && powBlock.Transactions[1].IsCoinStake;
         }
 
-        public static bool IsProofOfWork(Block block)
+        public static bool IsProofOfWork(PowBlock powBlock)
         {
-            return !IsProofOfStake(block);
+            return !IsProofOfStake(powBlock);
         }
 
-        public static Tuple<OutPoint, ulong> GetProofOfStake(Block block)
+        public static Tuple<OutPoint, ulong> GetProofOfStake(PowBlock powBlock)
         {
-            return IsProofOfStake(block) ?
-            new Tuple<OutPoint, ulong>(block.Transactions[1].Inputs.First().PrevOut, block.Transactions[1].LockTime) :
+            return IsProofOfStake(powBlock) ?
+            new Tuple<OutPoint, ulong>(powBlock.Transactions[1].Inputs.First().PrevOut, powBlock.Transactions[1].LockTime) :
             new Tuple<OutPoint, ulong>(new OutPoint(), (ulong)0);
         }
 
@@ -133,44 +133,44 @@ namespace NBitcoin
                 this.Flags |= BlockFlag.BLOCK_STAKE_MODIFIER;
         }
 
-        public static bool Check(Block block, Consensus consensus)
+        public static bool Check(PowBlock powBlock, Consensus consensus)
         {
-            return block.CheckMerkleRoot() && BlockStake.CheckProofOfWork(block, consensus) && BlockStake.CheckProofOfStake(block);
+            return powBlock.CheckMerkleRoot() && BlockStake.CheckProofOfWork(powBlock, consensus) && BlockStake.CheckProofOfStake(powBlock);
         }
 
-        public static bool CheckProofOfWork(Block block, Consensus consensus)
+        public static bool CheckProofOfWork(PowBlock powBlock, Consensus consensus)
         {
             // if POS return true else check POW algo
-            return IsProofOfStake(block) || block.Header.CheckProofOfWork(consensus);
+            return IsProofOfStake(powBlock) || powBlock.Header.CheckProofOfWork(consensus);
         }
 
-        public static bool CheckProofOfStake(Block block)
+        public static bool CheckProofOfStake(PowBlock powBlock)
         {
             // todo: move this to the full node code.
             // this code is not the full check of POS 
             // full POS check will be introduced with the full node
 
-            if (IsProofOfWork(block))
+            if (IsProofOfWork(powBlock))
                 return true;
 
             // Coinbase output should be empty if proof-of-stake block
-            if (block.Transactions[0].Outputs.Count != 1 || !block.Transactions[0].Outputs[0].IsEmpty)
+            if (powBlock.Transactions[0].Outputs.Count != 1 || !powBlock.Transactions[0].Outputs[0].IsEmpty)
                 return false;
 
             // Second transaction must be coinstake, the rest must not be
-            if (!block.Transactions[1].IsCoinStake)
+            if (!powBlock.Transactions[1].IsCoinStake)
                 return false;
 
-            if (block.Transactions.Skip(2).Any(t => t.IsCoinStake))
+            if (powBlock.Transactions.Skip(2).Any(t => t.IsCoinStake))
                 return false;
 
             return true;
         }
 
-        public static ulong GetStakeEntropyBit(Block block)
+        public static ulong GetStakeEntropyBit(PowBlock powBlock)
         {
             // Take last bit of block hash as entropy bit
-            ulong nEntropyBit = (block.GetHash().GetLow64() & (ulong)1);
+            ulong nEntropyBit = (powBlock.GetHash().GetLow64() & (ulong)1);
 
             //LogPrint("stakemodifier", "GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", GetHash().ToString(), nEntropyBit);
             return nEntropyBit;
@@ -197,20 +197,6 @@ namespace NBitcoin
 
             var workCorrect = stakeChain.CheckPowPosAndTarget(chainedBlock, stakeChain.Get(chainedBlock.HashBlock), network);
             return heightCorrect && genesisCorrect && hashPrevCorrect && hashCorrect && workCorrect;
-        }
-    }
-
-    public partial class Block
-    {
-        public static bool BlockSignature = false;
-
-        // block signature - signed by one of the coin base txout[N]'s owner
-        private BlockSignature blockSignature = new BlockSignature();
-
-        public BlockSignature BlockSignatur
-        {
-            get { return this.blockSignature; }
-            set { this.blockSignature = value; }
         }
     }
 
@@ -244,9 +230,9 @@ namespace NBitcoin
 
     public static class StakeExtentions
     {
-        public static bool CheckProofOfStake(this Block block)
+        public static bool CheckProofOfStake(this PowBlock powBlock)
         {
-            return BlockStake.CheckProofOfStake(block);
+            return BlockStake.CheckProofOfStake(powBlock);
         }
     }
 }

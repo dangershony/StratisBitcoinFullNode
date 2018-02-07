@@ -703,11 +703,11 @@ namespace Stratis.Bitcoin.Features.Wallet
         }
 
         /// <inheritdoc />
-        public void ProcessBlock(Block block, ChainedBlock chainedBlock)
+        public void ProcessBlock(PowBlock powBlock, ChainedBlock chainedBlock)
         {
-            Guard.NotNull(block, nameof(block));
+            Guard.NotNull(powBlock, nameof(powBlock));
             Guard.NotNull(chainedBlock, nameof(chainedBlock));
-            this.logger.LogTrace("({0}:'{1}',{2}:'{3}')", nameof(block), block.GetHash(), nameof(chainedBlock), chainedBlock);
+            this.logger.LogTrace("({0}:'{1}',{2}:'{3}')", nameof(powBlock), powBlock.GetHash(), nameof(chainedBlock), chainedBlock);
 
             // If there is no wallet yet, update the wallet tip hash and do nothing else.
             if (!this.Wallets.Any())
@@ -741,8 +741,8 @@ namespace Stratis.Bitcoin.Features.Wallet
 
             lock (this.lockObject)
             {
-                foreach (Transaction transaction in block.Transactions)
-                    this.ProcessTransaction(transaction, chainedBlock.Height, block, true);
+                foreach (Transaction transaction in powBlock.Transactions)
+                    this.ProcessTransaction(transaction, chainedBlock.Height, powBlock, true);
 
                 // Update the wallets with the last processed block height.
                 this.UpdateLastBlockSyncedHeight(chainedBlock);
@@ -752,7 +752,7 @@ namespace Stratis.Bitcoin.Features.Wallet
         }
 
         /// <inheritdoc />
-        public void ProcessTransaction(Transaction transaction, int? blockHeight = null, Block block = null, bool isPropagated = true)
+        public void ProcessTransaction(Transaction transaction, int? blockHeight = null, PowBlock powBlock = null, bool isPropagated = true)
         {
             Guard.NotNull(transaction, nameof(transaction));
             uint256 hash = transaction.GetHash();
@@ -773,7 +773,7 @@ namespace Stratis.Bitcoin.Features.Wallet
                     if (this.keysLookup.TryGetValue(utxo.ScriptPubKey, out HdAddress pubKey))
                     {
                         this.AddTransactionToWallet(transaction.ToHex(), hash, transaction.Time, transaction.IsCoinStake, transaction.Outputs.IndexOf(utxo),
-                            utxo.Value, utxo.ScriptPubKey, blockHeight, block, isPropagated);
+                            utxo.Value, utxo.ScriptPubKey, blockHeight, powBlock, isPropagated);
                         foundTrx.Add(Tuple.Create(utxo.ScriptPubKey, hash));
                     }
                 }
@@ -806,7 +806,7 @@ namespace Stratis.Bitcoin.Features.Wallet
                         return !addr.IsChangeAddress() && !transaction.IsCoinStake;
                     });
 
-                    this.AddSpendingTransactionToWallet(transaction.ToHex(), hash, transaction.Time, transaction.IsCoinStake, paidOutTo, tTx.Id, tTx.Index, blockHeight, block);
+                    this.AddSpendingTransactionToWallet(transaction.ToHex(), hash, transaction.Time, transaction.IsCoinStake, paidOutTo, tTx.Id, tTx.Index, blockHeight, powBlock);
                 }
             }
 
@@ -829,11 +829,11 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// <param name="amount">The amount.</param>
         /// <param name="script">The script.</param>
         /// <param name="blockHeight">Height of the block.</param>
-        /// <param name="block">The block containing the transaction to add.</param>
+        /// <param name="powBlock">The block containing the transaction to add.</param>
         /// <param name="transactionHex">The hexadecimal representation of the transaction.</param>
         /// <param name="isPropagated">Propagation state of the transaction.</param>
         private void AddTransactionToWallet(string transactionHex, uint256 transactionHash, uint time, bool isCoinStake, int index, Money amount, Script script,
-            int? blockHeight = null, Block block = null, bool isPropagated = true)
+            int? blockHeight = null, PowBlock powBlock = null, bool isPropagated = true)
         {
             this.logger.LogTrace("({0}:'{1}',{2}:'{3}',{4}:{5},{6}:{7},{8}:{9},{10}:{11},{12}:{13})", nameof(transactionHex), transactionHex,
                 nameof(transactionHash), transactionHash, nameof(time), time, nameof(isCoinStake), isCoinStake, nameof(index), index, nameof(amount), amount, nameof(blockHeight), blockHeight);
@@ -853,9 +853,9 @@ namespace Stratis.Bitcoin.Features.Wallet
                     Amount = amount,
                     IsCoinStake = isCoinStake == false ? (bool?)null : true,
                     BlockHeight = blockHeight,
-                    BlockHash = block?.GetHash(),
+                    BlockHash = powBlock?.GetHash(),
                     Id = transactionHash,
-                    CreationTime = DateTimeOffset.FromUnixTimeSeconds(block?.Header.Time ?? time),
+                    CreationTime = DateTimeOffset.FromUnixTimeSeconds(powBlock?.Header.Time ?? time),
                     Index = index,
                     ScriptPubKey = script,
                     Hex = transactionHex,
@@ -863,9 +863,9 @@ namespace Stratis.Bitcoin.Features.Wallet
                 };
 
                 // add the Merkle proof to the (non-spending) transaction
-                if (block != null)
+                if (powBlock != null)
                 {
-                    newTransaction.MerkleProof = new MerkleBlock(block, new[] { transactionHash }).PartialMerkleTree;
+                    newTransaction.MerkleProof = new MerkleBlock(powBlock, new[] { transactionHash }).PartialMerkleTree;
                 }
 
                 addressTransactions.Add(newTransaction);
@@ -878,19 +878,19 @@ namespace Stratis.Bitcoin.Features.Wallet
                 if ((foundTransaction.BlockHeight == null) && (blockHeight != null))
                 {
                     foundTransaction.BlockHeight = blockHeight;
-                    foundTransaction.BlockHash = block?.GetHash();
+                    foundTransaction.BlockHash = powBlock?.GetHash();
                 }
 
                 // Update the block time.
-                if (block != null)
+                if (powBlock != null)
                 {
-                    foundTransaction.CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time);
+                    foundTransaction.CreationTime = DateTimeOffset.FromUnixTimeSeconds(powBlock.Header.Time);
                 }
 
                 // Add the Merkle proof now that the transaction is confirmed in a block.
-                if ((block != null) && (foundTransaction.MerkleProof == null))
+                if ((powBlock != null) && (foundTransaction.MerkleProof == null))
                 {
-                    foundTransaction.MerkleProof = new MerkleBlock(block, new[] { transactionHash }).PartialMerkleTree;
+                    foundTransaction.MerkleProof = new MerkleBlock(powBlock, new[] { transactionHash }).PartialMerkleTree;
                 }
 
                 if (isPropagated)
@@ -912,10 +912,10 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// <param name="spendingTransactionId">The id of the transaction containing the output being spent, if this is a spending transaction.</param>
         /// <param name="spendingTransactionIndex">The index of the output in the transaction being referenced, if this is a spending transaction.</param>
         /// <param name="blockHeight">Height of the block.</param>
-        /// <param name="block">The block containing the transaction to add.</param>
+        /// <param name="powBlock">The block containing the transaction to add.</param>
         /// <param name="transactionHex">The hexadecimal representation of the transaction.</param>
         private void AddSpendingTransactionToWallet(string transactionHex, uint256 transactionHash, uint time, bool isCoinStake, IEnumerable<TxOut> paidToOutputs,
-            uint256 spendingTransactionId, int? spendingTransactionIndex, int? blockHeight = null, Block block = null)
+            uint256 spendingTransactionId, int? spendingTransactionIndex, int? blockHeight = null, PowBlock powBlock = null)
         {
             this.logger.LogTrace("({0}:'{1}',{2}:'{3}',{4}:{5},{6}:'{7}',{8}:{9},{10}:{11},{12}:{13})", nameof(transactionHex), transactionHex,
                 nameof(transactionHash), transactionHash, nameof(time), time, nameof(isCoinStake), isCoinStake, nameof(spendingTransactionId), spendingTransactionId, nameof(spendingTransactionIndex), spendingTransactionIndex, nameof(blockHeight), blockHeight);
@@ -972,7 +972,7 @@ namespace Stratis.Bitcoin.Features.Wallet
                 {
                     TransactionId = transactionHash,
                     Payments = payments,
-                    CreationTime = DateTimeOffset.FromUnixTimeSeconds(block?.Header.Time ?? time),
+                    CreationTime = DateTimeOffset.FromUnixTimeSeconds(powBlock?.Header.Time ?? time),
                     BlockHeight = blockHeight,
                     Hex = transactionHex,
                     IsCoinStake = isCoinStake == false ? (bool?)null : true
@@ -992,9 +992,9 @@ namespace Stratis.Bitcoin.Features.Wallet
                 }
 
                 // Update the block time to be that of the block in which the transaction is confirmed.
-                if (block != null)
+                if (powBlock != null)
                 {
-                    spentTransaction.SpendingDetails.CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time);
+                    spentTransaction.SpendingDetails.CreationTime = DateTimeOffset.FromUnixTimeSeconds(powBlock.Header.Time);
                 }
             }
 

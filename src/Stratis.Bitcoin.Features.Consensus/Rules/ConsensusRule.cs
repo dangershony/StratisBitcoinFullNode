@@ -30,7 +30,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules
         /// When <c>true</c> rule is allowed to skip validation when the <see cref="BlockValidationContext.SkipValidation"/> is set to <c>true</c>.
         /// </summary>
         /// <remarks>
-        /// State in this context is the manipulation of information in the consensus data store based on actions specified <see cref="Block"/> and <see cref="Transaction"/>.
+        /// State in this context is the manipulation of information in the consensus data store based on actions specified <see cref="PowBlock"/> and <see cref="Transaction"/>.
         /// This will allow to ability to run validation checks on blocks (during mining for example) without change the underline store.
         /// </remarks>
         public virtual bool ValidationOnlyRule => true;

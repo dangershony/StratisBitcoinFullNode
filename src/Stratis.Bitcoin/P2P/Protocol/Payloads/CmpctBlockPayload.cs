@@ -52,18 +52,18 @@ namespace Stratis.Bitcoin.P2P.Protocol.Payloads
         {
         }
 
-        public CmpctBlockPayload(Block block)
+        public CmpctBlockPayload(PowBlock powBlock)
         {
-            this.header = block.Header;
+            this.header = powBlock.Header;
             this.nonce = RandomUtils.GetUInt64();
             this.UpdateShortTxIDSelector();
             this.PrefilledTransactions.Add(new PrefilledTransaction()
             {
                 Index = 0,
-                Transaction = block.Transactions[0]
+                Transaction = powBlock.Transactions[0]
             });
 
-            foreach (Transaction tx in block.Transactions.Skip(1))
+            foreach (Transaction tx in powBlock.Transactions.Skip(1))
             {
                 this.ShortIds.Add(GetShortID(tx.GetHash()));
             }

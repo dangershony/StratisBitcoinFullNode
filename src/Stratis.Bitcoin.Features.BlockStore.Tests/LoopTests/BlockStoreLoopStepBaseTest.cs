@@ -19,10 +19,10 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests.LoopTests
     /// </summary>
     public class BlockStoreLoopStepBaseTest : TestBase
     {
-        internal void AddBlockToPendingStorage(BlockStoreLoop blockStoreLoop, Block block)
+        internal void AddBlockToPendingStorage(BlockStoreLoop blockStoreLoop, PowBlock powBlock)
         {
-            var chainedBlock = blockStoreLoop.Chain.GetBlock(block.GetHash());
-            blockStoreLoop.PendingStorage.TryAdd(block.GetHash(), new BlockPair(block, chainedBlock));
+            var chainedBlock = blockStoreLoop.Chain.GetBlock(powBlock.GetHash());
+            blockStoreLoop.PendingStorage.TryAdd(powBlock.GetHash(), new BlockPair(powBlock, chainedBlock));
         }
     }
 

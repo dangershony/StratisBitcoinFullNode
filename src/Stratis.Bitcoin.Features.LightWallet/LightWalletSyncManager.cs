@@ -157,12 +157,12 @@ namespace Stratis.Bitcoin.Features.LightWallet
         }
 
         /// <inheritdoc />
-        public void ProcessBlock(Block block)
+        public void ProcessBlock(PowBlock powBlock)
         {
-            Guard.NotNull(block, nameof(block));
-            this.logger.LogTrace("({0}:'{1}')", nameof(block), block.GetHash());
+            Guard.NotNull(powBlock, nameof(powBlock));
+            this.logger.LogTrace("({0}:'{1}')", nameof(powBlock), powBlock.GetHash());
 
-            ChainedBlock newTip = this.chain.GetBlock(block.GetHash());
+            ChainedBlock newTip = this.chain.GetBlock(powBlock.GetHash());
             if (newTip == null)
             {
                 this.logger.LogTrace("(-)[NEW_TIP_REORG]");
@@ -171,7 +171,7 @@ namespace Stratis.Bitcoin.Features.LightWallet
 
             // If the new block's previous hash is the same as the
             // wallet hash then just pass the block to the manager.
-            if (block.Header.HashPrevBlock != this.walletTip.HashBlock)
+            if (powBlock.Header.HashPrevBlock != this.walletTip.HashBlock)
             {
                 // If previous block does not match there might have
                 // been a reorg, check if the wallet is still on the main chain.
@@ -229,7 +229,7 @@ namespace Stratis.Bitcoin.Features.LightWallet
             else this.logger.LogTrace("New block follows the previously known block '{0}'.", this.walletTip);
 
             this.walletTip = newTip;
-            this.walletManager.ProcessBlock(block, newTip);
+            this.walletManager.ProcessBlock(powBlock, newTip);
 
             this.logger.LogTrace("(-)");
         }

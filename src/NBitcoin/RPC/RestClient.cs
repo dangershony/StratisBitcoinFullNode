@@ -43,13 +43,13 @@ namespace NBitcoin.RPC
         /// <param name="blockId">The block identifier.</param>
         /// <returns>Given a block hash (id) returns the requested block object.</returns>
         /// <exception cref="System.ArgumentNullException">blockId cannot be null.</exception>
-        public async Task<Block> GetBlockAsync(uint256 blockId)
+        public async Task<PowBlock> GetBlockAsync(uint256 blockId)
         {
             if (blockId == null)
                 throw new ArgumentNullException("blockId");
 
             byte[] result = await SendRequestAsync("block", RestResponseFormat.Bin, blockId.ToString()).ConfigureAwait(false);
-            return new Block(result);
+            return new PowBlock(result);
         }
 
         /// <summary>
@@ -58,7 +58,7 @@ namespace NBitcoin.RPC
         /// <param name="blockId">The block identifier.</param>
         /// <returns>Given a block hash (id) returns the requested block object.</returns>
         /// <exception cref="System.ArgumentNullException">blockId cannot be null.</exception>
-        public Block GetBlock(uint256 blockId)
+        public PowBlock GetBlock(uint256 blockId)
         {
             return GetBlockAsync(blockId).GetAwaiter().GetResult();
         }

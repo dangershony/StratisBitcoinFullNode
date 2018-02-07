@@ -12,7 +12,7 @@ namespace NBitcoin.Tests
             // These tests should be using the Bitcoin network.
             // Set these expected values accordingly.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         [Fact]

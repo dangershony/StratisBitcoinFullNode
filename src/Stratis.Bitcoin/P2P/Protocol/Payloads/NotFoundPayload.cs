@@ -21,8 +21,8 @@ namespace Stratis.Bitcoin.P2P.Protocol.Payloads
         {
         }
 
-        public NotFoundPayload(params Block[] blocks)
-            : this(blocks.Select(b => new InventoryVector(InventoryType.MSG_BLOCK, b.GetHash())).ToArray())
+        public NotFoundPayload(params PowBlock[] powBlocks)
+            : this(powBlocks.Select(b => new InventoryVector(InventoryType.MSG_BLOCK, b.GetHash())).ToArray())
         {
         }
 

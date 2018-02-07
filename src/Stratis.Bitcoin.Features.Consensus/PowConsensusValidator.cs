@@ -64,7 +64,7 @@ namespace Stratis.Bitcoin.Features.Consensus
         {
             this.logger.LogTrace("()");
 
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
             DeploymentFlags deploymentFlags = context.Flags;
 
             int height = context.BestBlock == null ? 0 : context.BestBlock.Height + 1;
@@ -72,10 +72,10 @@ namespace Stratis.Bitcoin.Features.Consensus
             // Start enforcing BIP113 (Median Time Past) using versionbits logic.
             DateTimeOffset lockTimeCutoff = deploymentFlags.LockTimeFlags.HasFlag(Transaction.LockTimeFlags.MedianTimePast) ?
                 context.BestBlock.MedianTimePast :
-                block.Header.BlockTime;
+                powBlock.Header.BlockTime;
 
             // Check that all transactions are finalized.
-            foreach (Transaction transaction in block.Transactions)
+            foreach (Transaction transaction in powBlock.Transactions)
             {
                 if (!transaction.IsFinal(lockTimeCutoff, height))
                 {
@@ -88,7 +88,7 @@ namespace Stratis.Bitcoin.Features.Consensus
             if (deploymentFlags.EnforceBIP34)
             {
                 var expect = new Script(Op.GetPushOp(height));
-                Script actual = block.Transactions[0].Inputs[0].ScriptSig;
+                Script actual = powBlock.Transactions[0].Inputs[0].ScriptSig;
                 if (!this.StartWith(actual.ToBytes(true), expect.ToBytes(true)))
                 {
                     this.logger.LogTrace("(-)[BAD_COINBASE_HEIGHT]");
@@ -107,15 +107,15 @@ namespace Stratis.Bitcoin.Features.Consensus
             bool haveWitness = false;
             if (deploymentFlags.ScriptFlags.HasFlag(ScriptVerify.Witness))
             {
-                int commitpos = this.GetWitnessCommitmentIndex(block);
+                int commitpos = this.GetWitnessCommitmentIndex(powBlock);
                 if (commitpos != -1)
                 {
-                    uint256 hashWitness = this.BlockWitnessMerkleRoot(block, out bool unused);
+                    uint256 hashWitness = this.BlockWitnessMerkleRoot(powBlock, out bool unused);
 
                     // The malleation check is ignored; as the transaction tree itself
                     // already does not permit it, it is impossible to trigger in the
                     // witness tree.
-                    WitScript witness = block.Transactions[0].Inputs[0].WitScript;
+                    WitScript witness = powBlock.Transactions[0].Inputs[0].WitScript;
                     if ((witness.PushCount != 1) || (witness.Pushes.First().Length != 32))
                     {
                         this.logger.LogTrace("(-)[BAD_WITNESS_NONCE_SIZE]");
@@ -127,7 +127,7 @@ namespace Stratis.Bitcoin.Features.Consensus
                     Buffer.BlockCopy(witness.Pushes.First(), 0, hashed, 32, 32);
                     hashWitness = Hashes.Hash256(hashed);
 
-                    if (!this.EqualsArray(hashWitness.ToBytes(), block.Transactions[0].Outputs[commitpos].ScriptPubKey.ToBytes(true).Skip(6).ToArray(), 32))
+                    if (!this.EqualsArray(hashWitness.ToBytes(), powBlock.Transactions[0].Outputs[commitpos].ScriptPubKey.ToBytes(true).Skip(6).ToArray(), 32))
                     {
                         this.logger.LogTrace("(-)[WITNESS_MERKLE_MISMATCH]");
                         ConsensusErrors.BadWitnessMerkleMatch.Throw();
@@ -139,9 +139,9 @@ namespace Stratis.Bitcoin.Features.Consensus
 
             if (!haveWitness)
             {
-                for (int i = 0; i < block.Transactions.Count; i++)
+                for (int i = 0; i < powBlock.Transactions.Count; i++)
                 {
-                    if (block.Transactions[i].HasWitness)
+                    if (powBlock.Transactions[i].HasWitness)
                     {
                         this.logger.LogTrace("(-)[UNEXPECTED_WITNESS]");
                         ConsensusErrors.UnexpectedWitness.Throw();
@@ -155,7 +155,7 @@ namespace Stratis.Bitcoin.Features.Consensus
             // large by filling up the coinbase witness, which doesn't change
             // the block hash, so we couldn't mark the block as permanently
             // failed).
-            if (this.GetBlockWeight(block) > this.ConsensusOptions.MaxBlockWeight)
+            if (this.GetBlockWeight(powBlock) > this.ConsensusOptions.MaxBlockWeight)
             {
                 this.logger.LogTrace("(-)[BAD_BLOCK_WEIGHT]");
                 ConsensusErrors.BadBlockWeight.Throw();
@@ -169,7 +169,7 @@ namespace Stratis.Bitcoin.Features.Consensus
         {
             this.logger.LogTrace("()");
 
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
             ChainedBlock index = context.BlockValidationContext.ChainedBlock;
             DeploymentFlags flags = context.Flags;
             UnspentOutputSet view = context.Set;
@@ -181,7 +181,7 @@ namespace Stratis.Bitcoin.Features.Consensus
             {
                 if (flags.EnforceBIP30)
                 {
-                    foreach (Transaction tx in block.Transactions)
+                    foreach (Transaction tx in powBlock.Transactions)
                     {
                         UnspentOutputs coins = view.AccessCoins(tx.GetHash());
                         if ((coins != null) && !coins.IsPrunable)
@@ -197,10 +197,10 @@ namespace Stratis.Bitcoin.Features.Consensus
             long sigOpsCost = 0;
             Money fees = Money.Zero;
             var checkInputs = new List<Task<bool>>();
-            for (int txIndex = 0; txIndex < block.Transactions.Count; txIndex++)
+            for (int txIndex = 0; txIndex < powBlock.Transactions.Count; txIndex++)
             {
                 this.PerformanceCounter.AddProcessedTransactions(1);
-                Transaction tx = block.Transactions[txIndex];
+                Transaction tx = powBlock.Transactions[txIndex];
                 if (!context.SkipValidation)
                 {
                     if (!tx.IsCoinBase && (!context.IsPoS || (context.IsPoS && !tx.IsCoinStake)))
@@ -267,7 +267,7 @@ namespace Stratis.Bitcoin.Features.Consensus
 
             if (!context.SkipValidation)
             {
-                this.CheckBlockReward(context, fees, index.Height, block);
+                this.CheckBlockReward(context, fees, index.Height, powBlock);
 
                 bool passed = checkInputs.All(c => c.GetAwaiter().GetResult());
                 if (!passed)
@@ -304,14 +304,14 @@ namespace Stratis.Bitcoin.Features.Consensus
         /// <param name="context">Context that contains variety of information regarding blocks validation and execution.</param>
         /// <param name="fees">Total amount of fees from transactions that are included in that block.</param>
         /// <param name="height">Block's height.</param>
-        /// <param name="block">Block for which reward amount is checked.</param>
+        /// <param name="powBlock">Block for which reward amount is checked.</param>
         /// <exception cref="ConsensusErrors.BadCoinbaseAmount">Thrown if coinbase transaction output value is larger than expected.</exception>
-        protected virtual void CheckBlockReward(RuleContext context, Money fees, int height, Block block)
+        protected virtual void CheckBlockReward(RuleContext context, Money fees, int height, PowBlock powBlock)
         {
             this.logger.LogTrace("()");
 
             Money blockReward = fees + this.GetProofOfWorkReward(height);
-            if (block.Transactions[0].TotalOut > blockReward)
+            if (powBlock.Transactions[0].TotalOut > blockReward)
             {
                 this.logger.LogTrace("(-)[BAD_COINBASE_AMOUNT]");
                 ConsensusErrors.BadCoinbaseAmount.Throw();
@@ -488,11 +488,11 @@ namespace Stratis.Bitcoin.Features.Consensus
         {
             this.logger.LogTrace("()");
 
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
 
             bool mutated;
-            uint256 hashMerkleRoot2 = this.BlockMerkleRoot(block, out mutated);
-            if (context.CheckMerkleRoot && (block.Header.HashMerkleRoot != hashMerkleRoot2))
+            uint256 hashMerkleRoot2 = this.BlockMerkleRoot(powBlock, out mutated);
+            if (context.CheckMerkleRoot && (powBlock.Header.HashMerkleRoot != hashMerkleRoot2))
             {
                 this.logger.LogTrace("(-)[BAD_MERKLE_ROOT]");
                 ConsensusErrors.BadMerkleRoot.Throw();
@@ -514,23 +514,23 @@ namespace Stratis.Bitcoin.Features.Consensus
             // checks that use witness data may be performed here.
 
             // Size limits.
-            if ((block.Transactions.Count == 0) || (block.Transactions.Count > this.ConsensusOptions.MaxBlockBaseSize) ||
-                (this.GetSize(block, NetworkOptions.TemporaryOptions & ~NetworkOptions.Witness) > this.ConsensusOptions.MaxBlockBaseSize))
+            if ((powBlock.Transactions.Count == 0) || (powBlock.Transactions.Count > this.ConsensusOptions.MaxBlockBaseSize) ||
+                (this.GetSize(powBlock, NetworkOptions.TemporaryOptions & ~NetworkOptions.Witness) > this.ConsensusOptions.MaxBlockBaseSize))
             {
                 this.logger.LogTrace("(-)[BAD_BLOCK_LEN]");
                 ConsensusErrors.BadBlockLength.Throw();
             }
 
             // First transaction must be coinbase, the rest must not be
-            if ((block.Transactions.Count == 0) || !block.Transactions[0].IsCoinBase)
+            if ((powBlock.Transactions.Count == 0) || !powBlock.Transactions[0].IsCoinBase)
             {
                 this.logger.LogTrace("(-)[NO_COINBASE]");
                 ConsensusErrors.BadCoinbaseMissing.Throw();
             }
 
-            for (int i = 1; i < block.Transactions.Count; i++)
+            for (int i = 1; i < powBlock.Transactions.Count; i++)
             {
-                if (block.Transactions[i].IsCoinBase)
+                if (powBlock.Transactions[i].IsCoinBase)
                 {
                     this.logger.LogTrace("(-)[MULTIPLE_COINBASE]");
                     ConsensusErrors.BadMultipleCoinbase.Throw();
@@ -538,11 +538,11 @@ namespace Stratis.Bitcoin.Features.Consensus
             }
 
             // Check transactions
-            foreach (Transaction tx in block.Transactions)
+            foreach (Transaction tx in powBlock.Transactions)
                 this.CheckTransaction(tx);
 
             long sigOps = 0;
-            foreach (Transaction tx in block.Transactions)
+            foreach (Transaction tx in powBlock.Transactions)
                 sigOps += this.GetLegacySignatureOperationsCount(tx);
 
             if ((sigOps * this.ConsensusOptions.WitnessScaleFactor) > this.ConsensusOptions.MaxBlockSigopsCost)
@@ -667,11 +667,11 @@ namespace Stratis.Bitcoin.Features.Consensus
         }
 
         /// <inheritdoc />
-        public long GetBlockWeight(Block block)
+        public long GetBlockWeight(PowBlock powBlock)
         {
             var options = NetworkOptions.TemporaryOptions;
-            return this.GetSize(block, options & ~NetworkOptions.Witness) * (this.ConsensusOptions.WitnessScaleFactor - 1) +
-                   this.GetSize(block, options | NetworkOptions.Witness);
+            return this.GetSize(powBlock, options & ~NetworkOptions.Witness) * (this.ConsensusOptions.WitnessScaleFactor - 1) +
+                   this.GetSize(powBlock, options | NetworkOptions.Witness);
         }
 
         /// <summary>
@@ -706,21 +706,21 @@ namespace Stratis.Bitcoin.Features.Consensus
         }
 
         /// <inheritdoc />
-        public uint256 BlockWitnessMerkleRoot(Block block, out bool mutated)
+        public uint256 BlockWitnessMerkleRoot(PowBlock powBlock, out bool mutated)
         {
             var leaves = new List<uint256>();
             leaves.Add(uint256.Zero); // The witness hash of the coinbase is 0.
-            foreach (Transaction tx in block.Transactions.Skip(1))
+            foreach (Transaction tx in powBlock.Transactions.Skip(1))
                 leaves.Add(tx.GetWitHash());
 
             return this.ComputeMerkleRoot(leaves, out mutated);
         }
 
         /// <inheritdoc />
-        public uint256 BlockMerkleRoot(Block block, out bool mutated)
+        public uint256 BlockMerkleRoot(PowBlock powBlock, out bool mutated)
         {
-            var leaves = new List<uint256>(block.Transactions.Count);
-            foreach (Transaction tx in block.Transactions)
+            var leaves = new List<uint256>(powBlock.Transactions.Count);
+            foreach (Transaction tx in powBlock.Transactions)
                 leaves.Add(tx.GetHash());
 
             return this.ComputeMerkleRoot(leaves, out mutated);
@@ -852,17 +852,17 @@ namespace Stratis.Bitcoin.Features.Consensus
         /// <summary>
         /// Gets index of the last coinbase transaction output with SegWit flag.
         /// </summary>
-        /// <param name="block">Block which coinbase transaction's outputs will be checked for SegWit flags.</param>
+        /// <param name="powBlock">Block which coinbase transaction's outputs will be checked for SegWit flags.</param>
         /// <returns>
         /// <c>-1</c> if no SegWit flags were found.
         /// If SegWit flag is found index of the last transaction's output that has SegWit flag is returned.
         /// </returns>
-        private int GetWitnessCommitmentIndex(Block block)
+        private int GetWitnessCommitmentIndex(PowBlock powBlock)
         {
             int commitpos = -1;
-            for (int i = 0; i < block.Transactions[0].Outputs.Count; i++)
+            for (int i = 0; i < powBlock.Transactions[0].Outputs.Count; i++)
             {
-                var scriptPubKey = block.Transactions[0].Outputs[i].ScriptPubKey;
+                var scriptPubKey = powBlock.Transactions[0].Outputs[i].ScriptPubKey;
 
                 if (scriptPubKey.Length >= 38)
                 {
@@ -909,7 +909,7 @@ namespace Stratis.Bitcoin.Features.Consensus
             Guard.NotNull(context.BestBlock, nameof(context.BestBlock));
             this.logger.LogTrace("()");
 
-            BlockHeader header = context.BlockValidationContext.Block.Header;
+            BlockHeader header = context.BlockValidationContext.PowBlock.Header;
 
             int height = context.BestBlock.Height + 1;
 

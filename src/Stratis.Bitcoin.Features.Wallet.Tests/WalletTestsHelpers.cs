@@ -84,7 +84,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             var nonce = RandomUtils.GetUInt32();
             foreach (ConcurrentChain chain in chains)
             {
-                var block = new Block();
+                var block = new PowBlock();
                 block.AddTransaction(new Transaction());
                 block.UpdateMerkleRoot();
                 block.Header.HashPrevBlock = previous == null ? chain.Tip.HashBlock : previous.HashBlock;
@@ -95,11 +95,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             return last;
         }
 
-        public static (ChainedBlock ChainedBlock, Block Block) AppendBlock(ChainedBlock previous, ConcurrentChain chain)
+        public static (ChainedBlock ChainedBlock, PowBlock Block) AppendBlock(ChainedBlock previous, ConcurrentChain chain)
         {
             ChainedBlock last = null;
             var nonce = RandomUtils.GetUInt32();
-            var block = new Block();
+            var block = new PowBlock();
 
             block.AddTransaction(new Transaction());
             block.UpdateMerkleRoot();
@@ -155,11 +155,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             return (walletFile, extendedKey);
         }
 
-        public static Block AppendTransactionInNewBlockToChain(ConcurrentChain chain, Transaction transaction)
+        public static PowBlock AppendTransactionInNewBlockToChain(ConcurrentChain chain, Transaction transaction)
         {
             ChainedBlock last = null;
             var nonce = RandomUtils.GetUInt32();
-            var block = new Block();
+            var block = new PowBlock();
             block.AddTransaction(transaction);
             block.UpdateMerkleRoot();
             block.Header.HashPrevBlock = chain.Tip.HashBlock;
@@ -275,7 +275,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             var prevBlockHash = chain.Genesis.HashBlock;
             for (var i = 0; i < blockAmount; i++)
             {
-                var block = new Block();
+                var block = new PowBlock();
                 block.AddTransaction(new Transaction());
                 block.UpdateMerkleRoot();
                 block.Header.BlockTime = new DateTimeOffset(new DateTime(2017, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(i));
@@ -295,20 +295,20 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         /// <param name="network">The network to use</param>
         /// <param name="forkBlock">The height at which to put the fork.</param>
         /// <returns></returns>
-        public static (ConcurrentChain LeftChain, ConcurrentChain RightChain, List<Block> LeftForkBlocks, List<Block> RightForkBlocks)
+        public static (ConcurrentChain LeftChain, ConcurrentChain RightChain, List<PowBlock> LeftForkBlocks, List<PowBlock> RightForkBlocks)
             GenerateForkedChainAndBlocksWithHeight(int blockAmount, Network network, int forkBlock)
         {
             var rightchain = new ConcurrentChain(network);
             var leftchain = new ConcurrentChain(network);
             var prevBlockHash = rightchain.Genesis.HashBlock;
-            var leftForkBlocks = new List<Block>();
-            var rightForkBlocks = new List<Block>();
+            var leftForkBlocks = new List<PowBlock>();
+            var rightForkBlocks = new List<PowBlock>();
 
             // build up left fork fully and right fork until forkblock
             uint256 forkBlockPrevHash = null;
             for (var i = 0; i < blockAmount; i++)
             {
-                var block = new Block();
+                var block = new PowBlock();
                 block.AddTransaction(new Transaction());
                 block.UpdateMerkleRoot();
                 block.Header.HashPrevBlock = prevBlockHash;
@@ -332,7 +332,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             // build up the right fork further.
             for (var i = forkBlock; i < blockAmount; i++)
             {
-                var block = new Block();
+                var block = new PowBlock();
                 block.AddTransaction(new Transaction());
                 block.UpdateMerkleRoot();
                 block.Header.HashPrevBlock = forkBlockPrevHash;
@@ -351,15 +351,15 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             return (leftchain, rightchain, leftForkBlocks, rightForkBlocks);
         }
 
-        public static (ConcurrentChain Chain, List<Block> Blocks) GenerateChainAndBlocksWithHeight(int blockAmount, Network network)
+        public static (ConcurrentChain Chain, List<PowBlock> Blocks) GenerateChainAndBlocksWithHeight(int blockAmount, Network network)
         {
             var chain = new ConcurrentChain(network);
             var nonce = RandomUtils.GetUInt32();
             var prevBlockHash = chain.Genesis.HashBlock;
-            var blocks = new List<Block>();
+            var blocks = new List<PowBlock>();
             for (var i = 0; i < blockAmount; i++)
             {
-                var block = new Block();
+                var block = new PowBlock();
                 block.AddTransaction(new Transaction());
                 block.UpdateMerkleRoot();
                 block.Header.HashPrevBlock = prevBlockHash;
@@ -376,7 +376,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             var chain = new ConcurrentChain(Network.StratisMain);
             var nonce = RandomUtils.GetUInt32();
-            var block = new Block();
+            var block = new PowBlock();
             block.AddTransaction(new Transaction());
             block.UpdateMerkleRoot();
             block.Header.HashPrevBlock = chain.Genesis.HashBlock;
@@ -439,7 +439,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             return addresses;
         }
 
-        public static TransactionData CreateTransactionDataFromFirstBlock((ConcurrentChain chain, uint256 blockHash, Block block) chainInfo)
+        public static TransactionData CreateTransactionDataFromFirstBlock((ConcurrentChain chain, uint256 blockHash, PowBlock block) chainInfo)
         {
             var transaction = chainInfo.block.Transactions[0];
 
@@ -456,59 +456,59 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             return addressTransaction;
         }
 
-        public static (ConcurrentChain chain, uint256 blockhash, Block block) CreateChainAndCreateFirstBlockWithPaymentToAddress(Network network, HdAddress address)
+        public static (ConcurrentChain chain, uint256 blockhash, PowBlock block) CreateChainAndCreateFirstBlockWithPaymentToAddress(Network network, HdAddress address)
         {
             var chain = new ConcurrentChain(network);
 
-            Block block = new Block();
-            block.Header.HashPrevBlock = chain.Tip.HashBlock;
-            block.Header.Bits = block.Header.GetWorkRequired(network, chain.Tip);
-            block.Header.UpdateTime(DateTimeOffset.UtcNow, network, chain.Tip);
+            PowBlock powBlock = new PowBlock();
+            powBlock.Header.HashPrevBlock = chain.Tip.HashBlock;
+            powBlock.Header.Bits = powBlock.Header.GetWorkRequired(network, chain.Tip);
+            powBlock.Header.UpdateTime(DateTimeOffset.UtcNow, network, chain.Tip);
 
             var coinbase = new Transaction();
             coinbase.AddInput(TxIn.CreateCoinbase(chain.Height + 1));
             coinbase.AddOutput(new TxOut(network.GetReward(chain.Height + 1), address.ScriptPubKey));
 
-            block.AddTransaction(coinbase);
-            block.Header.Nonce = 0;
-            block.UpdateMerkleRoot();
-            block.Header.CacheHashes();
+            powBlock.AddTransaction(coinbase);
+            powBlock.Header.Nonce = 0;
+            powBlock.UpdateMerkleRoot();
+            powBlock.Header.CacheHashes();
 
-            chain.SetTip(block.Header);
+            chain.SetTip(powBlock.Header);
 
-            return (chain, block.GetHash(), block);
+            return (chain, powBlock.GetHash(), powBlock);
         }
 
-        public static List<Block> AddBlocksWithCoinbaseToChain(Network network, ConcurrentChain chain, HdAddress address, int blocks = 1)
+        public static List<PowBlock> AddBlocksWithCoinbaseToChain(Network network, ConcurrentChain chain, HdAddress address, int blocks = 1)
         {
             //var chain = new ConcurrentChain(network.GetGenesis().Header);
 
-            var blockList = new List<Block>();
+            var blockList = new List<PowBlock>();
 
             for (int i = 0; i < blocks; i++)
             {
-                Block block = new Block();
-                block.Header.HashPrevBlock = chain.Tip.HashBlock;
-                block.Header.Bits = block.Header.GetWorkRequired(network, chain.Tip);
-                block.Header.UpdateTime(DateTimeOffset.UtcNow, network, chain.Tip);
+                PowBlock powBlock = new PowBlock();
+                powBlock.Header.HashPrevBlock = chain.Tip.HashBlock;
+                powBlock.Header.Bits = powBlock.Header.GetWorkRequired(network, chain.Tip);
+                powBlock.Header.UpdateTime(DateTimeOffset.UtcNow, network, chain.Tip);
 
                 var coinbase = new Transaction();
                 coinbase.AddInput(TxIn.CreateCoinbase(chain.Height + 1));
                 coinbase.AddOutput(new TxOut(network.GetReward(chain.Height + 1), address.ScriptPubKey));
 
-                block.AddTransaction(coinbase);
-                block.Header.Nonce = 0;
-                block.UpdateMerkleRoot();
-                block.Header.CacheHashes();
+                powBlock.AddTransaction(coinbase);
+                powBlock.Header.Nonce = 0;
+                powBlock.UpdateMerkleRoot();
+                powBlock.Header.CacheHashes();
 
-                chain.SetTip(block.Header);
+                chain.SetTip(powBlock.Header);
 
                 var addressTransaction = new TransactionData
                 {
                     Amount = coinbase.TotalOut,
-                    BlockHash = block.GetHash(),
-                    BlockHeight = chain.GetBlock(block.GetHash()).Height,
-                    CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time),
+                    BlockHash = powBlock.GetHash(),
+                    BlockHeight = chain.GetBlock(powBlock.GetHash()).Height,
+                    CreationTime = DateTimeOffset.FromUnixTimeSeconds(powBlock.Header.Time),
                     Id = coinbase.GetHash(),
                     Index = 0,
                     ScriptPubKey = coinbase.Outputs[0].ScriptPubKey,
@@ -516,7 +516,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
 
                 address.Transactions.Add(addressTransaction);
 
-                blockList.Add(block);
+                blockList.Add(powBlock);
             }
 
             return blockList;

@@ -14,10 +14,10 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         {
             if (context.CheckMerkleRoot)
             {
-                Block block = context.BlockValidationContext.Block;
+                PowBlock powBlock = context.BlockValidationContext.PowBlock;
 
-                uint256 hashMerkleRoot2 = BlockMerkleRoot(block, out bool mutated);
-                if (block.Header.HashMerkleRoot != hashMerkleRoot2)
+                uint256 hashMerkleRoot2 = BlockMerkleRoot(powBlock, out bool mutated);
+                if (powBlock.Header.HashMerkleRoot != hashMerkleRoot2)
                 {
                     this.Logger.LogTrace("(-)[BAD_MERKLE_ROOT]");
                     ConsensusErrors.BadMerkleRoot.Throw();
@@ -39,13 +39,13 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         /// <summary>
         /// Calculates merkle root for block's trasnactions.
         /// </summary>
-        /// <param name="block">Block which transactions are used for calculation.</param>
+        /// <param name="powBlock">Block which transactions are used for calculation.</param>
         /// <param name="mutated"><c>true</c> if block contains repeating sequences of transactions without affecting the merkle root of a block. Otherwise: <c>false</c>.</param>
         /// <returns>Merkle root.</returns>
-        public static uint256 BlockMerkleRoot(Block block, out bool mutated)
+        public static uint256 BlockMerkleRoot(PowBlock powBlock, out bool mutated)
         {
-            var leaves = new List<uint256>(block.Transactions.Count);
-            foreach (Transaction tx in block.Transactions)
+            var leaves = new List<uint256>(powBlock.Transactions.Count);
+            foreach (Transaction tx in powBlock.Transactions)
                 leaves.Add(tx.GetHash());
 
             return ComputeMerkleRoot(leaves, out mutated);

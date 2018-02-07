@@ -27,7 +27,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
     /// </summary>
     internal class TestChainContext
     {
-        public List<Block> Blocks { get; set; }
+        public List<PowBlock> Blocks { get; set; }
 
         public ConsensusLoop Consensus { get; set; }
 
@@ -110,7 +110,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
         /// <summary>
         /// Mine new blocks in to the consensus database and the chain.
         /// </summary>
-        public static async Task<List<Block>> MineBlocksAsync(TestChainContext testChainContext, int count, Script scriptPubKey)
+        public static async Task<List<PowBlock>> MineBlocksAsync(TestChainContext testChainContext, int count, Script scriptPubKey)
         {
             BlockPolicyEstimator blockPolicyEstimator = new BlockPolicyEstimator(new MempoolSettings(testChainContext.NodeSettings), testChainContext.LoggerFactory, testChainContext.NodeSettings);
             TxMempool mempool = new TxMempool(testChainContext.DateTimeProvider, blockPolicyEstimator, testChainContext.LoggerFactory, testChainContext.NodeSettings);
@@ -118,7 +118,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
 
             // Simple block creation, nothing special yet:
 
-            List<Block> blocks = new List<Block>();
+            List<PowBlock> blocks = new List<PowBlock>();
             for (int i = 0; i < count; ++i)
             {
                 PowBlockAssembler blockAssembler = CreatePowBlockAssembler(testChainContext.Network, testChainContext.Consensus, testChainContext.Chain, mempoolLock, mempool, testChainContext.DateTimeProvider, testChainContext.LoggerFactory as LoggerFactory);
@@ -126,26 +126,26 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
                 BlockTemplate newBlock = blockAssembler.CreateNewBlock(scriptPubKey);
 
                 int nHeight = testChainContext.Chain.Tip.Height + 1; // Height first in coinbase required for block.version=2
-                Transaction txCoinbase = newBlock.Block.Transactions[0];
+                Transaction txCoinbase = newBlock.PowBlock.Transactions[0];
                 txCoinbase.Inputs[0] = TxIn.CreateCoinbase(nHeight);
-                newBlock.Block.UpdateMerkleRoot();
+                newBlock.PowBlock.UpdateMerkleRoot();
 
                 var maxTries = int.MaxValue;
 
-                while (maxTries > 0 && !newBlock.Block.CheckProofOfWork(testChainContext.Network.Consensus))
+                while (maxTries > 0 && !newBlock.PowBlock.CheckProofOfWork(testChainContext.Network.Consensus))
                 {
-                    ++newBlock.Block.Header.Nonce;
+                    ++newBlock.PowBlock.Header.Nonce;
                     --maxTries;
                 }
 
                 if (maxTries == 0)
                     throw new XunitException("Test failed no blocks found");
 
-                var context = new BlockValidationContext { Block = newBlock.Block };
+                var context = new BlockValidationContext { PowBlock = newBlock.PowBlock };
                 await testChainContext.Consensus.AcceptBlockAsync(context);
                 Assert.Null(context.Error);
 
-                blocks.Add(newBlock.Block);
+                blocks.Add(newBlock.PowBlock);
             }
 
             return blocks;

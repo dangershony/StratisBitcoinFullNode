@@ -175,17 +175,17 @@ namespace Stratis.Bitcoin.IntegrationTests
 
                 // Simple block creation, nothing special yet:
                 this.newBlock = AssemblerForTest(this).CreateNewBlock(this.scriptPubKey);
-                this.chain.SetTip(this.newBlock.Block.Header);
-                await this.consensus.ValidateAndExecuteBlockAsync(new RuleContext(new BlockValidationContext { Block = this.newBlock.Block }, this.network.Consensus, this.consensus.Tip) { CheckPow = false, CheckMerkleRoot = false });
+                this.chain.SetTip(this.newBlock.PowBlock.Header);
+                await this.consensus.ValidateAndExecuteBlockAsync(new RuleContext(new BlockValidationContext { PowBlock = this.newBlock.PowBlock }, this.network.Consensus, this.consensus.Tip) { CheckPow = false, CheckMerkleRoot = false });
 
                 // We can't make transactions until we have inputs
                 // Therefore, load 100 blocks :)
                 this.baseheight = 0;
-                List<Block> blocks = new List<Block>();
+                List<PowBlock> blocks = new List<PowBlock>();
                 this.txFirst = new List<Transaction>();
                 for (int i = 0; i < this.blockinfo.Count; ++i)
                 {
-                    var pblock = this.newBlock.Block.Clone(); // pointer for convenience
+                    var pblock = this.newBlock.PowBlock.Clone(); // pointer for convenience
                     pblock.Header.HashPrevBlock = this.chain.Tip.HashBlock;
                     pblock.Header.Version = 1;
                     pblock.Header.Time = Utils.DateTimeToUnixTime(this.chain.Tip.GetMedianTimePast()) + 1;
@@ -206,7 +206,7 @@ namespace Stratis.Bitcoin.IntegrationTests
                     pblock.Header.Nonce = this.blockinfo[i].nonce;
 
                     this.chain.SetTip(pblock.Header);
-                    await this.consensus.ValidateAndExecuteBlockAsync(new RuleContext(new BlockValidationContext { Block = pblock }, this.network.Consensus, this.consensus.Tip) { CheckPow = false, CheckMerkleRoot = false });
+                    await this.consensus.ValidateAndExecuteBlockAsync(new RuleContext(new BlockValidationContext { PowBlock = pblock }, this.network.Consensus, this.consensus.Tip) { CheckPow = false, CheckMerkleRoot = false });
                     blocks.Add(pblock);
                 }
 
@@ -259,9 +259,9 @@ namespace Stratis.Bitcoin.IntegrationTests
             context.mempool.AddUnchecked(hashHighFeeTx, entry.Fee(50000).Time(context.date.GetTime()).SpendsCoinbase(false).FromTx(tx));
 
             var pblocktemplate = AssemblerForTest(context).CreateNewBlock(context.scriptPubKey);
-            Assert.True(pblocktemplate.Block.Transactions[1].GetHash() == hashParentTx);
-            Assert.True(pblocktemplate.Block.Transactions[2].GetHash() == hashHighFeeTx);
-            Assert.True(pblocktemplate.Block.Transactions[3].GetHash() == hashMediumFeeTx);
+            Assert.True(pblocktemplate.PowBlock.Transactions[1].GetHash() == hashParentTx);
+            Assert.True(pblocktemplate.PowBlock.Transactions[2].GetHash() == hashHighFeeTx);
+            Assert.True(pblocktemplate.PowBlock.Transactions[3].GetHash() == hashMediumFeeTx);
 
             // Test that a package below the block min tx fee doesn't get included
             tx = tx.Clone();
@@ -282,10 +282,10 @@ namespace Stratis.Bitcoin.IntegrationTests
             context.mempool.AddUnchecked(hashLowFeeTx, entry.Fee(feeToUse).FromTx(tx));
             pblocktemplate = AssemblerForTest(context).CreateNewBlock(context.scriptPubKey);
             // Verify that the free tx and the low fee tx didn't get selected
-            for (var i = 0; i < pblocktemplate.Block.Transactions.Count; ++i)
+            for (var i = 0; i < pblocktemplate.PowBlock.Transactions.Count; ++i)
             {
-                Assert.True(pblocktemplate.Block.Transactions[i].GetHash() != hashFreeTx);
-                Assert.True(pblocktemplate.Block.Transactions[i].GetHash() != hashLowFeeTx);
+                Assert.True(pblocktemplate.PowBlock.Transactions[i].GetHash() != hashFreeTx);
+                Assert.True(pblocktemplate.PowBlock.Transactions[i].GetHash() != hashLowFeeTx);
             }
 
             // Test that packages above the min relay fee do get included, even if one
@@ -297,8 +297,8 @@ namespace Stratis.Bitcoin.IntegrationTests
             hashLowFeeTx = tx.GetHash();
             context.mempool.AddUnchecked(hashLowFeeTx, entry.Fee(feeToUse + 2).FromTx(tx));
             pblocktemplate = AssemblerForTest(context).CreateNewBlock(context.scriptPubKey);
-            Assert.True(pblocktemplate.Block.Transactions[4].GetHash() == hashFreeTx);
-            Assert.True(pblocktemplate.Block.Transactions[5].GetHash() == hashLowFeeTx);
+            Assert.True(pblocktemplate.PowBlock.Transactions[4].GetHash() == hashFreeTx);
+            Assert.True(pblocktemplate.PowBlock.Transactions[5].GetHash() == hashLowFeeTx);
 
             // Test that transaction selection properly updates ancestor fee
             // calculations as ancestor transactions get included in a block.
@@ -322,10 +322,10 @@ namespace Stratis.Bitcoin.IntegrationTests
             pblocktemplate = AssemblerForTest(context).CreateNewBlock(context.scriptPubKey);
 
             // Verify that this tx isn't selected.
-            for (var i = 0; i < pblocktemplate.Block.Transactions.Count; ++i)
+            for (var i = 0; i < pblocktemplate.PowBlock.Transactions.Count; ++i)
             {
-                Assert.True(pblocktemplate.Block.Transactions[i].GetHash() != hashFreeTx2);
-                Assert.True(pblocktemplate.Block.Transactions[i].GetHash() != hashLowFeeTx2);
+                Assert.True(pblocktemplate.PowBlock.Transactions[i].GetHash() != hashFreeTx2);
+                Assert.True(pblocktemplate.PowBlock.Transactions[i].GetHash() != hashLowFeeTx2);
             }
 
             // This tx will be mineable, and should cause hashLowFeeTx2 to be selected
@@ -335,7 +335,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             tx.Outputs[0].Value = 100000000 - 10000; // 10k satoshi fee
             context.mempool.AddUnchecked(tx.GetHash(), entry.Fee(10000).FromTx(tx));
             pblocktemplate = AssemblerForTest(context).CreateNewBlock(context.scriptPubKey);
-            Assert.True(pblocktemplate.Block.Transactions[8].GetHash() == hashLowFeeTx2);
+            Assert.True(pblocktemplate.PowBlock.Transactions[8].GetHash() == hashLowFeeTx2);
         }
 
         [Fact]

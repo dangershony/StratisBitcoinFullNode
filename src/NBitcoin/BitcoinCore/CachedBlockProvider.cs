@@ -29,11 +29,11 @@ namespace NBitcoin.BitcoinCore
         }
         #region IBlockProvider Members
 
-        ConcurrentDictionary<uint256, Block> _Blocks = new ConcurrentDictionary<uint256, Block>();
+        ConcurrentDictionary<uint256, PowBlock> _Blocks = new ConcurrentDictionary<uint256, PowBlock>();
 
-        public Block GetBlock(uint256 id, List<byte[]> searchedData)
+        public PowBlock GetBlock(uint256 id, List<byte[]> searchedData)
         {
-            Block result = null;
+            PowBlock result = null;
             if(_Blocks.TryGetValue(id, out result))
                 return result;
             result = Inner.GetBlock(id, searchedData);
@@ -41,7 +41,7 @@ namespace NBitcoin.BitcoinCore
             while(_Blocks.Count > MaxCachedBlock)
             {
                 var removed = TakeRandom(_Blocks.Keys.ToList());
-                Block ignored = null;
+                PowBlock ignored = null;
                 _Blocks.TryRemove(removed, out ignored);
             }
             return result;

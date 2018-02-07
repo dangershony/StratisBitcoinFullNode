@@ -11,11 +11,11 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         [Fact]
         public void CanCall_AddNode()
         {
-            var initialBlockSignature = Block.BlockSignature;
+            var initialBlockSignature = PowBlock.BlockSignature;
 
             try
             {
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
                 string testDirectory = CreateTestDir(this);
 
 
@@ -29,18 +29,18 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             }
             finally
             {
-                Block.BlockSignature = initialBlockSignature;
+                PowBlock.BlockSignature = initialBlockSignature;
             }
         }
 
         [Fact]
         public void CanCall_AddNode_AddsNodeToCollection()
         {
-            var initialBlockSignature = Block.BlockSignature;
+            var initialBlockSignature = PowBlock.BlockSignature;
 
             try
             {
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
                 string testDirectory = CreateTestDir(this);
 
                 IFullNode fullNode = this.BuildServicedNode(testDirectory);
@@ -53,7 +53,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             }
             finally
             {
-                Block.BlockSignature = initialBlockSignature;
+                PowBlock.BlockSignature = initialBlockSignature;
             }
 
         }

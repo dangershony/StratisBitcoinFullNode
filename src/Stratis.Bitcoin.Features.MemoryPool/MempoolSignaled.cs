@@ -10,7 +10,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
     /// <summary>
     /// Mempool observer on block notifications.
     /// </summary>
-    public class MempoolSignaled : SignalObserver<Block>
+    public class MempoolSignaled : SignalObserver<PowBlock>
     {
         /// <summary>The async loop we need to wait upon before we can shut down this manager.</summary>
         private IAsyncLoop asyncLoop;
@@ -56,7 +56,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         }
 
         /// <inheritdoc />
-        protected override void OnNextCore(Block value)
+        protected override void OnNextCore(PowBlock value)
         {
             var blockHeader = this.chain.GetBlock(value.GetHash());
 

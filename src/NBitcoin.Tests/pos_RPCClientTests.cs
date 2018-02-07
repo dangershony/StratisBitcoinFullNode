@@ -23,7 +23,7 @@ namespace NBitcoin.Tests
             // These tests should be using the Stratis network.
             // Set these expected values accordingly.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
         }
 
         [Fact]

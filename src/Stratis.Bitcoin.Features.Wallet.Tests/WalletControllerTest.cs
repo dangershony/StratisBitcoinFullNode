@@ -26,7 +26,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             // Ensure that these flags have these expected values.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         [Fact]

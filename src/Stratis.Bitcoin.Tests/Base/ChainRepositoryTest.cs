@@ -75,7 +75,7 @@ namespace Stratis.Bitcoin.Tests.Base
             var nonce = RandomUtils.GetUInt32();
             foreach (var chain in chains)
             {
-                var block = new Block();
+                var block = new PowBlock();
                 block.AddTransaction(new Transaction());
                 block.UpdateMerkleRoot();
                 block.Header.HashPrevBlock = previous == null ? chain.Tip.HashBlock : previous.HashBlock;

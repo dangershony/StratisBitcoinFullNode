@@ -7,13 +7,13 @@ namespace Stratis.Bitcoin.Tests.Signals
 {
     public class SignalsTest
     {
-        private Mock<ISignaler<Block>> blockSignaler;
+        private Mock<ISignaler<PowBlock>> blockSignaler;
         private Bitcoin.Signals.Signals signals;
         private Mock<ISignaler<Transaction>> transactionSignaler;
 
         public SignalsTest()
         {
-            this.blockSignaler = new Mock<ISignaler<Block>>();
+            this.blockSignaler = new Mock<ISignaler<PowBlock>>();
             this.transactionSignaler = new Mock<ISignaler<Transaction>>();
             this.signals = new Bitcoin.Signals.Signals(this.blockSignaler.Object, this.transactionSignaler.Object);
         }
@@ -21,7 +21,7 @@ namespace Stratis.Bitcoin.Tests.Signals
         [Fact]
         public void SignalBlockBroadcastsToBlockSignaler()
         {
-            var block = new Block();
+            var block = new PowBlock();
 
             this.signals.SignalBlock(block);
 

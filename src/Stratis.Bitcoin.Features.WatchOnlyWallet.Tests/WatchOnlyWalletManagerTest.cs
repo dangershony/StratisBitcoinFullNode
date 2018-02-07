@@ -107,7 +107,7 @@ namespace Stratis.Bitcoin.Features.WatchOnlyWallet.Tests
             // Create a transaction to be received.
             string transactionHex = "010000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff230384041200fe0eb3a959fe1af507000963676d696e6572343208000000000000000000ffffffff02155e8b09000000001976a9144bfe90c8e6c6352c034b3f57d50a9a6e77a62a0788ac0000000000000000266a24aa21a9ed0bc6e4bfe82e04a1c52e66b72b199c5124794dd8c3c368f6ab95a0ba6cde277d0120000000000000000000000000000000000000000000000000000000000000000000000000";
             Transaction transaction = new Transaction(transactionHex);
-            var block = new Block();
+            var block = new PowBlock();
             block.AddTransaction(transaction);
             block.UpdateMerkleRoot();
 
@@ -149,7 +149,7 @@ namespace Stratis.Bitcoin.Features.WatchOnlyWallet.Tests
             // Create a transaction to be received.
             string transactionHex = "010000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff230384041200fe0eb3a959fe1af507000963676d696e6572343208000000000000000000ffffffff02155e8b09000000001976a9144bfe90c8e6c6352c034b3f57d50a9a6e77a62a0788ac0000000000000000266a24aa21a9ed0bc6e4bfe82e04a1c52e66b72b199c5124794dd8c3c368f6ab95a0ba6cde277d0120000000000000000000000000000000000000000000000000000000000000000000000000";
             Transaction transaction = new Transaction(transactionHex);
-            var block = new Block();
+            var block = new PowBlock();
             block.AddTransaction(transaction);
             block.UpdateMerkleRoot();
 
@@ -181,7 +181,7 @@ namespace Stratis.Bitcoin.Features.WatchOnlyWallet.Tests
                 "0100000001dd19f894733ab950ae8e772ef781fe299f80f4e813ee4cb6ac067fedea3a052c000000006b483045022100d4d6570c054bcbafa8178e9074f2be32b078e0761537bfe4fb7ad1eea949ab66022022e31d6f43d9418b6dc02147aefb380a4730386364bd406365e790826400570b012102a31bf228b4508abe3f0aa5f91c53732dfd49233c2fef3c5cfa68f2aa12cc71b4ffffffff029e90bf00000000001976a914128240d302a4aadcdd08d241b54fa4ef11acb21388ace0c810000000000017a914188d767b139ef64ce4efa091c2957c6137fbe0ce8700000000"
             };
 
-            var block = new Block();
+            var block = new PowBlock();
             foreach (var transactionHex in transactionsHex)
             {
                 block.AddTransaction(new Transaction(transactionHex));
@@ -220,7 +220,7 @@ namespace Stratis.Bitcoin.Features.WatchOnlyWallet.Tests
 
             // Ensure transaction appears in block
             Transaction transaction = new Transaction(transactionHex);
-            var block = new Block();
+            var block = new PowBlock();
             block.AddTransaction(transaction);
             block.UpdateMerkleRoot();
             

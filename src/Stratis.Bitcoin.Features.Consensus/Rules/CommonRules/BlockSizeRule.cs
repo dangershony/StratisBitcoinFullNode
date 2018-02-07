@@ -18,17 +18,17 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
             // large by filling up the coinbase witness, which doesn't change
             // the block hash, so we couldn't mark the block as permanently
             // failed).
-            if (this.GetBlockWeight(context.BlockValidationContext.Block, options, context.Consensus.NetworkOptions) > options.MaxBlockWeight)
+            if (this.GetBlockWeight(context.BlockValidationContext.PowBlock, options, context.Consensus.NetworkOptions) > options.MaxBlockWeight)
             {
                 this.Logger.LogTrace("(-)[BAD_BLOCK_WEIGHT]");
                 ConsensusErrors.BadBlockWeight.Throw();
             }
 
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
 
             // Size limits.
-            if ((block.Transactions.Count == 0) || (block.Transactions.Count > options.MaxBlockBaseSize) || 
-                (GetSize(block, context.Consensus.NetworkOptions & ~NetworkOptions.All) > options.MaxBlockBaseSize))
+            if ((powBlock.Transactions.Count == 0) || (powBlock.Transactions.Count > options.MaxBlockBaseSize) || 
+                (GetSize(powBlock, context.Consensus.NetworkOptions & ~NetworkOptions.All) > options.MaxBlockBaseSize))
             {
                 this.Logger.LogTrace("(-)[BAD_BLOCK_LEN]");
                 ConsensusErrors.BadBlockLength.Throw();
@@ -44,12 +44,12 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         /// This implements the <c>weight = (stripped_size * 4) + witness_size</c> formula, using only serialization with and without witness data.
         /// As witness_size is equal to total_size - stripped_size, this formula is identical to: <c>weight = (stripped_size * 3) + total_size</c>.
         /// </remarks>
-        /// <param name="block">Block that we get weight of.</param>
+        /// <param name="powBlock">Block that we get weight of.</param>
         /// <param name="options">Options for POW networks.</param>
         /// <returns>Block weight.</returns>
-        public long GetBlockWeight(Block block, PowConsensusOptions powOptions, NetworkOptions options)
+        public long GetBlockWeight(PowBlock powBlock, PowConsensusOptions powOptions, NetworkOptions options)
         {
-            return GetSize(block, options & ~NetworkOptions.Witness) * (powOptions.WitnessScaleFactor - 1) + GetSize(block, options);
+            return GetSize(powBlock, options & ~NetworkOptions.Witness) * (powOptions.WitnessScaleFactor - 1) + GetSize(powBlock, options);
         }
 
         /// <summary>

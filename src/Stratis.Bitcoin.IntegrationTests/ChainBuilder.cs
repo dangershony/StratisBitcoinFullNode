@@ -65,30 +65,30 @@ namespace Stratis.Bitcoin.IntegrationTests
 
         public void Mine(int blockCount)
         {
-            List<Block> blocks = new List<Block>();
+            List<PowBlock> blocks = new List<PowBlock>();
             DateTimeOffset now = DateTimeOffset.UtcNow;
             for (int i = 0; i < blockCount; i++)
             {
                 uint nonce = 0;
-                Block block = new Block();
-                block.Header.HashPrevBlock = this.Chain.Tip.HashBlock;
-                block.Header.Bits = block.Header.GetWorkRequired(this.network, this.Chain.Tip);
-                block.Header.UpdateTime(now, this.network, this.Chain.Tip);
+                PowBlock powBlock = new PowBlock();
+                powBlock.Header.HashPrevBlock = this.Chain.Tip.HashBlock;
+                powBlock.Header.Bits = powBlock.Header.GetWorkRequired(this.network, this.Chain.Tip);
+                powBlock.Header.UpdateTime(now, this.network, this.Chain.Tip);
                 var coinbase = new Transaction();
                 coinbase.AddInput(TxIn.CreateCoinbase(this.Chain.Height + 1));
                 coinbase.AddOutput(new TxOut(this.network.GetReward(this.Chain.Height + 1), this.MinerScriptPubKey));
-                block.AddTransaction(coinbase);
+                powBlock.AddTransaction(coinbase);
                 foreach (var tx in this.transactions)
                 {
-                    block.AddTransaction(tx);
+                    powBlock.AddTransaction(tx);
                 }
-                block.UpdateMerkleRoot();
-                while (!block.CheckProofOfWork(this.network.Consensus))
-                    block.Header.Nonce = ++nonce;
-                block.Header.CacheHashes();
-                blocks.Add(block);
+                powBlock.UpdateMerkleRoot();
+                while (!powBlock.CheckProofOfWork(this.network.Consensus))
+                    powBlock.Header.Nonce = ++nonce;
+                powBlock.Header.CacheHashes();
+                blocks.Add(powBlock);
                 this.transactions.Clear();
-                this.Chain.SetTip(block.Header);
+                this.Chain.SetTip(powBlock.Header);
             }
 
             foreach (var b in blocks)
@@ -97,7 +97,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             }
         }
 
-        internal Dictionary<uint256, Block> Blocks = new Dictionary<uint256, Block>();
+        internal Dictionary<uint256, PowBlock> Blocks = new Dictionary<uint256, PowBlock>();
         private List<Transaction> transactions = new List<Transaction>();
 
         public void Broadcast(Transaction tx)

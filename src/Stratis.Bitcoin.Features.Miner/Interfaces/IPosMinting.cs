@@ -15,13 +15,13 @@ namespace Stratis.Bitcoin.Features.Miner.Interfaces
         /// Creates a coinstake transaction with kernel that satisfies POS staking target.
         /// </summary>
         /// <param name="utxoStakeDescriptions">List of UTXOs that are available in the wallet for staking.</param>
-        /// <param name="block">Template of the block that we are trying to mine.</param>
+        /// <param name="powBlock">Template of the block that we are trying to mine.</param>
         /// <param name="chainTip">Tip of the best chain.</param>
         /// <param name="searchInterval">Length of an unexplored block time space in seconds. It only makes sense to look for a solution within this interval.</param>
         /// <param name="fees">Transaction fees from the transactions included in the block if we mine it.</param>
         /// <param name="coinstakeContext">Information about coinstake transaction and its private key that is to be filled when the kernel is found.</param>
         /// <returns><c>true</c> if the function succeeds, <c>false</c> otherwise.</returns>
-        Task<bool> CreateCoinstakeAsync(List<PosMinting.UtxoStakeDescription> utxoStakeDescriptions, Block block, ChainedBlock chainTip, long searchInterval, long fees, PosMinting.CoinstakeContext coinstakeContext);
+        Task<bool> CreateCoinstakeAsync(List<PosMinting.UtxoStakeDescription> utxoStakeDescriptions, PowBlock powBlock, ChainedBlock chainTip, long searchInterval, long fees, PosMinting.CoinstakeContext coinstakeContext);
 
         /// <summary>
         /// Attempts to stake new blocks in a loop.

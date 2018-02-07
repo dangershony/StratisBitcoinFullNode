@@ -13,7 +13,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         public override Task RunAsync(RuleContext context)
         {
             int height = context.BestBlock.Height + 1;
-            BlockHeader header = context.BlockValidationContext.Block.Header;
+            BlockHeader header = context.BlockValidationContext.PowBlock.Header;
 
             // Check that the block header hash matches the known checkpointed value, if any.
             if (!this.Parent.Checkpoints.CheckHardened(height, header.GetHash()))

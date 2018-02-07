@@ -4,6 +4,6 @@ namespace NBitcoin.BitcoinCore
 {
     public interface IBlockProvider
     {
-        Block GetBlock(uint256 id, List<byte[]> searchedData);
+        PowBlock GetBlock(uint256 id, List<byte[]> searchedData);
     }
 }

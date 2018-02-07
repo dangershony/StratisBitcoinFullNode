@@ -66,7 +66,7 @@ namespace Stratis.Bitcoin.BlockPulling
             public int Length;
 
             /// <summary>Description of a block.</summary>
-            public Block Block;
+            public PowBlock PowBlock;
 
             /// <summary>The peer the block came from.</summary>
             public IPEndPoint Peer;

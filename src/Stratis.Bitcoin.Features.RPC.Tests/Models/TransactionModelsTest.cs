@@ -23,7 +23,7 @@ namespace Stratis.Bitcoin.Features.RPC.Tests.Models
 
         public TransactionModelsTest()
         {
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
             Transaction.TimeStamp = false;
 
             this.txBlock10CoinbaseModelBrief = new TransactionBriefModel(Transaction.Parse(TxBlock10Hex));

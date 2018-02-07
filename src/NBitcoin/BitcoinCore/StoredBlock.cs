@@ -202,7 +202,7 @@ namespace NBitcoin.BitcoinCore
             return new DiskBlockPos(uint.Parse(match.Groups[1].Value), uint.Parse(match.Groups[2].Value));
         }
     }
-    public class StoredBlock : StoredItem<Block>
+    public class StoredBlock : StoredItem<PowBlock>
     {
         public bool ParseSkipBlockContent
         {
@@ -214,8 +214,8 @@ namespace NBitcoin.BitcoinCore
             : base(expectedNetwork, position)
         {
         }
-        public StoredBlock(uint magic, Block block, DiskBlockPos blockPosition)
-            : base(magic, block, blockPosition)
+        public StoredBlock(uint magic, PowBlock powBlock, DiskBlockPos blockPosition)
+            : base(magic, powBlock, blockPosition)
         {
         }
 
@@ -224,7 +224,7 @@ namespace NBitcoin.BitcoinCore
 
 
         static byte[] _Unused = new byte[1024 * 4];
-        protected override void ReadWriteItem(BitcoinStream stream, ref Block item)
+        protected override void ReadWriteItem(BitcoinStream stream, ref PowBlock item)
         {
             if(!ParseSkipBlockContent)
                 stream.ReadWrite(ref item);
@@ -234,7 +234,7 @@ namespace NBitcoin.BitcoinCore
                 BlockHeader header = item == null ? null : item.Header;
                 stream.ReadWrite(ref header);
                 if(!stream.Serializing)
-                    item = new Block(header);
+                    item = new PowBlock(header);
 
                 var headerSize = stream.Inner.Position - beforeReading;
                 var bodySize = this.Header.ItemSize - headerSize;

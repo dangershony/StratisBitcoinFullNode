@@ -17,10 +17,10 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         public override Task RunAsync(RuleContext context)
         {
             int nHeight = context.BestBlock?.Height + 1 ?? 0;
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
 
             Script expect = new Script(Op.GetPushOp(nHeight));
-            Script actual = block.Transactions[0].Inputs[0].ScriptSig;
+            Script actual = powBlock.Transactions[0].Inputs[0].ScriptSig;
             if (!this.StartWith(actual.ToBytes(true), expect.ToBytes(true)))
             {
                 this.Logger.LogTrace("(-)[BAD_COINBASE_HEIGHT]");

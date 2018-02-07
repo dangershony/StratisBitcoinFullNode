@@ -115,7 +115,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
 
             using (var engine = new DBreezeEngine(dir))
             {
-                var block = new Block();
+                var block = new PowBlock();
                 block.Header.GetHash();
                 block.Transactions.Add(trans);
 
@@ -209,10 +209,10 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
             string dir = CreateTestDir(this);
 
             var nextBlockHash = new uint256(1241256);
-            var blocks = new List<Block>();
+            var blocks = new List<PowBlock>();
             var blockHeader = new BlockHeader();
             blockHeader.Bits = new Target(12);
-            var block = new Block(blockHeader);
+            var block = new PowBlock(blockHeader);
             var transaction = new Transaction();
             transaction.Version = 32;
             block.Transactions.Add(transaction);
@@ -222,7 +222,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
             blocks.Add(block);
 
             var blockHeader2 = new BlockHeader();
-            var block2 = new Block(blockHeader2);
+            var block2 = new PowBlock(blockHeader2);
             transaction = new Transaction();
             transaction.Version = 15;
             block2.Transactions.Add(transaction);
@@ -257,7 +257,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
                 foreach (var item in blockDict)
                 {
                     var bl = blocks.Single(b => b.GetHash() == new uint256(item.Key));
-                    Assert.Equal(bl.Header.GetHash(), new Block(item.Value).Header.GetHash());
+                    Assert.Equal(bl.Header.GetHash(), new PowBlock(item.Value).Header.GetHash());
                 }
 
                 foreach (var item in transDict)
@@ -324,7 +324,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
         public void GetAsyncWithExistingBlockReturnsBlock()
         {
             string dir = CreateTestDir(this);
-            var block = new Block();
+            var block = new PowBlock();
 
             using (var engine = new DBreezeEngine(dir))
             {
@@ -360,7 +360,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
         public void ExistAsyncWithExistingBlockReturnsTrue()
         {
             string dir = CreateTestDir(this);
-            var block = new Block();
+            var block = new PowBlock();
 
             using (var engine = new DBreezeEngine(dir))
             {
@@ -396,7 +396,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.Tests
         public void DeleteAsyncRemovesBlocksAndTransactions()
         {
             string dir = CreateTestDir(this);
-            var block = new Block();
+            var block = new PowBlock();
             block.Transactions.Add(new Transaction());
 
             using (var engine = new DBreezeEngine(dir))

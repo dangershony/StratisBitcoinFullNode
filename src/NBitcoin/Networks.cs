@@ -14,16 +14,16 @@ namespace NBitcoin
         {
             // initialize the networks
             bool saveTS = Transaction.TimeStamp;
-            bool saveSig = Block.BlockSignature;
+            bool saveSig = PowBlock.BlockSignature;
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
 
             Network main = Network.Main;
             Network testNet = Network.TestNet;
             Network regTest = Network.RegTest;
 
             Transaction.TimeStamp = saveTS;
-            Block.BlockSignature = saveSig;
+            PowBlock.BlockSignature = saveSig;
         }
 
         /// <summary> The name of the root folder containing the different Bitcoin blockchains (Main, TestNet, RegTest). </summary>
@@ -289,7 +289,7 @@ namespace NBitcoin
 
         private static Network InitStratisMain()
         {
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             Transaction.TimeStamp = true;
 
             var consensus = new Consensus();
@@ -326,7 +326,7 @@ namespace NBitcoin
 
             consensus.DefaultAssumeValid = new uint256("0x8c2cf95f9ca72e13c8c4cdf15c2d7cc49993946fb49be4be147e106d502f1869"); // 642930
 
-            Block genesis = CreateStratisGenesisBlock(1470467000, 1831645, 0x1e0fffff, 1, Money.Zero);
+            PowBlock genesis = CreateStratisGenesisBlock(1470467000, 1831645, 0x1e0fffff, 1, Money.Zero);
             consensus.HashGenesisBlock = genesis.GetHash(consensus.NetworkOptions);
 
             // The message start string is designed to be unlikely to occur in normal data.
@@ -399,7 +399,7 @@ namespace NBitcoin
 
         private static Network InitStratisTest()
         {
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             Transaction.TimeStamp = true;
 
             var consensus = Network.StratisMain.Consensus.Clone();
@@ -462,7 +462,7 @@ namespace NBitcoin
             if (net != null)
                 return net;
 
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             Transaction.TimeStamp = true;
 
             var consensus = Network.StratisTest.Consensus.Clone();
@@ -508,14 +508,14 @@ namespace NBitcoin
             return builder.BuildAndRegister();
         }
 
-        private static Block CreateGenesisBlock(uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
+        private static PowBlock CreateGenesisBlock(uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
         {
             string pszTimestamp = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
             Script genesisOutputScript = new Script(Op.GetPushOp(Encoders.Hex.DecodeData("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f")), OpcodeType.OP_CHECKSIG);
             return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
         }
 
-        private static Block CreateGenesisBlock(string pszTimestamp, Script genesisOutputScript, uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
+        private static PowBlock CreateGenesisBlock(string pszTimestamp, Script genesisOutputScript, uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
         {
             Transaction txNew = new Transaction();
             txNew.Version = 1;
@@ -532,7 +532,7 @@ namespace NBitcoin
                 Value = genesisReward,
                 ScriptPubKey = genesisOutputScript
             });
-            Block genesis = new Block();
+            PowBlock genesis = new PowBlock();
             genesis.Header.BlockTime = Utils.UnixTimeToDateTime(nTime);
             genesis.Header.Bits = nBits;
             genesis.Header.Nonce = nNonce;
@@ -543,13 +543,13 @@ namespace NBitcoin
             return genesis;
         }
 
-        private static Block CreateStratisGenesisBlock(uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
+        private static PowBlock CreateStratisGenesisBlock(uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
         {
             string pszTimestamp = "http://www.theonion.com/article/olympics-head-priestess-slits-throat-official-rio--53466";
             return CreateStratisGenesisBlock(pszTimestamp, nTime, nNonce, nBits, nVersion, genesisReward);
         }
 
-        private static Block CreateStratisGenesisBlock(string pszTimestamp, uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
+        private static PowBlock CreateStratisGenesisBlock(string pszTimestamp, uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
         {
             Transaction txNew = new Transaction();
             txNew.Version = 1;
@@ -566,7 +566,7 @@ namespace NBitcoin
             {
                 Value = genesisReward,
             });
-            Block genesis = new Block();
+            PowBlock genesis = new PowBlock();
             genesis.Header.BlockTime = Utils.UnixTimeToDateTime(nTime);
             genesis.Header.Bits = nBits;
             genesis.Header.Nonce = nNonce;

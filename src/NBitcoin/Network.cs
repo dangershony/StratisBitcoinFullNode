@@ -234,7 +234,7 @@ namespace NBitcoin
         private PubKey alertPubKey;
         private readonly List<DNSSeedData> seeds = new List<DNSSeedData>();
         private readonly List<NetworkAddress> fixedSeeds = new List<NetworkAddress>();
-        private Block genesis;
+        private PowBlock genesis;
         private Consensus consensus = new Consensus();
 
         public NetworkOptions NetworkOptions
@@ -247,7 +247,7 @@ namespace NBitcoin
 
         private Network()
         {
-            this.genesis = new Block();
+            this.genesis = new PowBlock();
         }
 
         public PubKey AlertPubKey
@@ -668,7 +668,7 @@ namespace NBitcoin
             return this.Name;
         }
 
-        public Block GetGenesis()
+        public PowBlock GetGenesis()
         {
             return this.genesis.Clone(options:this.NetworkOptions);
         }

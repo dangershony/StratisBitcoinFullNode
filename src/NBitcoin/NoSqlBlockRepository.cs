@@ -23,20 +23,20 @@ namespace NBitcoin
 
         #region IBlockRepository Members
 
-        public Task<Block> GetBlockAsync(uint256 blockId)
+        public Task<PowBlock> GetBlockAsync(uint256 blockId)
         {
-            return this.repository.GetAsync<Block>(blockId.ToString());
+            return this.repository.GetAsync<PowBlock>(blockId.ToString());
         }
 
         #endregion
 
-        public Task PutAsync(Block block)
+        public Task PutAsync(PowBlock powBlock)
         {
-            return PutAsync(block.GetHash(), block);
+            return PutAsync(powBlock.GetHash(), powBlock);
         }
-        public Task PutAsync(uint256 blockId, Block block)
+        public Task PutAsync(uint256 blockId, PowBlock powBlock)
         {
-            return this.repository.PutAsync(blockId.ToString(), block);
+            return this.repository.PutAsync(blockId.ToString(), powBlock);
         }
     }
 

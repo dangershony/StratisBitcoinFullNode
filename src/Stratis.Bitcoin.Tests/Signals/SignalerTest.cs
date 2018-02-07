@@ -16,16 +16,16 @@ namespace Stratis.Bitcoin.Tests.Signals
         [Fact]
         public void SubscribeRegistersObserverWithObservable()
         {
-            var block = new Block();
-            var subject = new Mock<ISubject<Block>>();
-            var observer = new Mock<IObserver<Block>>();
-            subject.Setup(s => s.Subscribe(It.IsAny<IObserver<Block>>()))
-                .Callback<IObserver<Block>>((o) =>
+            var block = new PowBlock();
+            var subject = new Mock<ISubject<PowBlock>>();
+            var observer = new Mock<IObserver<PowBlock>>();
+            subject.Setup(s => s.Subscribe(It.IsAny<IObserver<PowBlock>>()))
+                .Callback<IObserver<PowBlock>>((o) =>
                 {
                     o.OnNext(block);
                 });
 
-            var signaler = new Signaler<Block>(subject.Object);
+            var signaler = new Signaler<PowBlock>(subject.Object);
 
             var result = signaler.Subscribe(observer.Object);
 
@@ -35,9 +35,9 @@ namespace Stratis.Bitcoin.Tests.Signals
         [Fact]
         public void BroadcastSignalsSubject()
         {
-            var block = new Block();
-            var subject = new Mock<ISubject<Block>>();
-            var signaler = new Signaler<Block>(subject.Object);
+            var block = new PowBlock();
+            var subject = new Mock<ISubject<PowBlock>>();
+            var signaler = new Signaler<PowBlock>(subject.Object);
 
             signaler.Broadcast(block);
 

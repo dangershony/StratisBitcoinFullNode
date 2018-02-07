@@ -22,18 +22,18 @@ namespace Stratis.Bitcoin.Features.Consensus.Interfaces
         /// <summary>
         /// Calculates merkle root for block's trasnactions.
         /// </summary>
-        /// <param name="block">Block which transactions are used for calculation.</param>
+        /// <param name="powBlock">Block which transactions are used for calculation.</param>
         /// <param name="mutated"><c>true</c> if block contains repeating sequences of transactions without affecting the merkle root of a block. Otherwise: <c>false</c>.</param>
         /// <returns>Merkle root.</returns>
-        uint256 BlockMerkleRoot(Block block, out bool mutated);
+        uint256 BlockMerkleRoot(PowBlock powBlock, out bool mutated);
 
         /// <summary>
         /// Calculates merkle root for witness data.
         /// </summary>
-        /// <param name="block">Block which transactions witness data is used for calculation.</param>
+        /// <param name="powBlock">Block which transactions witness data is used for calculation.</param>
         /// <param name="mutated"><c>true</c> if at least one leaf of the merkle tree has the same hash as any subtree. Otherwise: <c>false</c>.</param>
         /// <returns>Merkle root.</returns>
-        uint256 BlockWitnessMerkleRoot(Block block, out bool mutated);
+        uint256 BlockWitnessMerkleRoot(PowBlock powBlock, out bool mutated);
 
         /// <summary>
         /// Checks block's validity.
@@ -121,9 +121,9 @@ namespace Stratis.Bitcoin.Features.Consensus.Interfaces
         /// This implements the <c>weight = (stripped_size * 4) + witness_size</c> formula, using only serialization with and without witness data.
         /// As witness_size is equal to total_size - stripped_size, this formula is identical to: <c>weight = (stripped_size * 3) + total_size</c>.
         /// </remarks>
-        /// <param name="block">Block that we get weight of.</param>
+        /// <param name="powBlock">Block that we get weight of.</param>
         /// <returns>Block weight.</returns>
-        long GetBlockWeight(Block block);
+        long GetBlockWeight(PowBlock powBlock);
 
         /// <summary>
         /// Gets the proof of work reward amount for the block at provided height.

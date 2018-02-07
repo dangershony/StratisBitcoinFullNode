@@ -19,13 +19,13 @@ namespace Stratis.Bitcoin.IntegrationTests
         private bool initialBlockSignature;
         public WalletTests()
         {
-            this.initialBlockSignature = Block.BlockSignature;
-            Block.BlockSignature = false;
+            this.initialBlockSignature = PowBlock.BlockSignature;
+            PowBlock.BlockSignature = false;
         }
 
         public void Dispose()
         {
-            Block.BlockSignature = this.initialBlockSignature;
+            PowBlock.BlockSignature = this.initialBlockSignature;
         }
 
         [Fact]

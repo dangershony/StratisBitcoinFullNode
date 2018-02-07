@@ -32,15 +32,15 @@ namespace NBitcoin.Tests
             return Encoders.Hex.DecodeData(data);
         }
 
-        public static Block CreateFakeBlock(Transaction tx)
+        public static PowBlock CreateFakeBlock(Transaction tx)
         {
-            var block = new Block();
+            var block = new PowBlock();
             block.AddTransaction(tx);
             block.UpdateMerkleRoot();
             return block;
         }
 
-        public static Block CreateFakeBlock()
+        public static PowBlock CreateFakeBlock()
         {
             var block = TestUtils.CreateFakeBlock(new Transaction());
             block.Header.HashPrevBlock = new uint256(RandomUtils.GetBytes(32));

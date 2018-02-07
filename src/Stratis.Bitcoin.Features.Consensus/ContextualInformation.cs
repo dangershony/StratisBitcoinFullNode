@@ -105,7 +105,7 @@ namespace Stratis.Bitcoin.Features.Consensus
         {
             this.Stake = new ContextStakeInformation
             {
-                BlockStake = new BlockStake(this.BlockValidationContext.Block)
+                BlockStake = new BlockStake(this.BlockValidationContext.PowBlock)
             };
         }
     }

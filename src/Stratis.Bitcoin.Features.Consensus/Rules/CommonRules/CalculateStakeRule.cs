@@ -5,7 +5,7 @@ using NBitcoin;
 namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
 {
     /// <summary>
-    /// Checks if <see cref="Block"/> has a valid PoS header.
+    /// Checks if <see cref="PowBlock"/> has a valid PoS header.
     /// </summary>
     public class CalculateStakeRule : PosConsensusRule
     {
@@ -17,7 +17,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
 
             if (context.Stake.BlockStake.IsProofOfWork())
             {
-                if (context.CheckPow && !context.BlockValidationContext.Block.Header.CheckProofOfWork(context.Consensus))
+                if (context.CheckPow && !context.BlockValidationContext.PowBlock.Header.CheckProofOfWork(context.Consensus))
                 {
                     this.Logger.LogTrace("(-)[HIGH_HASH]");
                     ConsensusErrors.HighHash.Throw();

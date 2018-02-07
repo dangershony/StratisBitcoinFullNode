@@ -25,7 +25,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             // These tests use Network.StratisMain.
             // Ensure that these static flags have the expected values.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
 
             this.storeSettings = new StoreSettings
             {
@@ -94,7 +94,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         }
 
         /// <summary>
-        /// When processing a new <see cref="Block"/> that has a previous hash that is the same as the <see cref="WalletSyncManager.WalletTip"/> pass it directly to the <see cref="WalletManager"/>
+        /// When processing a new <see cref="PowBlock"/> that has a previous hash that is the same as the <see cref="WalletSyncManager.WalletTip"/> pass it directly to the <see cref="WalletManager"/>
         /// and set it as the new WalletTip.
         /// </summary>
         [Fact]
@@ -112,11 +112,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
 
             var expectedBlockHash = this.chain.GetBlock(4).Header.GetHash();
             Assert.Equal(expectedBlockHash, walletSyncManager.WalletTip.Header.GetHash());
-            this.walletManager.Verify(w => w.ProcessBlock(It.Is<Block>(b => b.GetHash() == blockToProcess.GetHash()), It.Is<ChainedBlock>(c => c.Header.GetHash() == expectedBlockHash)));
+            this.walletManager.Verify(w => w.ProcessBlock(It.Is<PowBlock>(b => b.GetHash() == blockToProcess.GetHash()), It.Is<ChainedBlock>(c => c.Header.GetHash() == expectedBlockHash)));
         }
 
         /// <summary>
-        /// When processing a new <see cref="Block"/> that has a previous hash that is not the same as the <see cref="WalletSyncManager.WalletTip"/> and is not on the best chain
+        /// When processing a new <see cref="PowBlock"/> that has a previous hash that is not the same as the <see cref="WalletSyncManager.WalletTip"/> and is not on the best chain
         /// look for the point at which the chain forked and remove blocks after that fork point from the <see cref="WalletManager"/>.
         /// After removing those blocks use the <see cref="BlockStoreCache"/> to retrieve blocks on the best chain and use those to catchup the WalletManager.
         /// Then set the incoming block as the WalletTip.
@@ -159,7 +159,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         }
 
         /// <summary>
-        /// When processing a new <see cref="Block"/> that has a previous hash that is not the same as the <see cref="WalletSyncManager.WalletTip"/> and is on the best chain
+        /// When processing a new <see cref="PowBlock"/> that has a previous hash that is not the same as the <see cref="WalletSyncManager.WalletTip"/> and is on the best chain
         /// see which blocks are missing and retrieve blocks from the <see cref="BlockStoreCache"/> to catchup the <see cref="WalletManager"/>.
         /// Then set the incoming block as the WalletTip.
         /// </summary>
@@ -194,7 +194,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         }
 
         /// <summary>
-        /// When using the <see cref="BlockStoreCache"/> to catchup on the <see cref="WalletManager"/> and the <see cref="Block"/> is not in the BlockStoreCache yet try to wait until it arrives.
+        /// When using the <see cref="BlockStoreCache"/> to catchup on the <see cref="WalletManager"/> and the <see cref="PowBlock"/> is not in the BlockStoreCache yet try to wait until it arrives.
         /// If it does use it to catchup the WalletManager.
         /// </summary>
         [Fact]
@@ -258,7 +258,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         }
 
         /// <summary>
-        /// Updates the <see cref="WalletSyncManager.WalletTip"/> and the <see cref="WalletManager.WalletTipHash"/> using the closest <see cref="Block"/> to the provided date.
+        /// Updates the <see cref="WalletSyncManager.WalletTip"/> and the <see cref="WalletManager.WalletTipHash"/> using the closest <see cref="PowBlock"/> to the provided date.
         /// </summary>
         [Fact]
         public void SyncFromDate_GivenDateMatchingBlocksOnChain_UpdatesUsingClosestBlock()
@@ -276,7 +276,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         }
 
         /// <summary>
-        /// Updates the <see cref="WalletSyncManager.WalletTip"/> and the <see cref="WalletManager.WalletTipHash"/> using the first <see cref="Block"/> if there is no block near the provided date.
+        /// Updates the <see cref="WalletSyncManager.WalletTip"/> and the <see cref="WalletManager.WalletTipHash"/> using the first <see cref="PowBlock"/> if there is no block near the provided date.
         /// </summary>
         [Fact]
         public void SyncFromDate_GivenDateNotMatchingBlocksOnChain_UpdatesUsingFirstBlock()
@@ -294,7 +294,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         }
 
         /// <summary>
-        /// Updates the <see cref="WalletSyncManager.WalletTip"/> and the <see cref="WalletManager.WalletTipHash"/> using the genesis <see cref="Block"/> if there is no block on the chain.
+        /// Updates the <see cref="WalletSyncManager.WalletTip"/> and the <see cref="WalletManager.WalletTipHash"/> using the genesis <see cref="PowBlock"/> if there is no block on the chain.
         /// </summary>
         [Fact]
         public void SyncFromDate_EmptyChain_UpdateUsingGenesisBlock()
@@ -345,9 +345,9 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             return It.Is<ChainedBlock>(c => c.Header.GetHash() == block.Header.GetHash());
         }
 
-        private static Block ExpectBlock(Block block)
+        private static PowBlock ExpectBlock(PowBlock powBlock)
         {
-            return It.Is<Block>(b => b.GetHash() == block.GetHash());
+            return It.Is<PowBlock>(b => b.GetHash() == powBlock.GetHash());
         }
 
         private class WalletSyncManagerOverride : WalletSyncManager

@@ -131,14 +131,14 @@ namespace Stratis.Bitcoin.Features.Miner
                 {
                     // Make sure the POS consensus rules are valid. This is required for generation of blocks inside tests,
                     // where it is possible to generate multiple blocks within one second.
-                    if (pblockTemplate.Block.Header.Time <= chainTip.Header.Time)
+                    if (pblockTemplate.PowBlock.Header.Time <= chainTip.Header.Time)
                     {
                         continue;
                     }
                 }
 
-                nExtraNonce = this.IncrementExtraNonce(pblockTemplate.Block, chainTip, nExtraNonce);
-                Block pblock = pblockTemplate.Block;
+                nExtraNonce = this.IncrementExtraNonce(pblockTemplate.PowBlock, chainTip, nExtraNonce);
+                PowBlock pblock = pblockTemplate.PowBlock;
 
                 while ((maxTries > 0) && (pblock.Header.Nonce < InnerLoopCount) && !pblock.CheckProofOfWork(this.network.Consensus))
                 {
@@ -159,7 +159,7 @@ namespace Stratis.Bitcoin.Features.Miner
                 if (newChain.ChainWork <= chainTip.ChainWork)
                     continue;
 
-                var blockValidationContext = new BlockValidationContext { Block = pblock };
+                var blockValidationContext = new BlockValidationContext { PowBlock = pblock };
 
                 this.consensusLoop.AcceptBlockAsync(blockValidationContext).GetAwaiter().GetResult();
 
@@ -178,7 +178,7 @@ namespace Stratis.Bitcoin.Features.Miner
                     return blocks;
                 }
 
-                this.logger.LogInformation("Mined new {0} block: '{1}'.", BlockStake.IsProofOfStake(blockValidationContext.Block) ? "POS" : "POW", blockValidationContext.ChainedBlock);
+                this.logger.LogInformation("Mined new {0} block: '{1}'.", BlockStake.IsProofOfStake(blockValidationContext.PowBlock) ? "POS" : "POW", blockValidationContext.ChainedBlock);
 
                 nHeight++;
                 blocks.Add(pblock.GetHash());
@@ -190,7 +190,7 @@ namespace Stratis.Bitcoin.Features.Miner
         }
 
         ///<inheritdoc/>
-        public int IncrementExtraNonce(Block pblock, ChainedBlock pindexPrev, int nExtraNonce)
+        public int IncrementExtraNonce(PowBlock pblock, ChainedBlock pindexPrev, int nExtraNonce)
         {
             // Update nExtraNonce
             if (this.hashPrevBlock != pblock.Header.HashPrevBlock)

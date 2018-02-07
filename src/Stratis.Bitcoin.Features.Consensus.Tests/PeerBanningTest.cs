@@ -16,7 +16,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
     {
         public PeerBanningTest()
         {
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
             Transaction.TimeStamp = false;
         }
 
@@ -34,7 +34,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
             var blocks = await TestChainFactory.MineBlocksAsync(context, 2, new Key().ScriptPubKey);
             var block = blocks.First();
             block.Header.HashPrevBlock = context.Chain.Tip.HashBlock;
-            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { Block = block, Peer = peer });
+            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { PowBlock = block, Peer = peer });
 
             Assert.True(context.PeerBanning.IsBanned(peer));
         }
@@ -58,7 +58,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
             // create a new block that breaks consensus.
             var block = blocks.First();
             block.Header.HashPrevBlock = context.Chain.Tip.HashBlock;
-            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { Block = block, Peer = peerEndPoint });
+            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { PowBlock = block, Peer = peerEndPoint });
             Assert.True(context.PeerBanning.IsBanned(peerEndPoint));
         }
 
@@ -80,7 +80,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
             // create a new block that breaks consensus.
             var block = blocks.First();
             block.Header.HashPrevBlock = context.Chain.Tip.HashBlock;
-            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { Block = block, Peer = peerEndPoint });
+            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { PowBlock = block, Peer = peerEndPoint });
 
             Assert.False(context.PeerBanning.IsBanned(peerEndPoint));
         }
@@ -104,7 +104,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
             // create a new block that breaks consensus.
             var block = blocks.First();
             block.Header.HashPrevBlock = context.Chain.Tip.HashBlock;
-            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { Block = block, Peer = peerEndPoint, BanDurationSeconds = BlockValidationContext.BanDurationNoBan });
+            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { PowBlock = block, Peer = peerEndPoint, BanDurationSeconds = BlockValidationContext.BanDurationNoBan });
 
             Assert.False(context.PeerBanning.IsBanned(peerEndPoint));
         }
@@ -127,7 +127,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Tests
             // create a new block that breaks consensus.
             var block = blocks.First();
             block.Header.HashPrevBlock = context.Chain.Tip.HashBlock;
-            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { Block = block, Peer = peerEndPoint, BanDurationSeconds = 1 }); // ban for 1 second
+            await context.Consensus.AcceptBlockAsync(new BlockValidationContext { PowBlock = block, Peer = peerEndPoint, BanDurationSeconds = 1 }); // ban for 1 second
 
             // wait 1 sec for ban to expire.
             Thread.Sleep(1000);

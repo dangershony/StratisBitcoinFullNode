@@ -40,33 +40,33 @@ namespace NBitcoin
         // Create from a CBlock, filtering transactions according to filter
         // Note that this will call IsRelevantAndUpdate on the filter for each transaction,
         // thus the filter will likely be modified.
-        public MerkleBlock(Block block, BloomFilter filter)
+        public MerkleBlock(PowBlock powBlock, BloomFilter filter)
         {
-            header = block.Header;
+            header = powBlock.Header;
 
             List<bool> vMatch = new List<bool>();
             List<uint256> vHashes = new List<uint256>();
 
 
-            for(uint i = 0; i < block.Transactions.Count; i++)
+            for(uint i = 0; i < powBlock.Transactions.Count; i++)
             {
-                uint256 hash = block.Transactions[(int)i].GetHash();
-                vMatch.Add(filter.IsRelevantAndUpdate(block.Transactions[(int)i]));
+                uint256 hash = powBlock.Transactions[(int)i].GetHash();
+                vMatch.Add(filter.IsRelevantAndUpdate(powBlock.Transactions[(int)i]));
                 vHashes.Add(hash);
             }
 
             _PartialMerkleTree = new PartialMerkleTree(vHashes.ToArray(), vMatch.ToArray());
         }
 
-        public MerkleBlock(Block block, uint256[] txIds)
+        public MerkleBlock(PowBlock powBlock, uint256[] txIds)
         {
-            header = block.Header;
+            header = powBlock.Header;
 
             List<bool> vMatch = new List<bool>();
             List<uint256> vHashes = new List<uint256>();
-            for(int i = 0; i < block.Transactions.Count; i++)
+            for(int i = 0; i < powBlock.Transactions.Count; i++)
             {
-                var hash = block.Transactions[i].GetHash();
+                var hash = powBlock.Transactions[i].GetHash();
                 vHashes.Add(hash);
                 vMatch.Add(txIds.Contains(hash));
             }

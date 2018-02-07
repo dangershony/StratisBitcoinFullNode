@@ -113,8 +113,8 @@ namespace Stratis.Bitcoin.Utilities
             if (type == typeof(uint256))
                 return new uint256(bytes);
 
-            if (type == typeof(Block))
-                return new Block(bytes/*, options:this.NetworkOptions*/);
+            if (type == typeof(PowBlock))
+                return new PowBlock(bytes/*, options:this.NetworkOptions*/);
 
             if (type == typeof(BlockStake))
                 return new BlockStake(bytes);

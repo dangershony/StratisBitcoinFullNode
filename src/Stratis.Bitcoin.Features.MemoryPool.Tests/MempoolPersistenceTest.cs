@@ -21,7 +21,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
 
         public MempoolPersistenceTest()
         {
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
             Transaction.TimeStamp = false;
 
             this.dir = "TestData/MempoolPersistenceTest/";

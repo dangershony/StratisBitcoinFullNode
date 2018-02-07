@@ -526,20 +526,20 @@ namespace Stratis.Bitcoin.Features.Miner
                 if (blockTemplate == null)
                     blockTemplate = this.blockAssemblerFactory.Create(chainTip, new AssemblerOptions() { IsProofOfStake = true }).CreateNewBlock(new Script());
 
-                Block block = blockTemplate.Block;
+                PowBlock powBlock = blockTemplate.PowBlock;
 
                 this.networkWeight = (long)this.GetNetworkWeight();
-                this.rpcGetStakingInfoModel.CurrentBlockSize = block.GetSerializedSize();
-                this.rpcGetStakingInfoModel.CurrentBlockTx = block.Transactions.Count();
+                this.rpcGetStakingInfoModel.CurrentBlockSize = powBlock.GetSerializedSize();
+                this.rpcGetStakingInfoModel.CurrentBlockTx = powBlock.Transactions.Count();
                 this.rpcGetStakingInfoModel.PooledTx = await this.mempoolLock.ReadAsync(() => this.mempool.MapTx.Count).ConfigureAwait(false);
                 this.rpcGetStakingInfoModel.Difficulty = this.GetDifficulty(chainTip);
                 this.rpcGetStakingInfoModel.NetStakeWeight = this.networkWeight;
 
                 // Trying to create coinstake that satisfies the difficulty target, put it into a block and sign the block.
-                if (await this.StakeAndSignBlockAsync(utxoStakeDescriptions, block, chainTip, blockTemplate.TotalFee, coinstakeTimestamp).ConfigureAwait(false))
+                if (await this.StakeAndSignBlockAsync(utxoStakeDescriptions, powBlock, chainTip, blockTemplate.TotalFee, coinstakeTimestamp).ConfigureAwait(false))
                 {
                     this.logger.LogTrace("New POS block created and signed successfully.");
-                    this.CheckStake(block, chainTip);
+                    this.CheckStake(powBlock, chainTip);
 
                     blockTemplate = null;
                 }
@@ -555,13 +555,13 @@ namespace Stratis.Bitcoin.Features.Miner
         /// One a new block is staked, this method is used to verify that it
         /// is a valid block and if so, it will add it to the chain.
         /// </summary>
-        /// <param name="block">The new block.</param>
+        /// <param name="powBlock">The new block.</param>
         /// <param name="chainTip">Block that was considered as a chain tip when the block staking started.</param>
-        private void CheckStake(Block block, ChainedBlock chainTip)
+        private void CheckStake(PowBlock powBlock, ChainedBlock chainTip)
         {
             this.logger.LogTrace("({0}:'{1}')", nameof(chainTip), chainTip);
 
-            if (!BlockStake.IsProofOfStake(block))
+            if (!BlockStake.IsProofOfStake(powBlock))
             {
                 this.logger.LogTrace("(-)[NOT_POS]");
                 return;
@@ -576,7 +576,7 @@ namespace Stratis.Bitcoin.Features.Miner
             }
 
             // Validate the block.
-            var blockValidationContext = new BlockValidationContext { Block = block };
+            var blockValidationContext = new BlockValidationContext { PowBlock = powBlock };
             this.consensusLoop.AcceptBlockAsync(blockValidationContext).GetAwaiter().GetResult();
 
             if (blockValidationContext.ChainedBlock == null)
@@ -601,24 +601,24 @@ namespace Stratis.Bitcoin.Features.Miner
         /// to be mined and signes it.
         /// </summary>
         /// <param name="utxoStakeDescriptions">List of UTXOs that are available in the wallet for staking.</param>
-        /// <param name="block">Template of the block that we are trying to mine.</param>
+        /// <param name="powBlock">Template of the block that we are trying to mine.</param>
         /// <param name="chainTip">Tip of the best chain.</param>
         /// <param name="fees">Transaction fees from the transactions included in the block if we mine it.</param>
         /// <param name="coinstakeTimestamp">Maximal timestamp of the coinstake transaction. The actual timestamp can be lower, but not higher.</param>
         /// <returns><c>true</c> if the function succeeds, <c>false</c> otherwise.</returns>
-        private async Task<bool> StakeAndSignBlockAsync(List<UtxoStakeDescription> utxoStakeDescriptions, Block block, ChainedBlock chainTip, long fees, uint coinstakeTimestamp)
+        private async Task<bool> StakeAndSignBlockAsync(List<UtxoStakeDescription> utxoStakeDescriptions, PowBlock powBlock, ChainedBlock chainTip, long fees, uint coinstakeTimestamp)
         {
             this.logger.LogTrace("({0}.{1}:{2},{3}:'{4}',{5}:{6},{7}:{8})", nameof(utxoStakeDescriptions), nameof(utxoStakeDescriptions.Count), utxoStakeDescriptions.Count, nameof(chainTip), chainTip, nameof(fees), fees, nameof(coinstakeTimestamp), coinstakeTimestamp);
 
             // If we are trying to sign something except proof-of-stake block template.
-            if (!block.Transactions[0].Outputs[0].IsEmpty)
+            if (!powBlock.Transactions[0].Outputs[0].IsEmpty)
             {
                 this.logger.LogTrace("(-)[NO_POS_BLOCK]:false");
                 return false;
             }
 
             // If we are trying to sign a complete proof-of-stake block.
-            if (BlockStake.IsProofOfStake(block))
+            if (BlockStake.IsProofOfStake(powBlock))
             {
                 this.logger.LogTrace("(-)[ALREADY_DONE]:true");
                 return true;
@@ -637,33 +637,33 @@ namespace Stratis.Bitcoin.Features.Miner
             this.lastCoinStakeSearchTime = searchTime;
             this.logger.LogTrace("Search interval set to {0}, last coinstake search timestamp set to {1}.", searchInterval, this.lastCoinStakeSearchTime);
 
-            if (await this.CreateCoinstakeAsync(utxoStakeDescriptions, block, chainTip, searchInterval, fees, coinstakeContext).ConfigureAwait(false))
+            if (await this.CreateCoinstakeAsync(utxoStakeDescriptions, powBlock, chainTip, searchInterval, fees, coinstakeContext).ConfigureAwait(false))
             {
                 uint minTimestamp = chainTip.Header.Time + 1;
                 if (coinstakeContext.CoinstakeTx.Time >= minTimestamp)
                 {
                     // Make sure coinstake would meet timestamp protocol
                     // as it would be the same as the block timestamp.
-                    block.Transactions[0].Time = block.Header.Time = coinstakeContext.CoinstakeTx.Time;
+                    powBlock.Transactions[0].Time = powBlock.Header.Time = coinstakeContext.CoinstakeTx.Time;
 
                     // We have to make sure that we have no future timestamps in
                     // our transactions set.
-                    foreach (Transaction transaction in block.Transactions)
+                    foreach (Transaction transaction in powBlock.Transactions)
                     {
-                        if (transaction.Time > block.Header.Time)
+                        if (transaction.Time > powBlock.Header.Time)
                         {
-                            this.logger.LogTrace("Removing transaction with timestamp {0} as it is greater than coinstake transaction timestamp {1}.", transaction.Time, block.Header.Time);
-                            block.Transactions.Remove(transaction);
+                            this.logger.LogTrace("Removing transaction with timestamp {0} as it is greater than coinstake transaction timestamp {1}.", transaction.Time, powBlock.Header.Time);
+                            powBlock.Transactions.Remove(transaction);
                         }
                     }
 
-                    block.Transactions.Insert(1, coinstakeContext.CoinstakeTx);
-                    block.UpdateMerkleRoot();
+                    powBlock.Transactions.Insert(1, coinstakeContext.CoinstakeTx);
+                    powBlock.UpdateMerkleRoot();
 
                     // Append a signature to our block.
-                    ECDSASignature signature = coinstakeContext.Key.Sign(block.GetHash());
+                    ECDSASignature signature = coinstakeContext.Key.Sign(powBlock.GetHash());
 
-                    block.BlockSignatur = new BlockSignature { Signature = signature.ToDER() };
+                    powBlock.BlockSignatur = new BlockSignature { Signature = signature.ToDER() };
                     this.logger.LogTrace("(-):true");
                     return true;
                 }
@@ -676,7 +676,7 @@ namespace Stratis.Bitcoin.Features.Miner
         }
 
         /// <inheritdoc/>
-        public async Task<bool> CreateCoinstakeAsync(List<UtxoStakeDescription> utxoStakeDescriptions, Block block, ChainedBlock chainTip, long searchInterval, long fees, CoinstakeContext coinstakeContext)
+        public async Task<bool> CreateCoinstakeAsync(List<UtxoStakeDescription> utxoStakeDescriptions, PowBlock powBlock, ChainedBlock chainTip, long searchInterval, long fees, CoinstakeContext coinstakeContext)
         {
             this.logger.LogTrace("({0}.{1}:{2},{3}:'{4}',{5}:{6},{7}:{8})", nameof(utxoStakeDescriptions), nameof(utxoStakeDescriptions.Count), utxoStakeDescriptions.Count, nameof(chainTip), chainTip, nameof(searchInterval), searchInterval, nameof(fees), fees);
 
@@ -752,7 +752,7 @@ namespace Stratis.Bitcoin.Features.Miner
                 coinIndex += stakingUtxoCount;
                 workerContexts[workerIndex] = cwc;
 
-                workers[workerIndex] = Task.Run(() => this.CoinstakeWorker(cwc, chainTip, block, minimalAllowedTime, searchInterval));
+                workers[workerIndex] = Task.Run(() => this.CoinstakeWorker(cwc, chainTip, powBlock, minimalAllowedTime, searchInterval));
             }
 
             await Task.WhenAll(workers).ConfigureAwait(false);
@@ -832,10 +832,10 @@ namespace Stratis.Bitcoin.Features.Miner
         /// </summary>
         /// <param name="context">Context information with worker task description. Results of the worker's attempt are also stored in this context.</param>
         /// <param name="chainTip">Tip of the best chain. Used only to stop working as soon as the chain advances.</param>
-        /// <param name="block">Template of the block that we are trying to mine.</param>
+        /// <param name="powBlock">Template of the block that we are trying to mine.</param>
         /// <param name="minimalAllowedTime">Minimal valid timestamp for new coinstake transaction.</param>
         /// <param name="searchInterval">Length of an unexplored block time space in seconds. It only makes sense to look for a solution within this interval.</param>
-        private void CoinstakeWorker(CoinstakeWorkerContext context, ChainedBlock chainTip, Block block, long minimalAllowedTime, long searchInterval)
+        private void CoinstakeWorker(CoinstakeWorkerContext context, ChainedBlock chainTip, PowBlock powBlock, long minimalAllowedTime, long searchInterval)
         {
             context.Logger.LogTrace("({0}:'{1}',{2}:{3},{4}:{5})", nameof(chainTip), chainTip, nameof(minimalAllowedTime), minimalAllowedTime, nameof(searchInterval), searchInterval);
 
@@ -899,10 +899,10 @@ namespace Stratis.Bitcoin.Features.Miner
 
                         var contextInformation = new ContextStakeInformation
                         {
-                            BlockStake = new BlockStake(block)
+                            BlockStake = new BlockStake(powBlock)
                         };
 
-                        this.posConsensusValidator.StakeValidator.CheckKernel(contextInformation, chainTip, block.Header.Bits, txTime, prevoutStake);
+                        this.posConsensusValidator.StakeValidator.CheckKernel(contextInformation, chainTip, powBlock.Header.Bits, txTime, prevoutStake);
 
                         if (context.Result.SetKernelFoundIndex(context.Index))
                         {

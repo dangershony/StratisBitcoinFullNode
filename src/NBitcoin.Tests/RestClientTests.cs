@@ -10,14 +10,14 @@ namespace NBitcoin.Tests
     [Trait("RestClient", "RestClient")]
     public class RestClientTests
     {    
-        private static readonly Block RegNetGenesisBlock = Network.RegTest.GetGenesis();
+        private static readonly PowBlock RegNetGenesisPowBlock = Network.RegTest.GetGenesis();
 
         public RestClientTests()
         {
             // These flags may get set due to static network initializers
             // which include the initializers for Stratis.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         [Fact]
@@ -60,8 +60,8 @@ namespace NBitcoin.Tests
             {
                 var client = builder.CreateNode().CreateRESTClient();
                 builder.StartAll();
-                var block = client.GetBlockAsync(RegNetGenesisBlock.GetHash()).Result;
-                Assert.Equal(block.GetHash(), RegNetGenesisBlock.GetHash());
+                var block = client.GetBlockAsync(RegNetGenesisPowBlock.GetHash()).Result;
+                Assert.Equal(block.GetHash(), RegNetGenesisPowBlock.GetHash());
             }
         }
 
@@ -74,13 +74,13 @@ namespace NBitcoin.Tests
                 builder.StartAll();
                 var rpc = builder.Nodes[0].CreateRPCClient();
                 builder.Nodes[0].Generate(2);
-                var result = client.GetBlockHeadersAsync(RegNetGenesisBlock.GetHash(), 3).Result;
+                var result = client.GetBlockHeadersAsync(RegNetGenesisPowBlock.GetHash(), 3).Result;
                 var headers = result.ToArray();
                 var last = headers.Last();
                 Assert.Equal(3, headers.Length);
                 Assert.Equal(rpc.GetBestBlockHash(), last.GetHash());
                 Assert.Equal(headers[1].GetHash(), last.HashPrevBlock);
-                Assert.Equal(RegNetGenesisBlock.GetHash(), headers[1].HashPrevBlock);
+                Assert.Equal(RegNetGenesisPowBlock.GetHash(), headers[1].HashPrevBlock);
             }
         }
 

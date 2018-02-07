@@ -10,11 +10,11 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         /// <inheritdoc />
         public override Task RunAsync(RuleContext context)
         {
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
             var options = context.Consensus.Option<PowConsensusOptions>();
 
             // Check transactions
-            foreach (Transaction tx in block.Transactions)
+            foreach (Transaction tx in powBlock.Transactions)
                 this.CheckTransaction(options, tx);
 
             return Task.CompletedTask;

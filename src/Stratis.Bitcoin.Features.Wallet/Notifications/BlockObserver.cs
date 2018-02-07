@@ -6,9 +6,9 @@ using Stratis.Bitcoin.Utilities;
 namespace Stratis.Bitcoin.Features.Wallet.Notifications
 {
     /// <summary>
-    /// Observer that receives notifications about the arrival of new <see cref="Block"/>s.
+    /// Observer that receives notifications about the arrival of new <see cref="PowBlock"/>s.
     /// </summary>
-    public class BlockObserver : SignalObserver<Block>
+    public class BlockObserver : SignalObserver<PowBlock>
     {
         private readonly IWalletSyncManager walletSyncManager;
 
@@ -22,10 +22,10 @@ namespace Stratis.Bitcoin.Features.Wallet.Notifications
         /// <summary>
         /// Manages what happens when a new block is received.
         /// </summary>
-        /// <param name="block">The new block</param>
-        protected override void OnNextCore(Block block)
+        /// <param name="powBlock">The new block</param>
+        protected override void OnNextCore(PowBlock powBlock)
         {
-            this.walletSyncManager.ProcessBlock(block);
+            this.walletSyncManager.ProcessBlock(powBlock);
         }
     }
 }

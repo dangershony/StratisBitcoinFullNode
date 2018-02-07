@@ -19,15 +19,15 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         {
             DeploymentFlags deploymentFlags = context.Flags;
             int nHeight = context.BestBlock?.Height + 1 ?? 0;
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
 
             // Start enforcing BIP113 (Median Time Past) using versionbits logic.
             DateTimeOffset nLockTimeCutoff = deploymentFlags.LockTimeFlags.HasFlag(Transaction.LockTimeFlags.MedianTimePast) ?
                 context.BestBlock.MedianTimePast :
-                block.Header.BlockTime;
+                powBlock.Header.BlockTime;
 
             // Check that all transactions are finalized.
-            foreach (Transaction transaction in block.Transactions)
+            foreach (Transaction transaction in powBlock.Transactions)
             {
                 if (!transaction.IsFinal(nLockTimeCutoff, nHeight))
                 {

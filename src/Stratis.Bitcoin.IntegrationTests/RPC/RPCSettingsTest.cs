@@ -13,11 +13,11 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         [Fact]
         public void CanSpecifyRPCSettings()
         {
-            var initialBlockSignature = Block.BlockSignature;
+            var initialBlockSignature = PowBlock.BlockSignature;
 
             try
             {
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
                 var dir = CreateTestDir(this);
 
                 NodeSettings nodeSettings = new NodeSettings(args:new string[] { $"-datadir={dir}" });
@@ -43,7 +43,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             }
             finally
             {
-                Block.BlockSignature = initialBlockSignature;
+                PowBlock.BlockSignature = initialBlockSignature;
             }
 
         }

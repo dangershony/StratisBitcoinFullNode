@@ -39,7 +39,7 @@ namespace Stratis.Bitcoin.Features.LightWallet.Tests
 
             // Do not assume that the preceding line will set these flags.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
         }
 
         [Fact]
@@ -50,7 +50,7 @@ namespace Stratis.Bitcoin.Features.LightWallet.Tests
 
             lightWalletSyncManager.Start();
 
-            this.signals.Verify(s => s.SubscribeForBlocks(It.IsAny<IObserver<Block>>()), Times.Exactly(1));
+            this.signals.Verify(s => s.SubscribeForBlocks(It.IsAny<IObserver<PowBlock>>()), Times.Exactly(1));
             this.signals.Verify(s => s.SubscribeForTransactions(It.IsAny<IObserver<Transaction>>()), Times.Exactly(1));
         }
 
@@ -477,7 +477,7 @@ namespace Stratis.Bitcoin.Features.LightWallet.Tests
         }
 
         /// <summary>
-        /// When processing a new <see cref="Block"/> that has a previous hash that is the same as the <see cref="LightWalletSyncManager.WalletTip"/> pass it directly to the <see cref="WalletManager"/>
+        /// When processing a new <see cref="PowBlock"/> that has a previous hash that is the same as the <see cref="LightWalletSyncManager.WalletTip"/> pass it directly to the <see cref="WalletManager"/>
         /// and set it as the new WalletTip.
         /// </summary>
         [Fact]
@@ -495,11 +495,11 @@ namespace Stratis.Bitcoin.Features.LightWallet.Tests
 
             var expectedBlockHash = this.chain.GetBlock(4).Header.GetHash();
             Assert.Equal(expectedBlockHash, lightWalletSyncManager.WalletTip.Header.GetHash());
-            this.walletManager.Verify(w => w.ProcessBlock(It.Is<Block>(b => b.GetHash() == blockToProcess.GetHash()), It.Is<ChainedBlock>(c => c.Header.GetHash() == expectedBlockHash)));
+            this.walletManager.Verify(w => w.ProcessBlock(It.Is<PowBlock>(b => b.GetHash() == blockToProcess.GetHash()), It.Is<ChainedBlock>(c => c.Header.GetHash() == expectedBlockHash)));
         }
 
         /// <summary>
-        /// When processing a new <see cref="Block"/> that has a previous hash that is not the same as the <see cref="LightWalletSyncManager.WalletTip"/> and is on the best chain
+        /// When processing a new <see cref="PowBlock"/> that has a previous hash that is not the same as the <see cref="LightWalletSyncManager.WalletTip"/> and is on the best chain
         /// see which blocks are missing notify the <see cref="BlockNotification"/> to sync from the wallet tip to catchup the <see cref="WalletManager"/>.
         /// Do not process the block or set it as a wallet tip.
         /// </summary>
@@ -522,11 +522,11 @@ namespace Stratis.Bitcoin.Features.LightWallet.Tests
 
             var expectedBlockHash = this.chain.GetBlock(2).Header.GetHash();
             Assert.Equal(expectedBlockHash, lightWalletSyncManager.WalletTip.Header.GetHash());
-            this.walletManager.Verify(w => w.ProcessBlock(It.IsAny<Block>(), It.IsAny<ChainedBlock>()), Times.Exactly(0));
+            this.walletManager.Verify(w => w.ProcessBlock(It.IsAny<PowBlock>(), It.IsAny<ChainedBlock>()), Times.Exactly(0));
         }
 
         /// <summary>
-        /// When processing a new <see cref="Block"/> that has a previous hash that is not the same as the <see cref="LightWalletSyncManager.WalletTip"/>
+        /// When processing a new <see cref="PowBlock"/> that has a previous hash that is not the same as the <see cref="LightWalletSyncManager.WalletTip"/>
         /// and is on the best chain see if the wallettip is after the newtip.
         /// If this is the case use the old <see cref="LightWalletSyncManager.WalletTip"/> and  process the block using the <see cref="WalletManager"/>.
         /// </summary>
@@ -551,7 +551,7 @@ namespace Stratis.Bitcoin.Features.LightWallet.Tests
         }
 
         /// <summary>
-        /// When processing a new <see cref="Block"/> that has a previous hash that is not the same as the <see cref="LightWalletSyncManager.WalletTip"/> and is not on the best chain
+        /// When processing a new <see cref="PowBlock"/> that has a previous hash that is not the same as the <see cref="LightWalletSyncManager.WalletTip"/> and is not on the best chain
         /// look for the point at which the chain forked and remove blocks after that fork point from the <see cref="WalletManager"/>.
         /// After removing those blocks set the fork block as the <see cref="LightWalletSyncManager.WalletTip"/> and notify the <see cref="blockNotification"/> to start syncing from the fork.
         /// Do not process the block.
@@ -580,11 +580,11 @@ namespace Stratis.Bitcoin.Features.LightWallet.Tests
             Assert.Equal(this.chain.GetBlock(2).HashBlock, lightWalletSyncManager.WalletTip.HashBlock);
             this.blockNotification.Verify(w => w.SyncFrom(this.chain.GetBlock(2).HashBlock));
             // expect no blocks to be processed.
-            this.walletManager.Verify(w => w.ProcessBlock(It.IsAny<Block>(), It.IsAny<ChainedBlock>()), Times.Exactly(0));
+            this.walletManager.Verify(w => w.ProcessBlock(It.IsAny<PowBlock>(), It.IsAny<ChainedBlock>()), Times.Exactly(0));
         }
 
         /// <summary>
-        /// When processing a new <see cref="Block"/> that has a previous hash that is not the same as the <see cref="LightWalletSyncManager.WalletTip"/> and is not on the best chain
+        /// When processing a new <see cref="PowBlock"/> that has a previous hash that is not the same as the <see cref="LightWalletSyncManager.WalletTip"/> and is not on the best chain
         /// look for the point at which the chain forked and remove blocks after that fork point from the <see cref="WalletManager"/>.
         /// After removing those blocks set the fork block as the <see cref="LightWalletSyncManager.WalletTip"/>
         /// Process the block if the new tip is before the <see cref="LightWalletSyncManager.WalletTip"/>.
@@ -622,9 +622,9 @@ namespace Stratis.Bitcoin.Features.LightWallet.Tests
             return It.Is<ChainedBlock>(c => c.Header.GetHash() == block.Header.GetHash());
         }
 
-        private static Block ExpectBlock(Block block)
+        private static PowBlock ExpectBlock(PowBlock powBlock)
         {
-            return It.Is<Block>(b => b.GetHash() == block.GetHash());
+            return It.Is<PowBlock>(b => b.GetHash() == powBlock.GetHash());
         }
 
         private class LightWalletSyncManagerOverride : LightWalletSyncManager

@@ -36,7 +36,7 @@ namespace Stratis.Bitcoin.Features.Miner
 
     public class BlockTemplate
     {
-        public Block Block;
+        public PowBlock PowBlock;
 
         public List<Money> VTxFees;
 
@@ -48,7 +48,7 @@ namespace Stratis.Bitcoin.Features.Miner
 
         public BlockTemplate()
         {
-            this.Block = new Block();
+            this.PowBlock = new PowBlock();
             this.VTxFees = new List<Money>();
             this.TxSigOpsCost = new List<long>();
         }
@@ -144,7 +144,7 @@ namespace Stratis.Bitcoin.Features.Miner
         protected readonly BlockTemplate pblocktemplate;
 
         // A convenience pointer that always refers to the CBlock in pblocktemplate.
-        protected Block pblock;
+        protected PowBlock pblock;
 
         // Configuration parameters for the block size.
         private bool fIncludeWitness;
@@ -223,7 +223,7 @@ namespace Stratis.Bitcoin.Features.Miner
             this.fees = 0;
 
             this.ChainTip = chainTip;
-            this.pblocktemplate = new BlockTemplate { Block = new Block(), VTxFees = new List<Money>() };
+            this.pblocktemplate = new BlockTemplate { PowBlock = new PowBlock(), VTxFees = new List<Money>() };
         }
 
         private int ComputeBlockVersion(ChainedBlock prevChainedBlock, NBitcoin.Consensus consensus)
@@ -250,7 +250,7 @@ namespace Stratis.Bitcoin.Features.Miner
         {
             this.logger.LogTrace("({0}.{1}:{2},{3}:{4})", nameof(scriptPubKeyIn), nameof(scriptPubKeyIn.Length), scriptPubKeyIn.Length, nameof(fMineWitnessTx), fMineWitnessTx);
 
-            this.pblock = this.pblocktemplate.Block; // Pointer for convenience.
+            this.pblock = this.pblocktemplate.PowBlock; // Pointer for convenience.
             this.scriptPubKeyIn = scriptPubKeyIn;
 
             this.CreateCoinbase();
@@ -345,7 +345,7 @@ namespace Stratis.Bitcoin.Features.Miner
         {
             this.logger.LogTrace("()");
 
-            var context = new RuleContext(new BlockValidationContext { Block = this.pblock }, this.network.Consensus, this.consensusLoop.Tip)
+            var context = new RuleContext(new BlockValidationContext { PowBlock = this.pblock }, this.network.Consensus, this.consensusLoop.Tip)
             {
                 CheckPow = false,
                 CheckMerkleRoot = false,

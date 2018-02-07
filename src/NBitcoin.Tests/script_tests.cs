@@ -21,7 +21,7 @@ namespace NBitcoin.Tests
             // These flags may get set due to static network initializers
             // which include the initializers for Stratis.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         static Dictionary<string, OpcodeType> mapOpNames = new Dictionary<string, OpcodeType>();

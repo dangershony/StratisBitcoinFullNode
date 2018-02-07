@@ -13,7 +13,7 @@ using System.Timers;
 
 namespace Stratis.Bitcoin.Features.BlockStore
 {
-    public class BlockStoreSignaled : SignalObserver<Block>
+    public class BlockStoreSignaled : SignalObserver<PowBlock>
     {
         private readonly BlockStoreLoop blockStoreLoop;
 
@@ -65,7 +65,7 @@ namespace Stratis.Bitcoin.Features.BlockStore
             this.dequeueLoopTask = this.DequeueContinuouslyAsync();
         }
 
-        protected override void OnNextCore(Block block)
+        protected override void OnNextCore(PowBlock powBlock)
         {
             this.logger.LogTrace("()");
             if (this.storeSettings.Prune)
@@ -74,7 +74,7 @@ namespace Stratis.Bitcoin.Features.BlockStore
                 return;
             }
 
-            ChainedBlock chainedBlock = this.chain.GetBlock(block.GetHash());
+            ChainedBlock chainedBlock = this.chain.GetBlock(powBlock.GetHash());
             if (chainedBlock == null)
             {
                 this.logger.LogTrace("(-)[REORG]");
@@ -83,7 +83,7 @@ namespace Stratis.Bitcoin.Features.BlockStore
 
             this.logger.LogTrace("Block hash is '{0}'.", chainedBlock.HashBlock);
 
-            var blockPair = new BlockPair(block, chainedBlock);
+            var blockPair = new BlockPair(powBlock, chainedBlock);
 
             // Ensure the block is written to disk before relaying.
             this.blockStoreLoop.AddToPending(blockPair);
@@ -95,7 +95,7 @@ namespace Stratis.Bitcoin.Features.BlockStore
             }
 
             // Add to cache if not in IBD.
-            this.blockStoreCache.AddToCache(block);
+            this.blockStoreCache.AddToCache(powBlock);
 
             this.logger.LogTrace("Block header '{0}' added to the announce queue.", chainedBlock);
             this.blocksToAnnounce.Enqueue(chainedBlock);

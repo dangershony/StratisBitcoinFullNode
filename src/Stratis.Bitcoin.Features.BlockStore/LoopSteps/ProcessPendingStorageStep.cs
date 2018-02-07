@@ -156,7 +156,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.LoopSteps
             if (blockIsInPendingStorage)
             {
                 context.PendingBlockPairsToStore.Push(context.PendingBlockPairToStore);
-                context.PendingStorageBatchSize += context.PendingBlockPairToStore.Block.GetSerializedSize();
+                context.PendingStorageBatchSize += context.PendingBlockPairToStore.PowBlock.GetSerializedSize();
             }
 
             return context.CanProcessNextBlock() ? StepResult.Next : StepResult.Stop;
@@ -170,7 +170,7 @@ namespace Stratis.Bitcoin.Features.BlockStore.LoopSteps
         {
             this.logger.LogDebug(context.ToString());
 
-            await this.BlockStoreLoop.BlockRepository.PutAsync(context.PendingBlockPairsToStore.First().ChainedBlock.HashBlock, context.PendingBlockPairsToStore.Select(b => b.Block).ToList());
+            await this.BlockStoreLoop.BlockRepository.PutAsync(context.PendingBlockPairsToStore.First().ChainedBlock.HashBlock, context.PendingBlockPairsToStore.Select(b => b.PowBlock).ToList());
             this.BlockStoreLoop.SetStoreTip(context.PendingBlockPairsToStore.First().ChainedBlock);
 
             context.PendingBlockPairToStore = null;

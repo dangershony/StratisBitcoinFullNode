@@ -14,7 +14,7 @@ using Stratis.Bitcoin.Utilities;
 
 namespace Stratis.Bitcoin.Features.Consensus
 {
-    public class ConsensusStats : SignalObserver<Block>
+    public class ConsensusStats : SignalObserver<PowBlock>
     {
         private readonly CachedCoinView cache;
 
@@ -111,7 +111,7 @@ namespace Stratis.Bitcoin.Features.Consensus
             this.logger.LogInformation(benchLogs.ToString());
         }
 
-        protected override void OnNextCore(Block value)
+        protected override void OnNextCore(PowBlock value)
         {
             if (this.dateTimeProvider.GetUtcNow() - this.lastSnapshot.Taken > TimeSpan.FromSeconds(5.0))
                 if (this.initialBlockDownloadState.IsInitialBlockDownload())

@@ -32,7 +32,7 @@ namespace Stratis.Bitcoin.Features.Notifications.Tests
             var notification = new BlockNotification(this.LoggerFactory.Object, chain.Object, new Mock<ILookaheadBlockPuller>().Object, signals.Object, new AsyncLoopFactory(new LoggerFactory()), lifetime);
             notification.Notify(lifetime.ApplicationStopping);
 
-            signals.Verify(s => s.SignalBlock(It.IsAny<Block>()), Times.Exactly(0));
+            signals.Verify(s => s.SignalBlock(It.IsAny<PowBlock>()), Times.Exactly(0));
         }
 
         /// <summary>
@@ -53,7 +53,7 @@ namespace Stratis.Bitcoin.Features.Notifications.Tests
             notification.SyncFrom(startBlockId);
             notification.Notify(lifetime.ApplicationStopping);
 
-            signals.Verify(s => s.SignalBlock(It.IsAny<Block>()), Times.Exactly(0));
+            signals.Verify(s => s.SignalBlock(It.IsAny<PowBlock>()), Times.Exactly(0));
         }
 
         /// <summary>
@@ -88,7 +88,7 @@ namespace Stratis.Bitcoin.Features.Notifications.Tests
         }
 
         /// <summary>
-        /// Ensures that <see cref="ISignals.SignalBlock(Block)" /> was called twice
+        /// Ensures that <see cref="ISignals.SignalBlock(PowBlock)" /> was called twice
         /// as 2 blocks were made available by the puller to be signaled.
         /// </summary>
         [Fact]
@@ -103,8 +103,8 @@ namespace Stratis.Bitcoin.Features.Notifications.Tests
 
             var puller = new Mock<ILookaheadBlockPuller>();
             puller.SetupSequence(s => s.NextBlock(lifetime.ApplicationStopping))
-                .Returns(new LookaheadResult { Block = blocks[0] })
-                .Returns(new LookaheadResult { Block = blocks[1] })
+                .Returns(new LookaheadResult { PowBlock = blocks[0] })
+                .Returns(new LookaheadResult { PowBlock = blocks[1] })
                 .Returns(null);
 
             var signals = new Mock<ISignals>();
@@ -119,7 +119,7 @@ namespace Stratis.Bitcoin.Features.Notifications.Tests
 
             notification.Object.Notify(lifetime.ApplicationStopping);
 
-            signals.Verify(s => s.SignalBlock(It.IsAny<Block>()), Times.Exactly(2));
+            signals.Verify(s => s.SignalBlock(It.IsAny<PowBlock>()), Times.Exactly(2));
         }
 
         [Fact]
@@ -135,13 +135,13 @@ namespace Stratis.Bitcoin.Features.Notifications.Tests
             this.AppendBlocksToChain(chain, blocks.Skip(1));
 
             puller.SetupSequence(p => p.NextBlock(It.IsAny<CancellationToken>()))
-                .Returns(new LookaheadResult() { Block = null })
-                .Returns(new LookaheadResult() { Block = blocks[0] });
+                .Returns(new LookaheadResult() { PowBlock = null })
+                .Returns(new LookaheadResult() { PowBlock = blocks[0] });
 
             
             CancellationTokenSource source = new CancellationTokenSource();
             var token = source.Token;
-            signals.Setup(s => s.SignalBlock(It.Is<Block>(b => b.GetHash() == blocks[0].GetHash())))
+            signals.Setup(s => s.SignalBlock(It.Is<PowBlock>(b => b.GetHash() == blocks[0].GetHash())))
                 .Callback(() => {
                     source.Cancel();
                 }).Verifiable();

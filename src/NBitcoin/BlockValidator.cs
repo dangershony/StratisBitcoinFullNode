@@ -143,23 +143,23 @@ namespace NBitcoin
             return new Target(target);
         }
 
-        public static bool CheckBlockSignature(Block block)
+        public static bool CheckBlockSignature(PowBlock powBlock)
         {
-            if (BlockStake.IsProofOfWork(block))
-                return block.BlockSignatur.IsEmpty();
+            if (BlockStake.IsProofOfWork(powBlock))
+                return powBlock.BlockSignatur.IsEmpty();
 
-            if (block.BlockSignatur.IsEmpty())
+            if (powBlock.BlockSignatur.IsEmpty())
                 return false;
 
-            var txout = block.Transactions[1].Outputs[1];
+            var txout = powBlock.Transactions[1].Outputs[1];
 
             if (PayToPubkeyTemplate.Instance.CheckScriptPubKey(txout.ScriptPubKey))
             {
                 var pubKey = PayToPubkeyTemplate.Instance.ExtractScriptPubKeyParameters(txout.ScriptPubKey);
-                return pubKey.Verify(block.GetHash(), new ECDSASignature(block.BlockSignatur.Signature));
+                return pubKey.Verify(powBlock.GetHash(), new ECDSASignature(powBlock.BlockSignatur.Signature));
             }
 
-            if (IsProtocolV3((int)block.Header.Time))
+            if (IsProtocolV3((int)powBlock.Header.Time))
             {
                 // Block signing key also can be encoded in the nonspendable output
                 // This allows to not pollute UTXO set with useless outputs e.g. in case of multisig staking
@@ -174,22 +174,22 @@ namespace NBitcoin
                 var data = ops.ElementAt(1).PushData;
                 if (!ScriptEvaluationContext.IsCompressedOrUncompressedPubKey(data))
                     return false;
-                return new PubKey(data).Verify(block.GetHash(), new ECDSASignature(block.BlockSignatur.Signature));
+                return new PubKey(data).Verify(powBlock.GetHash(), new ECDSASignature(powBlock.BlockSignatur.Signature));
             }
 
             return false;
         }
 
-        public static bool IsCanonicalBlockSignature(Block block, bool checkLowS)
+        public static bool IsCanonicalBlockSignature(PowBlock powBlock, bool checkLowS)
         {
-            if (BlockStake.IsProofOfWork(block))
+            if (BlockStake.IsProofOfWork(powBlock))
             {
-                return block.BlockSignatur.IsEmpty();
+                return powBlock.BlockSignatur.IsEmpty();
             }
 
             return checkLowS ?
-                ScriptEvaluationContext.IsLowDerSignature(block.BlockSignatur.Signature) :
-                ScriptEvaluationContext.IsValidSignatureEncoding(block.BlockSignatur.Signature);
+                ScriptEvaluationContext.IsLowDerSignature(powBlock.BlockSignatur.Signature) :
+                ScriptEvaluationContext.IsValidSignatureEncoding(powBlock.BlockSignatur.Signature);
         }
 
         public static bool EnsureLowS(BlockSignature blockSignature)
@@ -201,63 +201,63 @@ namespace NBitcoin
         }
 
         // a method to check a block, this may be moved to the full node.
-        public static bool CheckBlock(Consensus consensus, Block block, bool checkPow = true, bool checkMerkleRoot = true, bool checkSig = true)
+        public static bool CheckBlock(Consensus consensus, PowBlock powBlock, bool checkPow = true, bool checkMerkleRoot = true, bool checkSig = true)
         {
             // These are checks that are independent of context
             // that can be verified before saving an orphan block.
 
             // Size limits
-            if (!block.Transactions.Any() || block.GetSerializedSize() > MAX_BLOCK_SIZE)
+            if (!powBlock.Transactions.Any() || powBlock.GetSerializedSize() > MAX_BLOCK_SIZE)
                 return false; // DoS(100, error("CheckBlock() : size limits failed"));
 
             // Check proof of work matches claimed amount
-            if (checkPow && BlockStake.IsProofOfWork(block) && !block.CheckProofOfWork(consensus))
+            if (checkPow && BlockStake.IsProofOfWork(powBlock) && !powBlock.CheckProofOfWork(consensus))
                 return false; //DoS(50, error("CheckBlock() : proof of work failed"));
 
             // Check timestamp
-            if (block.Header.Time > FutureDriftV2(DateTime.UtcNow.Ticks)) //GetAdjustedTime()))
+            if (powBlock.Header.Time > FutureDriftV2(DateTime.UtcNow.Ticks)) //GetAdjustedTime()))
                 return false; //error("CheckBlock() : block timestamp too far in he future");
 
             // First transaction must be coinbase, the rest must not be
-            if (!block.Transactions[0].IsCoinBase)
+            if (!powBlock.Transactions[0].IsCoinBase)
                 return false; //  DoS(100, error("CheckBlock() : first tx is not coinbase"));
 
-            if (block.Transactions.Skip(1).Any(t => t.IsCoinBase))
+            if (powBlock.Transactions.Skip(1).Any(t => t.IsCoinBase))
                 return false; //DoS(100, error("CheckBlock() : more than one coinbase"));
 
-            if (BlockStake.IsProofOfStake(block))
+            if (BlockStake.IsProofOfStake(powBlock))
             {
                 // Coinbase output should be empty if proof-of-stake block
-                if (block.Transactions[0].Outputs.Count != 1 || !block.Transactions[0].Outputs[0].IsEmpty)
+                if (powBlock.Transactions[0].Outputs.Count != 1 || !powBlock.Transactions[0].Outputs[0].IsEmpty)
                     return false; // DoS(100, error("CheckBlock() : coinbase output not empty for proof-of-stake block"));
 
                 // Second transaction must be coinstake, the rest must not be
-                if (!block.Transactions[1].IsCoinStake)
+                if (!powBlock.Transactions[1].IsCoinStake)
                     return false; // DoS(100, error("CheckBlock() : second tx is not coinstake"));
 
-                if (block.Transactions.Skip(2).Any(t => t.IsCoinStake))
+                if (powBlock.Transactions.Skip(2).Any(t => t.IsCoinStake))
                     return false; //DoS(100, error("CheckBlock() : more than one coinstake"));
             }
 
             // Check proof-of-stake block signature
-            if (checkSig && !CheckBlockSignature(block))
+            if (checkSig && !CheckBlockSignature(powBlock))
                 return false; //DoS(100, error("CheckBlock() : bad proof-of-stake block signature"));
 
             // Check transactions
-            foreach (var transaction in block.Transactions)
+            foreach (var transaction in powBlock.Transactions)
             {
                 if (transaction.Check() != TransactionCheckResult.Success)
                     return false; // DoS(tx.nDoS, error("CheckBlock() : CheckTransaction failed"));
 
                 // ppcoin: check transaction timestamp
-                if (block.Header.Time < transaction.Time)
+                if (powBlock.Header.Time < transaction.Time)
                     return false; // DoS(50, error("CheckBlock() : block timestamp earlier than transaction timestamp"));
             }
 
             // Check for duplicate txids. This is caught by ConnectInputs(),
             // but catching it earlier avoids a potential DoS attack:
             var set = new HashSet<uint256>();
-            if (block.Transactions.Select(t => t.GetHash()).Any(h => !set.Add(h)))
+            if (powBlock.Transactions.Select(t => t.GetHash()).Any(h => !set.Add(h)))
                 return false; //DoS(100, error("CheckBlock() : duplicate transaction"));
 
             // todo: check if this is legacy from older implementtions and actually needed
@@ -270,7 +270,7 @@ namespace NBitcoin
             //    return DoS(100, error("CheckBlock() : out-of-bounds SigOpCount"));
 
             // Check merkle root
-            if (checkMerkleRoot && !block.CheckMerkleRoot())
+            if (checkMerkleRoot && !powBlock.CheckMerkleRoot())
                 return false; //DoS(100, error("CheckBlock() : hashMerkleRoot mismatch"));
 
             return true;
@@ -332,16 +332,16 @@ namespace NBitcoin
         public const uint ModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 
         public static bool CheckAndComputeStake(INBitcoinBlockRepository blockStore, ITransactionRepository trasnactionStore, IBlockTransactionMapStore mapStore, StakeChain stakeChain,
-            ChainBase chainIndex, ChainedBlock pindex, Block block, out BlockStake blockStake)
+            ChainBase chainIndex, ChainedBlock pindex, PowBlock powBlock, out BlockStake blockStake)
         {
-            if (block.GetHash() != pindex.HashBlock)
+            if (powBlock.GetHash() != pindex.HashBlock)
                 throw new ArgumentException();
 
-            blockStake = new BlockStake(block);
+            blockStake = new BlockStake(powBlock);
 
             uint256 hashProof = null;
             // Verify hash target and signature of coinstake tx
-            if (BlockStake.IsProofOfStake(block))
+            if (BlockStake.IsProofOfStake(powBlock))
             {
                 var pindexPrev = pindex.Previous;
 
@@ -350,13 +350,13 @@ namespace NBitcoin
                     return false; // the stake proof of the previous block is not set
 
                 uint256 targetProofOfStake;
-                if (!CheckProofOfStake(blockStore, trasnactionStore, mapStore, pindexPrev, prevBlockStake, block.Transactions[1],
+                if (!CheckProofOfStake(blockStore, trasnactionStore, mapStore, pindexPrev, prevBlockStake, powBlock.Transactions[1],
                         pindex.Header.Bits.ToCompact(), out hashProof, out targetProofOfStake))
                     return false; // error("AcceptBlock() : check proof-of-stake failed for block %s", hash.ToString());
             }
 
             // PoW is checked in CheckBlock()
-            if (BlockStake.IsProofOfWork(block))
+            if (BlockStake.IsProofOfWork(powBlock))
             {
                 hashProof = pindex.Header.GetPoWHash();
             }
@@ -417,13 +417,13 @@ namespace NBitcoin
             return ctx.VerifyScript(input.ScriptSig, output.ScriptPubKey, checker);
         }
 
-        private static bool CheckStakeKernelHash(ChainedBlock pindexPrev, uint nBits, Block blockFrom, Transaction txPrev, BlockStake prevBlockStake,
+        private static bool CheckStakeKernelHash(ChainedBlock pindexPrev, uint nBits, PowBlock powBlockFrom, Transaction txPrev, BlockStake prevBlockStake,
             OutPoint prevout, uint nTimeTx, out uint256 hashProofOfStake, out uint256 targetProofOfStake, bool fPrintProofOfStake)
         {
             targetProofOfStake = null; hashProofOfStake = null;
 
             if (IsProtocolV2(pindexPrev.Height + 1))
-                return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.Header.Time, prevBlockStake, txPrev, prevout, nTimeTx, out hashProofOfStake, out targetProofOfStake, fPrintProofOfStake);
+                return CheckStakeKernelHashV2(pindexPrev, nBits, powBlockFrom.Header.Time, prevBlockStake, txPrev, prevout, nTimeTx, out hashProofOfStake, out targetProofOfStake, fPrintProofOfStake);
             else
                 return CheckStakeKernelHashV1();
         }

@@ -85,13 +85,13 @@ namespace Stratis.Bitcoin.Features.Consensus
         }
 
         /// <inheritdoc />
-        protected override void CheckBlockReward(RuleContext context, Money fees, int height, Block block)
+        protected override void CheckBlockReward(RuleContext context, Money fees, int height, PowBlock powBlock)
         {
             this.logger.LogTrace("({0}:{1},{2}:'{3}')", nameof(fees), fees, nameof(height), height);
 
-            if (BlockStake.IsProofOfStake(block))
+            if (BlockStake.IsProofOfStake(powBlock))
             {
-                Money stakeReward = block.Transactions[1].TotalOut - context.Stake.TotalCoinStakeValueIn;
+                Money stakeReward = powBlock.Transactions[1].TotalOut - context.Stake.TotalCoinStakeValueIn;
                 Money calcStakeReward = fees + this.GetProofOfStakeReward(height);
 
                 this.logger.LogTrace("Block stake reward is {0}, calculated reward is {1}.", stakeReward, calcStakeReward);
@@ -104,8 +104,8 @@ namespace Stratis.Bitcoin.Features.Consensus
             else
             {
                 Money blockReward = fees + this.GetProofOfWorkReward(height);
-                this.logger.LogTrace("Block reward is {0}, calculated reward is {1}.", block.Transactions[0].TotalOut, blockReward);
-                if (block.Transactions[0].TotalOut > blockReward)
+                this.logger.LogTrace("Block reward is {0}, calculated reward is {1}.", powBlock.Transactions[0].TotalOut, blockReward);
+                if (powBlock.Transactions[0].TotalOut > blockReward)
                 {
                     this.logger.LogTrace("(-)[BAD_COINBASE_AMOUNT]");
                     ConsensusErrors.BadCoinbaseAmount.Throw();
@@ -138,34 +138,34 @@ namespace Stratis.Bitcoin.Features.Consensus
 
             base.CheckBlock(context);
 
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
 
             // Check timestamp.
-            if (block.Header.Time > this.FutureDrift(this.dateTimeProvider.GetAdjustedTimeAsUnixTimestamp()))
+            if (powBlock.Header.Time > this.FutureDrift(this.dateTimeProvider.GetAdjustedTimeAsUnixTimestamp()))
             {
                 // The block can be valid only after its time minus the future drift.
-                context.BlockValidationContext.RejectUntil = Utils.UnixTimeToDateTime(block.Header.Time - this.FutureDrift(0)).UtcDateTime;
+                context.BlockValidationContext.RejectUntil = Utils.UnixTimeToDateTime(powBlock.Header.Time - this.FutureDrift(0)).UtcDateTime;
                 this.logger.LogTrace("(-)[TIME_TOO_FAR]");
                 ConsensusErrors.BlockTimestampTooFar.Throw();
             }
 
-            if (BlockStake.IsProofOfStake(block))
+            if (BlockStake.IsProofOfStake(powBlock))
             {
                 // Coinbase output should be empty if proof-of-stake block.
-                if ((block.Transactions[0].Outputs.Count != 1) || !block.Transactions[0].Outputs[0].IsEmpty)
+                if ((powBlock.Transactions[0].Outputs.Count != 1) || !powBlock.Transactions[0].Outputs[0].IsEmpty)
                 {
                     this.logger.LogTrace("(-)[COINBASE_NOT_EMPTY]");
                     ConsensusErrors.BadStakeBlock.Throw();
                 }
 
                 // Second transaction must be coinstake, the rest must not be.
-                if (!block.Transactions[1].IsCoinStake)
+                if (!powBlock.Transactions[1].IsCoinStake)
                 {
                     this.logger.LogTrace("(-)[NO_COINSTAKE]");
                     ConsensusErrors.BadStakeBlock.Throw();
                 }
 
-                if (block.Transactions.Skip(2).Any(t => t.IsCoinStake))
+                if (powBlock.Transactions.Skip(2).Any(t => t.IsCoinStake))
                 {
                     this.logger.LogTrace("(-)[MULTIPLE_COINSTAKE]");
                     ConsensusErrors.BadMultipleCoinstake.Throw();
@@ -173,19 +173,19 @@ namespace Stratis.Bitcoin.Features.Consensus
             }
 
             // Check proof-of-stake block signature.
-            if (!this.CheckBlockSignature(block))
+            if (!this.CheckBlockSignature(powBlock))
             {
                 this.logger.LogTrace("(-)[BAD_SIGNATURE]");
                 ConsensusErrors.BadBlockSignature.Throw();
             }
 
             // Check transactions.
-            foreach (Transaction transaction in block.Transactions)
+            foreach (Transaction transaction in powBlock.Transactions)
             {
                 // Check transaction timestamp.
-                if (block.Header.Time < transaction.Time)
+                if (powBlock.Header.Time < transaction.Time)
                 {
-                    this.logger.LogTrace("Block contains transaction with timestamp {0}, which is greater than block's timestamp {1}.", transaction.Time, block.Header.Time);
+                    this.logger.LogTrace("Block contains transaction with timestamp {0}, which is greater than block's timestamp {1}.", transaction.Time, powBlock.Header.Time);
                     this.logger.LogTrace("(-)[TX_TIME_MISMATCH]");
                     ConsensusErrors.BlockTimeBeforeTrx.Throw();
                 }
@@ -308,7 +308,7 @@ namespace Stratis.Bitcoin.Features.Consensus
             }
 
             // Check coinbase timestamp.
-            if (chainedBlock.Header.Time > this.FutureDrift(context.BlockValidationContext.Block.Transactions[0].Time))
+            if (chainedBlock.Header.Time > this.FutureDrift(context.BlockValidationContext.PowBlock.Transactions[0].Time))
             {
                 this.logger.LogTrace("(-)[TIME_TOO_NEW]");
                 ConsensusErrors.TimeTooNew.Throw();
@@ -316,7 +316,7 @@ namespace Stratis.Bitcoin.Features.Consensus
 
             // Check coinstake timestamp.
             if (context.Stake.BlockStake.IsProofOfStake()
-                && !this.CheckCoinStakeTimestamp(chainedBlock.Header.Time, context.BlockValidationContext.Block.Transactions[1].Time))
+                && !this.CheckCoinStakeTimestamp(chainedBlock.Header.Time, context.BlockValidationContext.PowBlock.Transactions[1].Time))
             {
                 this.logger.LogTrace("(-)[BAD_TIME]");
                 ConsensusErrors.StakeTimeViolation.Throw();
@@ -370,31 +370,31 @@ namespace Stratis.Bitcoin.Features.Consensus
         /// <summary>
         /// Checks if block signature is valid.
         /// </summary>
-        /// <param name="block">The block.</param>
+        /// <param name="powBlock">The block.</param>
         /// <returns><c>true</c> if the signature is valid, <c>false</c> otherwise.</returns>
-        private bool CheckBlockSignature(Block block)
+        private bool CheckBlockSignature(PowBlock powBlock)
         {
             this.logger.LogTrace("()");
 
-            if (BlockStake.IsProofOfWork(block))
+            if (BlockStake.IsProofOfWork(powBlock))
             {
-                bool res = block.BlockSignatur.IsEmpty();
+                bool res = powBlock.BlockSignatur.IsEmpty();
                 this.logger.LogTrace("(-)[POW]:{0}", res);
                 return res;
             }
 
-            if (block.BlockSignatur.IsEmpty())
+            if (powBlock.BlockSignatur.IsEmpty())
             {
                 this.logger.LogTrace("(-)[EMPTY]:false");
                 return false;
             }
 
-            TxOut txout = block.Transactions[1].Outputs[1];
+            TxOut txout = powBlock.Transactions[1].Outputs[1];
 
             if (PayToPubkeyTemplate.Instance.CheckScriptPubKey(txout.ScriptPubKey))
             {
                 PubKey pubKey = PayToPubkeyTemplate.Instance.ExtractScriptPubKeyParameters(txout.ScriptPubKey);
-                bool res = pubKey.Verify(block.GetHash(), new ECDSASignature(block.BlockSignatur.Signature));
+                bool res = pubKey.Verify(powBlock.GetHash(), new ECDSASignature(powBlock.BlockSignatur.Signature));
                 this.logger.LogTrace("(-)[P2PK]:{0}", res);
                 return res;
             }
@@ -428,7 +428,7 @@ namespace Stratis.Bitcoin.Features.Consensus
                 return false;
             }
 
-            bool verifyRes = new PubKey(data).Verify(block.GetHash(this.ConsensusParams.NetworkOptions), new ECDSASignature(block.BlockSignatur.Signature));
+            bool verifyRes = new PubKey(data).Verify(powBlock.GetHash(this.ConsensusParams.NetworkOptions), new ECDSASignature(powBlock.BlockSignatur.Signature));
             this.logger.LogTrace("(-):{0}", verifyRes);
             return verifyRes;
         }
@@ -444,11 +444,11 @@ namespace Stratis.Bitcoin.Features.Consensus
             this.logger.LogTrace("()");
 
             ChainedBlock chainedBlock = context.BlockValidationContext.ChainedBlock;
-            Block block = context.BlockValidationContext.Block;
+            PowBlock powBlock = context.BlockValidationContext.PowBlock;
             BlockStake blockStake = context.Stake.BlockStake;
 
             // Verify hash target and signature of coinstake tx.
-            if (BlockStake.IsProofOfStake(block))
+            if (BlockStake.IsProofOfStake(powBlock))
             {
                 ChainedBlock prevChainedBlock = chainedBlock.Previous;
 
@@ -459,13 +459,13 @@ namespace Stratis.Bitcoin.Features.Consensus
                 // Only do proof of stake validation for blocks that are after the assumevalid block or after the last checkpoint.
                 if (!context.SkipValidation)
                 {
-                    this.StakeValidator.CheckProofOfStake(context.Stake, prevChainedBlock, prevBlockStake, block.Transactions[1], chainedBlock.Header.Bits.ToCompact());
+                    this.StakeValidator.CheckProofOfStake(context.Stake, prevChainedBlock, prevBlockStake, powBlock.Transactions[1], chainedBlock.Header.Bits.ToCompact());
                 }
                 else this.logger.LogTrace("POS validation skipped for block at height {0}.", chainedBlock.Height);
             }
 
             // PoW is checked in CheckBlock().
-            if (BlockStake.IsProofOfWork(block))
+            if (BlockStake.IsProofOfWork(powBlock))
                 context.Stake.HashProofOfStake = chainedBlock.Header.GetPoWHash();
 
             // Compute stake entropy bit for stake modifier.

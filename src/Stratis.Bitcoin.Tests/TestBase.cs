@@ -76,7 +76,7 @@ namespace Stratis.Bitcoin.Tests
             return Path.Combine("TestCase", caller.GetType().Name, callingMethod);
         }
 
-        public void AppendBlocksToChain(ConcurrentChain chain, IEnumerable<Block> blocks)
+        public void AppendBlocksToChain(ConcurrentChain chain, IEnumerable<PowBlock> blocks)
         {
             foreach (var block in blocks)
             {
@@ -86,22 +86,22 @@ namespace Stratis.Bitcoin.Tests
             }
         }
 
-        public List<Block> CreateBlocks(int amount, bool bigBlocks = false)
+        public List<PowBlock> CreateBlocks(int amount, bool bigBlocks = false)
         {
-            var blocks = new List<Block>();
+            var blocks = new List<PowBlock>();
             for (int i = 0; i < amount; i++)
             {
-                Block block = this.CreateBlock(i);
-                block.Header.HashPrevBlock = blocks.LastOrDefault()?.GetHash() ?? Network.Main.GenesisHash;
-                blocks.Add(block);
+                PowBlock powBlock = this.CreateBlock(i);
+                powBlock.Header.HashPrevBlock = blocks.LastOrDefault()?.GetHash() ?? Network.Main.GenesisHash;
+                blocks.Add(powBlock);
             }
 
             return blocks;
         }
 
-        public Block CreateBlock(int blockNumber, bool bigBlocks = false)
+        public PowBlock CreateBlock(int blockNumber, bool bigBlocks = false)
         {
-            var block = new Block();
+            var block = new PowBlock();
 
             int transactionCount = bigBlocks ? 1000 : 10;
 

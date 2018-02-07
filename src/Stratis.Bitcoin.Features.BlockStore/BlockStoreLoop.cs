@@ -141,22 +141,22 @@ namespace Stratis.Bitcoin.Features.BlockStore
             if (this.StoreTip == null)
             {
                 var blockStoreResetList = new List<uint256>();
-                Block resetBlock = await this.BlockRepository.GetAsync(this.BlockRepository.BlockHash).ConfigureAwait(false);
-                uint256 resetBlockHash = resetBlock.GetHash();
+                PowBlock resetPowBlock = await this.BlockRepository.GetAsync(this.BlockRepository.BlockHash).ConfigureAwait(false);
+                uint256 resetBlockHash = resetPowBlock.GetHash();
 
                 while (this.Chain.GetBlock(resetBlockHash) == null)
                 {
                     blockStoreResetList.Add(resetBlockHash);
 
-                    if (resetBlock.Header.HashPrevBlock == this.Chain.Genesis.HashBlock)
+                    if (resetPowBlock.Header.HashPrevBlock == this.Chain.Genesis.HashBlock)
                     {
                         resetBlockHash = this.Chain.Genesis.HashBlock;
                         break;
                     }
 
-                    resetBlock = await this.BlockRepository.GetAsync(resetBlock.Header.HashPrevBlock).ConfigureAwait(false);
-                    Guard.NotNull(resetBlock, nameof(resetBlock));
-                    resetBlockHash = resetBlock.GetHash();
+                    resetPowBlock = await this.BlockRepository.GetAsync(resetPowBlock.Header.HashPrevBlock).ConfigureAwait(false);
+                    Guard.NotNull(resetPowBlock, nameof(resetPowBlock));
+                    resetBlockHash = resetPowBlock.GetHash();
                 }
 
                 ChainedBlock newTip = this.Chain.GetBlock(resetBlockHash);

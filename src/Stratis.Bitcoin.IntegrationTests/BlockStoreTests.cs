@@ -24,7 +24,7 @@ namespace Stratis.Bitcoin.IntegrationTests
         {
             // These tests use Network.Main.
             // Ensure that these static flags have the expected values.
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
             Transaction.TimeStamp = false;
 
             this.loggerFactory = new LoggerFactory();
@@ -38,11 +38,11 @@ namespace Stratis.Bitcoin.IntegrationTests
             {
                 using (var blockRepo = new BlockRepository(Network.Main, dir.FolderName, DateTimeProvider.Default, this.loggerFactory))
                 {
-                    var lst = new List<Block>();
+                    var lst = new List<PowBlock>();
                     for (int i = 0; i < 30; i++)
                     {
                         // roughly 1mb blocks
-                        var block = new Block();
+                        var block = new PowBlock();
                         for (int j = 0; j < 3000; j++)
                         {
                             var trx = new Transaction();
@@ -87,11 +87,11 @@ namespace Stratis.Bitcoin.IntegrationTests
                 {
                     blockRepo.SetTxIndexAsync(true).Wait();
 
-                    var lst = new List<Block>();
+                    var lst = new List<PowBlock>();
                     for (int i = 0; i < 5; i++)
                     {
                         // put
-                        var block = new Block();
+                        var block = new PowBlock();
                         block.AddTransaction(new Transaction());
                         block.AddTransaction(new Transaction());
                         block.Transactions[0].AddInput(new TxIn(Script.Empty));
@@ -136,7 +136,7 @@ namespace Stratis.Bitcoin.IntegrationTests
                     blockRepo.InitializeAsync().GetAwaiter().GetResult();
 
                     Assert.Equal(Network.Main.GenesisHash, blockRepo.BlockHash);
-                    var hash = new Block().GetHash();
+                    var hash = new PowBlock().GetHash();
                     blockRepo.SetBlockHashAsync(hash).GetAwaiter().GetResult();
                     Assert.Equal(hash, blockRepo.BlockHash);
                 }

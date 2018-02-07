@@ -13,11 +13,11 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         [Fact]
         public void CallWithDependencies()
         {
-            var initialBlockSignature = Block.BlockSignature;
+            var initialBlockSignature = PowBlock.BlockSignature;
 
             try
             {
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
                 string dir = CreateTestDir(this);
                 IFullNode fullNode = this.BuildServicedNode(dir);
                 FullNodeController controller = fullNode.Services.ServiceProvider.GetService<FullNodeController>();
@@ -43,7 +43,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             }
             finally
             {
-                Block.BlockSignature = initialBlockSignature;
+                PowBlock.BlockSignature = initialBlockSignature;
             }
         }
     }

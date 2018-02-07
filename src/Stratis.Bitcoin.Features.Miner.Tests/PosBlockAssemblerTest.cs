@@ -127,12 +127,12 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
                 Assert.Equal(2, blockTemplate.VTxFees.Count);
                 Assert.Equal(new Money(-1000), blockTemplate.VTxFees[0]);
                 Assert.Equal(new Money(1000), blockTemplate.VTxFees[1]);
-                Assert.Equal(2, blockTemplate.Block.Transactions.Count);
-                Assert.Equal(536870912, blockTemplate.Block.Header.Version);
+                Assert.Equal(2, blockTemplate.PowBlock.Transactions.Count);
+                Assert.Equal(536870912, blockTemplate.PowBlock.Header.Version);
 
-                Assert.Equal(2, blockTemplate.Block.Transactions.Count);
+                Assert.Equal(2, blockTemplate.PowBlock.Transactions.Count);
 
-                var resultingTransaction = blockTemplate.Block.Transactions[0];
+                var resultingTransaction = blockTemplate.PowBlock.Transactions[0];
                 Assert.NotEmpty(resultingTransaction.Inputs);
                 Assert.NotEmpty(resultingTransaction.Outputs);
                 Assert.True(resultingTransaction.IsCoinBase);
@@ -142,7 +142,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
                 Assert.Equal(new Script(), resultingTransaction.Outputs[0].ScriptPubKey);
                 Assert.Equal(new Money(0), resultingTransaction.Outputs[0].Value);
 
-                resultingTransaction = blockTemplate.Block.Transactions[1];
+                resultingTransaction = blockTemplate.PowBlock.Transactions[1];
                 Assert.NotEmpty(resultingTransaction.Inputs);
                 Assert.NotEmpty(resultingTransaction.Outputs);
                 Assert.False(resultingTransaction.IsCoinBase);
@@ -263,11 +263,11 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
 
                 var result = posBlockAssembler.CreateCoinBase(chain.Tip, this.key.ScriptPubKey);
 
-                Assert.NotEmpty(result.Block.Transactions);
+                Assert.NotEmpty(result.PowBlock.Transactions);
                 Assert.Equal(-1, result.TxSigOpsCost[0]);
                 Assert.Equal(new Money(-1), result.VTxFees[0]);
 
-                var resultingTransaction = result.Block.Transactions[0];
+                var resultingTransaction = result.PowBlock.Transactions[0];
                 Assert.True(resultingTransaction.IsCoinBase);
                 Assert.False(resultingTransaction.IsCoinStake);
                 Assert.Equal(Money.Zero, resultingTransaction.TotalOut);
@@ -383,7 +383,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
             var prevBlockHash = chain.Genesis.HashBlock;
             for (var i = 0; i < blockAmount; i++)
             {
-                var block = new Block();
+                var block = new PowBlock();
                 Transaction coinStake = CreateCoinStakeTransaction(network, key, chain.Height + 1, new uint256((ulong)12312312 + (ulong)i));
 
                 block.AddTransaction(coinStake);
@@ -406,7 +406,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
             var prevBlockHash = chain.Genesis.HashBlock;
             for (var i = 0; i < blockAmount; i++)
             {
-                var block = new Block();
+                var block = new PowBlock();
                 Transaction coinbase = CreateCoinStakeTransaction(network, key, chain.Height + 1, new uint256((ulong)12312312 + (ulong)i));
 
                 block.AddTransaction(coinbase);
@@ -469,8 +469,8 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         {
             this.validator.Setup(v => v.GetProofOfWorkReward(6))
                 .Returns(this.powReward);
-            this.validator.Setup(v => v.GetBlockWeight(It.IsAny<Block>()))
-                .Returns<Block>((block) =>
+            this.validator.Setup(v => v.GetBlockWeight(It.IsAny<PowBlock>()))
+                .Returns<PowBlock>((block) =>
                 {
                     return block.ToBytes().Length;
                 });
@@ -516,7 +516,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
             AssemblerOptions options = null) :
                 base(consensusLoop, network, mempoolLock, mempool, dateTimeProvider, stakeChain, stakeValidator, chainTip, loggerFactory, options)
             {
-                base.pblock = this.pblocktemplate.Block;
+                base.pblock = this.pblocktemplate.PowBlock;
             }
 
             public new void TestBlockValidity()
@@ -524,7 +524,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
                 base.TestBlockValidity();
             }
 
-            public Block UpdateHeaders(ChainedBlock chainTip)
+            public PowBlock UpdateHeaders(ChainedBlock chainTip)
             {
                 base.ChainTip = chainTip;
 
@@ -549,12 +549,12 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
 
                 base.CreateCoinbase();
 
-                base.pblocktemplate.Block = base.pblock;
+                base.pblocktemplate.PowBlock = base.pblock;
 
                 return base.pblocktemplate;
             }
 
-            public (Block Block, int Selected, int Updated) AddTransactions()
+            public (PowBlock Block, int Selected, int Updated) AddTransactions()
             {
                 int selected;
                 int updated;

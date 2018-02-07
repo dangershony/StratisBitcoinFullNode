@@ -9,9 +9,9 @@ namespace Stratis.Bitcoin.Features.BlockStore
 {
     public interface IBlockStoreCache
     {
-        Task<Block> GetBlockAsync(uint256 blockid);
+        Task<PowBlock> GetBlockAsync(uint256 blockid);
 
-        void AddToCache(Block block);
+        void AddToCache(PowBlock powBlock);
 
         /// <summary>
         /// Determine if a block already exists in the cache.
@@ -25,7 +25,7 @@ namespace Stratis.Bitcoin.Features.BlockStore
     {
         private readonly IBlockRepository blockRepository;
 
-        private readonly MemoryCache<uint256, Block> cache;
+        private readonly MemoryCache<uint256, PowBlock> cache;
 
         public BlockStoreCachePerformanceCounter PerformanceCounter { get; }
 
@@ -50,7 +50,7 @@ namespace Stratis.Bitcoin.Features.BlockStore
             // Value of 300 is chosen because it covers most of the cases when not synced node is connected and trying to sync from us.
             this.MaxCacheBlocksCount = nodeSettings.ConfigReader.GetOrDefault("maxCacheBlocksCount", 300);
 
-            this.cache = new MemoryCache<uint256, Block>(this.MaxCacheBlocksCount);
+            this.cache = new MemoryCache<uint256, PowBlock>(this.MaxCacheBlocksCount);
 
             this.blockRepository = blockRepository;
             this.dateTimeProvider = dateTimeProvider;
@@ -63,45 +63,45 @@ namespace Stratis.Bitcoin.Features.BlockStore
             return new BlockStoreCachePerformanceCounter(this.dateTimeProvider);
         }
 
-        public async Task<Block> GetBlockAsync(uint256 blockid)
+        public async Task<PowBlock> GetBlockAsync(uint256 blockid)
         {
             this.logger.LogTrace("({0}:'{1}')", nameof(blockid), blockid);
             Guard.NotNull(blockid, nameof(blockid));
 
-            Block block;
-            if (this.cache.TryGetValue(blockid, out block))
+            PowBlock powBlock;
+            if (this.cache.TryGetValue(blockid, out powBlock))
             {
                 this.PerformanceCounter.AddCacheHitCount(1);
-                this.logger.LogTrace("(-)[CACHE_HIT]:'{0}'", block);
-                return block;
+                this.logger.LogTrace("(-)[CACHE_HIT]:'{0}'", powBlock);
+                return powBlock;
             }
 
             this.PerformanceCounter.AddCacheMissCount(1);
 
-            block = await this.blockRepository.GetAsync(blockid);
-            if (block != null)
+            powBlock = await this.blockRepository.GetAsync(blockid);
+            if (powBlock != null)
             {
-                this.cache.AddOrUpdate(blockid, block);
+                this.cache.AddOrUpdate(blockid, powBlock);
                 this.PerformanceCounter.AddCacheSetCount(1);
             }
 
-            this.logger.LogTrace("(-)[CACHE_MISS]:'{0}'", block);
-            return block;
+            this.logger.LogTrace("(-)[CACHE_MISS]:'{0}'", powBlock);
+            return powBlock;
         }
 
-        public void AddToCache(Block block)
+        public void AddToCache(PowBlock powBlock)
         {
-            uint256 blockid = block.GetHash();
-            this.logger.LogTrace("({0}:'{1}')", nameof(block), blockid);
+            uint256 blockid = powBlock.GetHash();
+            this.logger.LogTrace("({0}:'{1}')", nameof(powBlock), blockid);
 
-            this.cache.AddOrUpdate(blockid, block);
+            this.cache.AddOrUpdate(blockid, powBlock);
             this.logger.LogTrace("(-)");
         }
 
         /// <inheritdoc />
         public bool Exist(uint256 blockid)
         {
-            return this.cache.TryGetValue(blockid, out Block unused);
+            return this.cache.TryGetValue(blockid, out PowBlock unused);
         }
     }
 }

@@ -42,9 +42,9 @@ namespace Stratis.Bitcoin.Features.RPC.Tests.Controller
 
         public RPCControllerTest()
         {
-            this.initialBlockSignature = Block.BlockSignature;
+            this.initialBlockSignature = PowBlock.BlockSignature;
 
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
             this.network = Network.TestNet;
             this.fullNode = new Mock<IFullNode>();
             this.fullNode.Setup(f => f.Network)
@@ -79,7 +79,7 @@ namespace Stratis.Bitcoin.Features.RPC.Tests.Controller
 
         public void Dispose()
         {
-            Block.BlockSignature = this.initialBlockSignature;
+            PowBlock.BlockSignature = this.initialBlockSignature;
         }
 
         [Fact]

@@ -146,18 +146,18 @@ namespace Stratis.Bitcoin.Features.Wallet.Interfaces
         /// <summary>
         /// Processes a block received from the network.
         /// </summary>
-        /// <param name="block">The block.</param>
+        /// <param name="powBlock">The block.</param>
         /// <param name="chainedBlock">The blocks chain of headers.</param>
-        void ProcessBlock(Block block, ChainedBlock chainedBlock);
+        void ProcessBlock(PowBlock powBlock, ChainedBlock chainedBlock);
 
         /// <summary>
         /// Processes a transaction received from the network.
         /// </summary>
         /// <param name="transaction">The transaction.</param>
         /// <param name="blockHeight">The height of the block this transaction came from. Null if it was not a transaction included in a block.</param>
-        /// <param name="block">The block in which this transaction was included.</param>
+        /// <param name="powBlock">The block in which this transaction was included.</param>
         /// <param name="isPropagated">Transaction propagation state.</param>
-        void ProcessTransaction(Transaction transaction, int? blockHeight = null, Block block = null, bool isPropagated = true);
+        void ProcessTransaction(Transaction transaction, int? blockHeight = null, PowBlock powBlock = null, bool isPropagated = true);
 
         /// <summary>
         /// Saves the wallet into the file system.

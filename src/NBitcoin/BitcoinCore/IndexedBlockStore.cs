@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace NBitcoin.BitcoinCore
 {
-    public class IndexedBlockStore : IndexedStore<StoredBlock, Block>, IBlockProvider
+    public class IndexedBlockStore : IndexedStore<StoredBlock, PowBlock>, IBlockProvider
     {
         private readonly BlockStore _Store;
 
@@ -40,18 +40,18 @@ namespace NBitcoin.BitcoinCore
             return stored.Item.Header;
         }
 
-        public Block Get(uint256 id)
+        public PowBlock Get(uint256 id)
         {
             return GetAsync(id).GetAwaiter().GetResult();
         }
-        public Task<Block> GetAsync(uint256 id)
+        public Task<PowBlock> GetAsync(uint256 id)
         {
             return GetAsync(id.ToString());
         }
 
         #region IBlockProvider Members
 
-        public Block GetBlock(uint256 id, List<byte[]> searchedData)
+        public PowBlock GetBlock(uint256 id, List<byte[]> searchedData)
         {
             var block = Get(id.ToString());
             if(block == null)
@@ -61,7 +61,7 @@ namespace NBitcoin.BitcoinCore
 
         #endregion
 
-        protected override string GetKey(Block item)
+        protected override string GetKey(PowBlock item)
         {
             return item.GetHash().ToString();
         }

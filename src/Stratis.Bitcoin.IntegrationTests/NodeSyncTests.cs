@@ -14,7 +14,7 @@ namespace Stratis.Bitcoin.IntegrationTests
         {
             // These tests are for mostly for POW. Set the flags to the expected values.
             Transaction.TimeStamp = false;
-            Block.BlockSignature = false;
+            PowBlock.BlockSignature = false;
         }
 
         [Fact]
@@ -139,7 +139,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             // Temporary fix so the Network static initialize will not break.
             var m = Network.Main;
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             try
             {
                 using (NodeBuilder builder = NodeBuilder.Create())
@@ -216,7 +216,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             finally
             {
                 Transaction.TimeStamp = false;
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
             }
         }
 
@@ -234,7 +234,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             // Temporary fix so the Network static initialize will not break.
             var m = Network.Main;
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
             try
             {
                 using (NodeBuilder builder = NodeBuilder.Create())
@@ -288,7 +288,7 @@ namespace Stratis.Bitcoin.IntegrationTests
             finally
             {
                 Transaction.TimeStamp = false;
-                Block.BlockSignature = false;
+                PowBlock.BlockSignature = false;
             }
         }
 

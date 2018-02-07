@@ -23,7 +23,7 @@ namespace NBitcoin.Tests
             // These tests should be using the Stratis network.
             // Set these expected values accordingly.
             Transaction.TimeStamp = true;
-            Block.BlockSignature = true;
+            PowBlock.BlockSignature = true;
         }
 
         [Fact]
@@ -70,7 +70,7 @@ namespace NBitcoin.Tests
 
         private ChainedBlock CreateBlock(DateTimeOffset now, int offset, ChainBase chain = null)
         {
-            Block b = new Block(new BlockHeader()
+            PowBlock b = new PowBlock(new BlockHeader()
             {
                 BlockTime = now + TimeSpan.FromMinutes(offset)
             });

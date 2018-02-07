@@ -82,7 +82,7 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
         {
             this.logger.LogTrace("()");
 
-            Block genesis = this.network.GetGenesis();
+            PowBlock genesis = this.network.GetGenesis();
 
             Task task = Task.Run(() =>
             {

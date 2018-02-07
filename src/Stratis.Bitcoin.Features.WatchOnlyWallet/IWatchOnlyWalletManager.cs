@@ -41,15 +41,15 @@ namespace Stratis.Bitcoin.Features.WatchOnlyWallet
         /// <summary>
         /// Processes a block received from the network.
         /// </summary>
-        /// <param name="block">The block to process.</param>
-        void ProcessBlock(Block block);
+        /// <param name="powBlock">The block to process.</param>
+        void ProcessBlock(PowBlock powBlock);
 
         /// <summary>
         /// Processes a transaction received from the network.
         /// </summary>
         /// <param name="transaction">The transaction to process.</param>
-        /// <param name="block">The block in which this transaction was included. <c>null</c> if it was not a transaction included in a block.</param>
-        void ProcessTransaction(Transaction transaction, Block block = null);
+        /// <param name="powBlock">The block in which this transaction was included. <c>null</c> if it was not a transaction included in a block.</param>
+        void ProcessTransaction(Transaction transaction, PowBlock powBlock = null);
 
         /// <summary>
         /// Saves the watch-only wallet to a persistent storage.

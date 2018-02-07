@@ -23,7 +23,7 @@ namespace NBitcoin
 {
     public static class Extensions
     {
-        public static Block GetBlock(this INBitcoinBlockRepository repository, uint256 blockId)
+        public static PowBlock GetBlock(this INBitcoinBlockRepository repository, uint256 blockId)
         {
             return repository.GetBlockAsync(blockId).GetAwaiter().GetResult();
         }

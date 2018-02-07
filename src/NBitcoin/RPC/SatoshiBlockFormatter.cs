@@ -79,7 +79,7 @@ namespace NBitcoin.RPC
             return json.ToObject<RPCBlock>();
         }
 
-        public static Block ToBlock(RPCBlock rpcBlock)
+        public static PowBlock ToBlock(RPCBlock rpcBlock)
         {
             var header = new BlockHeader()
             {
@@ -97,7 +97,7 @@ namespace NBitcoin.RPC
                 Version = rpcBlock.version,
             };
 
-            var block = new Block(header);
+            var block = new PowBlock(header);
 
             if (!string.IsNullOrEmpty(rpcBlock.signature))
             {
