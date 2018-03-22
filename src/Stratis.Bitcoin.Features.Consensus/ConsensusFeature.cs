@@ -24,7 +24,7 @@ using Stratis.Bitcoin.Utilities;
 
 namespace Stratis.Bitcoin.Features.Consensus
 {
-    public class ConsensusFeature : FullNodeFeature, INodeStats
+    public class ConsensusFeature : FullNodeFeature, INodeStats, IFeatureStats
     {
         private readonly DBreezeCoinView dBreezeCoinView;
 
@@ -165,6 +165,11 @@ namespace Stratis.Bitcoin.Features.Consensus
             }
            
             this.dBreezeCoinView.Dispose();
+        }
+
+        public void AddFeatureStats(StringBuilder benchLog)
+        {
+            this.consensusLoop.Puller.snapshot();
         }
     }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
@@ -304,6 +305,24 @@ namespace Stratis.Bitcoin.BlockPulling
             }
 
             this.logger.LogTrace("(-)");
+        }
+
+        public string snapshot()
+        {
+            var bs = new StringBuilder();
+            lock (this.lockObject)
+            {
+                foreach (var pendingDownload in this.peersPendingDownloads)
+                {
+                    bs.AppendLine(pendingDownload.Key.AttachedPeer.PeerEndPoint.ToString());
+                    foreach (var assignment in pendingDownload.Value)
+                    {
+                        bs.AppendLine("-- " + assignment.Value.BlockHash.ToString() + this.Chain.GetBlock(assignment.Value.BlockHash));
+                    }
+                }
+            }
+
+            return bs.ToString();
         }
 
         /// <summary>

@@ -285,6 +285,7 @@ namespace Stratis.Bitcoin.Connection
                 builder.AppendLine("Total".PadRight(LoggingConfiguration.ColumnLength * 2) + "R:" + this.ToKBSec(diffTotal.ReadenBytesPerSecond) + "\tW:" + this.ToKBSec(diffTotal.WrittenBytesPerSecond));
                 builder.AppendLine("==========================");
 
+                
                 //TODO: Hack, we should just clean nodes that are not connect anymore.
                 if (this.downloads.Count > 1000)
                     this.downloads.Clear();
@@ -309,6 +310,16 @@ namespace Stratis.Bitcoin.Connection
                     (" height:" + (chainHeadersBehavior.PendingTip != null ? chainHeadersBehavior.PendingTip.Height.ToString() : peer.PeerVersion?.StartHeight.ToString() ?? "unknown") + ",").PadRight(LoggingConfiguration.ColumnLength + 2) +
                     " agent:" + agent);
             }
+
+            var addnode = this.PeerConnectors.OfType<PeerConnectorAddNode>().First();
+
+            builder.AppendLine("addnode.MaxOutboundConnections = " + addnode.MaxOutboundConnections);
+
+            foreach (var add in addnode.ConnectionSettings.AddNode)
+            {
+                builder.AppendLine("add.Address = " + add.Address);
+            }
+
 
             return builder.ToString();
         }
@@ -393,6 +404,7 @@ namespace Stratis.Bitcoin.Connection
 
             this.peerAddressManager.AddPeer(ipEndpoint.MapToIpv6(), IPAddress.Loopback);
 
+            Console.WriteLine("AddNodeAddress " + ipEndpoint);
             if (!this.ConnectionSettings.AddNode.Any(p => p.Match(ipEndpoint)))
             {
                 this.ConnectionSettings.AddNode.Add(ipEndpoint);
@@ -415,6 +427,7 @@ namespace Stratis.Bitcoin.Connection
         {
             this.logger.LogTrace("({0}:'{1}')", nameof(ipEndpoint), ipEndpoint);
 
+            Console.WriteLine("RemoveNodeAddress " + ipEndpoint);
             INetworkPeer peer = this.connectedPeers.FindByEndpoint(ipEndpoint);
             peer?.Disconnect("Requested by user");
 

@@ -316,6 +316,10 @@ namespace Stratis.Bitcoin.Features.BlockStore
                     //TODO strip block of witness if node does not support
                     await peer.SendMessageAsync(new BlockPayload(block.WithOptions(peer.SupportedTransactionOptions))).ConfigureAwait(false);
                 }
+                else
+                {
+                    Console.WriteLine("==============   Block was asked but not found " + item.Hash + " in chain = " + this.chain.GetBlock(item.Hash));
+                }
 
                 // If the peer is syncing using "getblocks" message we are supposed to send 
                 // an "inv" message with our tip to it once it asks for all blocks
