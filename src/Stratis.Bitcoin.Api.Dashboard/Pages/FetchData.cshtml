@@ -1,0 +1,39 @@
+﻿@using System.Net
+@using System.Net.Http
+@using Stratis.Bitcoin.Api.Dashboard
+@using Stratis.Bitcoin.Api.Dashboard.Models
+@page "/fetchdata"
+@inject HttpClient Http
+
+<h1>Weather forecast</h1>
+
+<p>This component demonstrates fetching data from the server.</p>
+
+<button class="btn btn-primary" onclick="@getdata">Click me</button>
+
+<p>Current count: @currentCount</p>
+<p>Current count: @currentCount2</p>
+
+<p>Status: @status</p>
+
+
+<p>Status: @modelget</p>
+
+@functions {
+    string status;
+    StatusModel modelget;
+    int currentCount = 0;
+    int currentCount2 = 0;
+
+    void getdata()
+    {
+        currentCount++;
+
+        HttpClient cl = new HttpClient();
+        status = cl.GetStringAsync("api/node/status").Result;
+
+        //modelget = WebRequestMethods.Http.GetJsonAsync<StatusModel>("api/node/status").Result;
+
+        currentCount2++;
+    }
+}
