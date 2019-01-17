@@ -161,6 +161,24 @@ namespace Stratis.Bitcoin.Utilities
             return coins;
         }
 
+        public long GetSize
+        {
+            get
+            {
+                long size = 0;
+                foreach (var unspentOutput in this.Outputs)
+                {
+                    if (unspentOutput != null)
+                    {
+                        size += unspentOutput.ScriptPubKey.Length;
+                        size += sizeof(long);
+                    }
+                }
+
+                return size;
+            }
+        }
+
         public void ReadWrite(BitcoinStream stream)
         {
             stream.ReadWrite(ref this.transactionId);

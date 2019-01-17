@@ -33,6 +33,8 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
 
             /// <summary><c>true</c> if the information in the cache is different than the information in the underlying storage.</summary>
             public bool IsDirty;
+
+            public long GetSize => this.UnspentOutputs?.GetSize ?? 0;
         }
 
         /// <summary>
@@ -113,6 +115,8 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
         /// <remarks>The getter violates the lock contract on <see cref="cachedUtxoItems"/>, but the lock here is unnecessary as the <see cref="cachedUtxoItems"/> is marked as readonly.</remarks>
         private int cacheEntryCount => this.cachedUtxoItems.Count;
 
+        private long cacheEntrySize;
+
         /// <summary>Provider of time functions.</summary>
         private readonly IDateTimeProvider dateTimeProvider;
 
@@ -182,6 +186,7 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
             this.random = new Random();
 
             nodeStats.RegisterStats(this.AddBenchStats, StatsType.Benchmark, 300);
+            nodeStats.RegisterStats(this.AddComponentStats, StatsType.Component, 1000);
         }
 
         /// <inheritdoc />
@@ -259,7 +264,9 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
                     cache.ExistInInner = unspent != null;
                     cache.IsDirty = false;
                     cache.UnspentOutputs = unspent?.Clone();
-                    this.cachedUtxoItems.TryAdd(txIds[index], cache);
+
+                    if (this.cachedUtxoItems.TryAdd(txIds[index], cache))
+                        this.cacheEntrySize += cache.GetSize;
                 }
 
                 result = new FetchCoinsResponse(outputs, this.blockHash);
@@ -326,7 +333,10 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
                 // Remove prunable entries from cache as they were flushed down.
                 IEnumerable<KeyValuePair<uint256, CacheItem>> prunableEntries = unspent.Where(c => (c.Value.UnspentOutputs != null) && c.Value.UnspentOutputs.IsPrunable);
                 foreach (KeyValuePair<uint256, CacheItem> entry in prunableEntries)
-                    this.cachedUtxoItems.Remove(entry.Key);
+                {
+                    if (this.cachedUtxoItems.Remove(entry.Key))
+                        this.cacheEntrySize -= entry.Value.GetSize;
+                }
 
                 this.cachedRewindDataIndex.Clear();
                 this.innerBlockHash = this.blockHash;
@@ -349,7 +359,8 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
                     if ((this.random.Next() % 3) == 0)
                     {
                         this.logger.LogTrace("Transaction ID '{0}' selected to be removed from the cache.", entry.Key);
-                        this.cachedUtxoItems.Remove(entry.Key);
+                        if (this.cachedUtxoItems.Remove(entry.Key))
+                            this.cacheEntrySize -= entry.Value.GetSize;
                     }
                 }
             }
@@ -394,7 +405,8 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
 
                         cacheItem.UnspentOutputs = unspentOutput?.Clone();
 
-                        this.cachedUtxoItems.TryAdd(unspent.TransactionId, cacheItem);
+                        if (this.cachedUtxoItems.TryAdd(unspent.TransactionId, cacheItem))
+                            this.cacheEntrySize += cacheItem.GetSize;
                     }
                     else
                     {
@@ -417,6 +429,8 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
 
                         // Now modify the cached items with the mutated data.
                         cacheItem.UnspentOutputs.Spend(unspent);
+
+                        this.cacheEntrySize -= unspent.gets
                     }
                     else
                     {
@@ -425,6 +439,8 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
 
                         // Put in the cache the new UTXOs.
                         cacheItem.UnspentOutputs = unspent;
+
+                        this.cacheEntrySize += unspent.GetSize;
                     }
 
                     cacheItem.IsDirty = true;
@@ -563,6 +579,15 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
                 log.AppendLine((snapShot - this.latestPerformanceSnapShot).ToString());
 
             this.latestPerformanceSnapShot = snapShot;
+        }
+
+        private void AddComponentStats(StringBuilder log)
+        {
+            log.AppendLine();
+            log.AppendLine("======UTXO Cache======");
+
+            log.AppendLine($"Cache count: {this.cacheEntryCount} entries");
+            log.AppendLine($"Cache size: {this.cacheEntrySize} MB");
         }
 
         /// <inheritdoc />
