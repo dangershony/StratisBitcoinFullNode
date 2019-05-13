@@ -9,7 +9,7 @@ namespace Obsidian.ObsidianD
 	    {
 		    get
 		    {
-			    return new NetworksSelector(() => new ObsidianMain(), () => new StratisTest(), () => new StratisRegTest());
+			    return new NetworksSelector(() => new ObsidianMain(), () => null, () => null);
 		    }
 	    }
 	}

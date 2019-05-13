@@ -25,7 +25,9 @@ namespace Obsidian.ObsidianD
 
 		/// <summary> Starts the fullnode asyncronously.</summary>
 		/// <remarks>To run as gateway node use the args -gateway=1 -whitelist=[trusted-QT-ip] addnode=[trusted-QT-ip],
-		/// e.g. -gateway=1 -whitelist=104.45.21.229 addnode=104.45.21.229 -port=56666</remarks>
+		/// e.g. -gateway=1 -whitelist=104.45.21.229 addnode=104.45.21.229 -port=56666
+		/// Use arg -maxblkmem=2 on a low memory VPS.
+		/// </remarks>
 		/// <param name="args">args</param>
 		/// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
 		static async Task MainAsync(string[] args)
