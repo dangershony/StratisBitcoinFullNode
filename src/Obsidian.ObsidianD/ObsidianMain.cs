@@ -144,7 +144,12 @@ namespace Obsidian.ObsidianD
 	            new DNSSeedData("obsidianblockchain2.westeurope.cloudapp.azure.com", "obsidianblockchain2.westeurope.cloudapp.azure.com")
 			};
 
-            string[] seedNodes = { "104.45.21.229", "23.101.75.57" }; // IP addresses of the Obsidian DNS seed nodes
+            string[] seedNodes =
+            {
+	            "104.45.21.229", "23.101.75.57",	// IP addresses of the Obsidian (c++) DNS seed nodes
+	            "165.22.90.248"						// IP addresses of c# gateway nodes
+
+            }; 
 			this.SeedNodes = this.ConvertToNetworkAddresses(seedNodes, this.DefaultPort).ToList();
 
             this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();  // Is this needed for Obsidian?
