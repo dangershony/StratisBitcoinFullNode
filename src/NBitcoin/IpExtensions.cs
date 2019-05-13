@@ -1,5 +1,4 @@
-﻿#if !NOSOCKET
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -8,49 +7,89 @@ namespace NBitcoin
 {
     public static class IpExtensions
     {
-#if WIN
-        interface ICompatibility
+        /// <summary>192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 Documentation. Not globally reachable.</summary>
+        public static bool IsRFC5737(this IPAddress address)
         {
-            IPAddress MapToIPv6(IPAddress address);
-            bool IsIPv4MappedToIPv6(IPAddress address);
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                (bytes[15 - 3] == 192 && bytes[15 - 2] == 0 && bytes[15 - 1] == 2) ||
+                (bytes[15 - 3] == 198 && bytes[15 - 2] == 51 && bytes[15 - 1] == 100) ||
+                (bytes[15 - 3] == 203 && bytes[15 - 2] == 0 && bytes[15 - 1] == 113));
         }
-        class MonoCompatibility : ICompatibility
-        {
-            public bool IsIPv4MappedToIPv6(IPAddress address)
-            {
-                return Utils.IsIPv4MappedToIPv6(address);
-            }
 
-            public IPAddress MapToIPv6(IPAddress address)
-            {
-                return Utils.MapToIPv6(address);
-            }
-        }
-        class WinCompatibility : ICompatibility
+        /// <summary>100.64.0.0/10 Shared Address Space. Not globally reachable.</summary>
+        public static bool IsRFC6598(this IPAddress address)
         {
-            public bool IsIPv4MappedToIPv6(IPAddress address)
-            {
-                return address.IsIPv4MappedToIPv6;
-            }
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                bytes[15 - 3] == 100 && (bytes[15 - 2] & 0xc0) == 64);
+        }
 
-            public IPAddress MapToIPv6(IPAddress address)
-            {
-                return address.MapToIPv6();
-            }
-        }
-        static ICompatibility _Compatibility;
-        static ICompatibility Compatibility
+        /// <summary>192.31.196.0/24 AS112-v4. Globally reachable.</summary>
+        public static bool IsRFC7535(this IPAddress address)
         {
-            get
-            {
-                if(_Compatibility == null)
-                {
-                    _Compatibility = IsRunningOnMono() ? (ICompatibility)new MonoCompatibility() : new WinCompatibility();
-                }
-                return _Compatibility;
-            }
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                bytes[15 - 3] == 192 && bytes[15 - 2]  == 31 && bytes[15 - 1] == 196);
         }
-#endif
+
+        /// <summary>192.52.193.0/24 AMT. Globally reachable.</summary>
+        public static bool IsRFC7450(this IPAddress address)
+        {
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                bytes[15 - 3] == 192 && bytes[15 - 2] == 52 && bytes[15 - 1] == 193);
+        }
+
+        /// <summary>192.88.99.0/24 Deprecated (6to4 Relay Anycast).</summary>
+        public static bool IsRFC7526(this IPAddress address)
+        {
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                bytes[15 - 3] == 192 && bytes[15 - 2] == 88 && bytes[15 - 1] == 99);
+        }
+
+        /// <summary>192.175.48.0/24 Direct Delegation AS112 Service. Globally reachable. Not globally unique.</summary>
+        public static bool IsRFC7534(this IPAddress address)
+        {
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                bytes[15 - 3] == 192 && bytes[15 - 2] == 175 && bytes[15 - 1] == 48);
+        }
+
+        /// <summary>198.18.0.0/15 Benchmarking. Not globally reachable.</summary>
+        public static bool IsRFC2544(this IPAddress address)
+        {
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                bytes[15 - 3] == 198 && (bytes[15 - 2] & 254) == 18);
+        }
+
+        /// <summary>240.0.0.0/4 Reserved.</summary>
+        public static bool IsRFC1112(this IPAddress address)
+        {
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                (bytes[15 - 3] & 240) == 240);
+        }
+
+        /// <summary>192.0.0.0/24 IETF Protocol Assignments.</summary>
+        public static bool IsRFC6890(this IPAddress address)
+        {
+            address = address.EnsureIPv6();
+            byte[] bytes = address.GetAddressBytes();
+            return address.IsIPv4() && (
+                bytes[15 - 3] == 192 && bytes[15 - 2] == 0 && bytes[15 - 1] == 0);
+        }
+
         public static bool IsRFC1918(this IPAddress address)
         {
             address = address.EnsureIPv6();
@@ -60,7 +99,6 @@ namespace NBitcoin
                 (bytes[15 - 3] == 192 && bytes[15 - 2] == 168) ||
                 (bytes[15 - 3] == 172 && (bytes[15 - 2] >= 16 && bytes[15 - 2] <= 31)));
         }
-
 
         public static bool IsIPv4(this IPAddress address)
         {
@@ -143,7 +181,8 @@ namespace NBitcoin
             }
 
             // all unroutable addresses belong to the same group
-            if(!address.IsRoutable(true))
+            // RFC6598 is a special case that is not globally routable but still locally routable.
+            if(!address.IsRoutable(true) && !address.IsRFC6598())
             {
                 nClass = 0;
                 nBits = 0;
@@ -219,20 +258,12 @@ namespace NBitcoin
 
         public static IPAddress MapToIPv6Ex(this IPAddress address)
         {
-#if WIN
-            return Compatibility.MapToIPv6(address);
-#else
             return Utils.MapToIPv6(address);
-#endif
         }
+
         public static bool IsIPv4MappedToIPv6Ex(this IPAddress address)
         {
-#if WIN
-            return Compatibility.IsIPv4MappedToIPv6(address);
-#else
             return Utils.IsIPv4MappedToIPv6(address);
-#endif
-
         }
 
         public static bool IsLocal(this IPAddress address)
@@ -260,20 +291,27 @@ namespace NBitcoin
         }
 
         /// <summary>
-        /// Specific IP address ranges that are reserved specifically as non - routable addresses to be used in 
-        /// private networks: 10.0.0.0 through 10.255.255.255. 172.16.0.0 through 172.32.255.255. 192.168.0.0 
+        /// Specific IP address ranges that are reserved specifically as non - routable addresses to be used in
+        /// private networks: 10.0.0.0 through 10.255.255.255. 172.16.0.0 through 172.32.255.255. 192.168.0.0
         /// through 192.168.255.255.
         /// </summary>
         public static bool IsRoutable(this IPAddress address, bool allowLocal)
         {
             return address.IsValid() && !(
                                             (!allowLocal && address.IsRFC1918()) ||
+                                            address.IsRFC6890() ||
+                                            address.IsRFC5737() ||
+                                            address.IsRFC6598() ||
+                                            address.IsRFC7534() ||
+                                            address.IsRFC2544() ||
+                                            address.IsRFC1112() ||
                                             address.IsRFC3927() ||
                                             address.IsRFC4862() ||
                                             (address.IsRFC4193() && !address.IsTor()) ||
                                             address.IsRFC4843() || (!allowLocal && address.IsLocal())
                                             );
         }
+
         public static bool IsValid(this IPAddress address)
         {
             address = address.EnsureIPv6();
@@ -302,4 +340,3 @@ namespace NBitcoin
         }
     }
 }
-#endif

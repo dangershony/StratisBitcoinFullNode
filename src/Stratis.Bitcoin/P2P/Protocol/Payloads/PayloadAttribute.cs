@@ -25,7 +25,7 @@ namespace Stratis.Bitcoin.P2P.Protocol.Payloads
         {
             if (commandName.Length > 12)
                 throw new ArgumentException("Protocol violation: command name is limited to 12 characters.");
-            
+
             this.Name = commandName;
         }
     }
@@ -64,7 +64,7 @@ namespace Stratis.Bitcoin.P2P.Protocol.Payloads
             assembly = assembly ?? typeof(PayloadAttribute).GetTypeInfo().Assembly;
 
             IEnumerable<TypeInfo> types = null;
-                
+
             try
             {
                 types = assembly.DefinedTypes;
@@ -75,7 +75,6 @@ namespace Stratis.Bitcoin.P2P.Protocol.Payloads
             }
 
             foreach (var pair in types
-                .Where(t => t.Namespace == typeof(PayloadAttribute).Namespace)
                 .Where(t => t.IsDefined(typeof(PayloadAttribute), true))
                 .Select(t =>
                     new
@@ -107,7 +106,7 @@ namespace Stratis.Bitcoin.P2P.Protocol.Payloads
             this.nameToType.Add(payloadAttribute.Name, payloadType);
             this.typeToName.Add(payloadType, payloadAttribute.Name);
         }
-        
+
         /// <summary>
         /// Get the <see cref="Payload"/> type associated with the command name.
         /// </summary>

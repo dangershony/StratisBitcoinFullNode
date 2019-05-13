@@ -91,7 +91,9 @@ namespace Stratis.Bitcoin.Builder
             List<Action<IFeatureCollection>> featuresRegistrationDelegates, IFeatureCollection features)
             : this(configureServicesDelegates, configureDelegates, featuresRegistrationDelegates, features)
         {
-            this.NodeSettings = nodeSettings ?? NodeSettings.Default();
+            Guard.NotNull(nodeSettings, nameof(nodeSettings));
+
+            this.NodeSettings = nodeSettings;
             this.Network = this.NodeSettings.Network;
 
             this.ConfigureServices(service =>
@@ -163,6 +165,8 @@ namespace Stratis.Bitcoin.Builder
             // Print command-line help
             if (this.NodeSettings?.PrintHelpAndExit ?? false)
             {
+                NodeSettings.PrintHelp(this.Network);
+
                 foreach (IFeatureRegistration featureRegistration in this.Features.FeatureRegistrations)
                 {
                     MethodInfo printHelp = featureRegistration.FeatureType.GetMethod("PrintHelp", BindingFlags.Public | BindingFlags.Static);
@@ -217,7 +221,7 @@ namespace Stratis.Bitcoin.Builder
             foreach (Action<IFeatureCollection> configureFeature in this.featuresRegistrationDelegates)
                 configureFeature(this.Features);
 
-            // configure features startup            
+            // configure features startup
             foreach (IFeatureRegistration featureRegistration in this.Features.FeatureRegistrations)
             {
                 try

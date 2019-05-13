@@ -1,7 +1,9 @@
 ﻿using System.IO;
-using NBitcoin;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Configuration.Settings;
+using Stratis.Bitcoin.Features.Api;
+using Stratis.Bitcoin.Features.RPC;
+using Stratis.Bitcoin.Networks;
 using Stratis.Bitcoin.Tests.Common;
 using Xunit;
 
@@ -9,7 +11,7 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
 {
     public class NodeSettingsTest : TestBase
     {
-        public NodeSettingsTest():base(Network.Main)
+        public NodeSettingsTest():base(KnownNetworks.Main)
         {
         }
 
@@ -20,7 +22,7 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
         public void NodeSettings_CanReadSingleValueFromCmdLine()
         {
             // Arrange
-            var nodeSettings = new NodeSettings(args:new[] { "-agentprefix=abc" });
+            var nodeSettings = new NodeSettings(networksSelector: Networks.Networks.Bitcoin, args: new[] { "-agentprefix=abc" });
             // Act
             string result = nodeSettings.ConfigReader.GetOrDefault("agentprefix", string.Empty);
             // Assert
@@ -37,7 +39,7 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
             string dataDir = TestBase.CreateDataFolder(this).RootPath;
             string configFile = Path.Combine(dataDir, "config.txt");
             File.WriteAllText(configFile, "agentprefix=def");
-            var nodeSettings = new NodeSettings(args: new[] { $"-datadir={dataDir}", $"-conf=config.txt" });
+            var nodeSettings = new NodeSettings(networksSelector: Networks.Networks.Bitcoin, args: new[] { $"-datadir={dataDir}", $"-conf=config.txt" });
             // Act
             string result = nodeSettings.ConfigReader.GetOrDefault("agentprefix", string.Empty);
             // Assert
@@ -54,7 +56,7 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
             string dataDir = TestBase.CreateDataFolder(this).RootPath;
             string configFile = Path.Combine(dataDir, "config.txt");
             File.WriteAllText(configFile, "agentprefix=def");
-            var nodeSettings = new NodeSettings(args: new[] { $"-datadir={dataDir}", $"-conf=config.txt", "-agentprefix=abc" });
+            var nodeSettings = new NodeSettings(networksSelector: Networks.Networks.Bitcoin, args: new[] { $"-datadir={dataDir}", $"-conf=config.txt", "-agentprefix=abc" });
             // Act
             string result = nodeSettings.ConfigReader.GetOrDefault("agentprefix", string.Empty);
             // Assert
@@ -71,7 +73,7 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
             string dataDir = TestBase.CreateDataFolder(this).RootPath;
             string configFile = Path.Combine(dataDir, "config.txt");
             File.WriteAllText(configFile, "");
-            var nodeSettings = new NodeSettings(args: new[] { $"-datadir={dataDir}", $"-conf=config.txt" });
+            var nodeSettings = new NodeSettings(networksSelector: Networks.Networks.Bitcoin, args: new[] { $"-datadir={dataDir}", $"-conf=config.txt" });
             // Act
             string result = nodeSettings.ConfigReader.GetOrDefault("agentprefix", string.Empty);
             // Assert
@@ -86,7 +88,7 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
         public void NodeSettings_CanReadMultiValueFromCmdLine()
         {
             // Arrange
-            var nodeSettings = new NodeSettings(args: new[] { "-addnode=0.0.0.0", "-addnode=0.0.0.1" });
+            var nodeSettings = new NodeSettings(networksSelector: Networks.Networks.Bitcoin, args: new[] { "-addnode=0.0.0.0", "-addnode=0.0.0.1" });
             // Act
             string[] result = nodeSettings.ConfigReader.GetAll("addnode");
             // Assert
@@ -105,7 +107,7 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
             string dataDir = TestBase.CreateDataFolder(this).RootPath;
             string configFile = Path.Combine(dataDir, "config.txt");
             File.WriteAllText(configFile, "addnode=0.0.0.0\r\naddnode=0.0.0.1");
-            var nodeSettings = new NodeSettings(args: new[] { $"-datadir={dataDir}", $"-conf=config.txt" });
+            var nodeSettings = new NodeSettings(networksSelector: Networks.Networks.Bitcoin, args: new[] { $"-datadir={dataDir}", $"-conf=config.txt" });
             // Act
             string[] result = nodeSettings.ConfigReader.GetAll("addnode");
             // Assert
@@ -124,7 +126,7 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
             string dataDir = TestBase.CreateDataFolder(this).RootPath;
             string configFile = Path.Combine(dataDir, "config.txt");
             File.WriteAllText(configFile, "addnode=0.0.0.0");
-            var nodeSettings = new NodeSettings(args: new[] { $"-datadir={dataDir}", $"-conf=config.txt", "-addnode=0.0.0.1" });
+            var nodeSettings = new NodeSettings(networksSelector: Networks.Networks.Bitcoin, args: new[] { $"-datadir={dataDir}", $"-conf=config.txt", "-addnode=0.0.0.1" });
             // Act
             string[] result = nodeSettings.ConfigReader.GetAll("addnode");
             // Assert
@@ -143,11 +145,54 @@ namespace Stratis.Bitcoin.Tests.NodeConfiguration
             string dataDir = TestBase.CreateDataFolder(this).RootPath;
             string configFile = Path.Combine(dataDir, "config.txt");
             File.WriteAllText(configFile, "");
-            var nodeSettings = new NodeSettings(args: new[] { $"-datadir={dataDir}", $"-conf=config.txt" });
+            var nodeSettings = new NodeSettings(networksSelector: Networks.Networks.Bitcoin, args: new[] { $"-datadir={dataDir}", $"-conf=config.txt" });
             // Act
             string[] result = nodeSettings.ConfigReader.GetAll("addnode");
             // Assert
             Assert.Empty(result);
+        }
+
+        /// <summary>
+        /// Verifies API port value can be passed in on startup.
+        /// </summary>
+        [Fact]
+        public void NodeSettings_CanOverrideOnlyApiPort()
+        {
+            const int apiport = 12345;
+
+            var nodeSettings = new NodeSettings(new BitcoinRegTest(), args: new[] {  $"-apiport={apiport}" });
+
+            var apiSettings = new ApiSettings(nodeSettings);
+            var rpcSettings = new RpcSettings(nodeSettings);
+            var configurationManagerSettings = new ConnectionManagerSettings(nodeSettings);
+
+            Assert.Equal(apiport, apiSettings.ApiPort);
+            Assert.Equal(nodeSettings.Network.DefaultRPCPort, rpcSettings.RPCPort);
+            Assert.Equal(nodeSettings.Network.DefaultPort, configurationManagerSettings.Port);
+        }
+
+        /// <summary>
+        /// Verifies all port values can be passed in on startup.
+        /// </summary>
+        [Fact]
+        public void NodeSettings_CanOverrideAllPorts()
+        {
+            // On MacOS ports below 1024 are privileged, and cannot be bound to by anyone other than root.
+            const int port = 1024 + 123;
+            const int rpcPort = 1024 + 456;
+            const int apiPort = 1024 + 567;
+
+            var args = new [] {$"-port={port.ToString()}", $"-rpcport={rpcPort.ToString()}", $"-apiport={apiPort.ToString()}"};
+
+            var nodeSettings = new NodeSettings(new BitcoinRegTest(), args: args);
+
+            var apiSettings = new ApiSettings(nodeSettings);
+            var rpcSettings = new RpcSettings(nodeSettings);
+            var configurationManagerSettings = new ConnectionManagerSettings(nodeSettings);
+
+            Assert.Equal(apiPort, apiSettings.ApiPort);
+            Assert.Equal(rpcPort, rpcSettings.RPCPort);
+            Assert.Equal(port, configurationManagerSettings.Port);
         }
     }
 }

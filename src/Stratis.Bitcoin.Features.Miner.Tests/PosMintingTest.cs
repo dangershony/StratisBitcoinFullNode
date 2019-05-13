@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
 using Moq;
 using NBitcoin;
+using NBitcoin.BitcoinCore;
+using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
-using Stratis.Bitcoin.Connection;
+using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.Consensus.CoinViews;
@@ -13,6 +17,8 @@ using Stratis.Bitcoin.Features.Consensus.Interfaces;
 using Stratis.Bitcoin.Features.MemoryPool;
 using Stratis.Bitcoin.Features.MemoryPool.Interfaces;
 using Stratis.Bitcoin.Features.Miner.Models;
+using Stratis.Bitcoin.Features.Miner.Staking;
+using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Mining;
@@ -26,44 +32,44 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
 {
     public class PosMintingTest : LogsTestBase
     {
-        private PosMinting posMinting;
-        private readonly Mock<IConsensusLoop> consensusLoop;
-        private ConcurrentChain chain;
-        private Network network;
-        private readonly Mock<IConnectionManager> connectionManager;
+        protected PosMinting posMinting;
+        private readonly Mock<IConsensusManager> consensusManager;
+        private ChainIndexer chainIndexer;
+        protected Network network;
         private readonly Mock<IDateTimeProvider> dateTimeProvider;
         private readonly Mock<IInitialBlockDownloadState> initialBlockDownloadState;
         private readonly Mock<INodeLifetime> nodeLifetime;
-        private readonly Mock<CoinView> coinView;
+        private readonly Mock<ICoinView> coinView;
         private readonly Mock<IStakeChain> stakeChain;
         private readonly List<uint256> powBlocks;
         private readonly Mock<IStakeValidator> stakeValidator;
         private readonly MempoolSchedulerLock mempoolSchedulerLock;
         private readonly Mock<ITxMempool> txMempool;
+        private readonly MinerSettings minerSettings;
         private readonly Mock<IWalletManager> walletManager;
-        private readonly Mock<IAsyncLoopFactory> asyncLoopFactory;
+        private readonly Mock<IAsyncProvider> asyncProvider;
         private readonly Mock<ITimeSyncBehaviorState> timeSyncBehaviorState;
         private readonly CancellationTokenSource cancellationTokenSource;
 
         public PosMintingTest()
         {
-            this.consensusLoop = new Mock<IConsensusLoop>();
-            this.network = Network.StratisTest;
-            this.network.Consensus.Options = new PowConsensusOptions();
-            this.chain = new ConcurrentChain(this.network);
-            this.connectionManager = new Mock<IConnectionManager>();
+            this.consensusManager = new Mock<IConsensusManager>();
+            this.network = KnownNetworks.StratisTest;
+            this.network.Consensus.Options = new ConsensusOptions();
+            this.chainIndexer = new ChainIndexer(this.network);
             this.dateTimeProvider = new Mock<IDateTimeProvider>();
             this.initialBlockDownloadState = new Mock<IInitialBlockDownloadState>();
             this.nodeLifetime = new Mock<INodeLifetime>();
-            this.coinView = new Mock<CoinView>();
+            this.coinView = new Mock<ICoinView>();
             this.stakeChain = new Mock<IStakeChain>();
             this.powBlocks = new List<uint256>();
             this.SetupStakeChain();
             this.stakeValidator = new Mock<IStakeValidator>();
             this.mempoolSchedulerLock = new MempoolSchedulerLock();
+            this.minerSettings = new MinerSettings(NodeSettings.Default(this.network));
             this.txMempool = new Mock<ITxMempool>();
             this.walletManager = new Mock<IWalletManager>();
-            this.asyncLoopFactory = new Mock<IAsyncLoopFactory>();
+            this.asyncProvider = new Mock<IAsyncProvider>();
             this.timeSyncBehaviorState = new Mock<ITimeSyncBehaviorState>();
 
             this.cancellationTokenSource = new CancellationTokenSource();
@@ -76,23 +82,23 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         public void Stake_StakingLoopNotStarted_StartsStakingLoop()
         {
             var asyncLoop = new AsyncLoop("PosMining.Stake2", this.FullNodeLogger.Object, token => { return Task.CompletedTask; });
-            this.asyncLoopFactory.Setup(a => a.Run("PosMining.Stake",
+            this.asyncProvider.Setup(a => a.CreateAndRunAsyncLoop("PosMining.Stake",
                 It.IsAny<Func<CancellationToken, Task>>(), It.IsAny<CancellationToken>(),
                 It.Is<TimeSpan>(t => t.Milliseconds == 500), TimeSpans.Second))
                 .Returns(asyncLoop)
                 .Verifiable();
 
-            this.posMinting.Stake(new PosMinting.WalletSecret() { WalletName = "wallet1", WalletPassword = "myPassword" });
+            this.posMinting.Stake(new WalletSecret() { WalletName = "wallet1", WalletPassword = "myPassword" });
 
             this.nodeLifetime.Verify();
-            this.asyncLoopFactory.Verify();
+            this.asyncProvider.Verify();
         }
 
         [Fact]
         public void Stake_StakingLoopThrowsMinerException_AddsErrorToRpcStakingInfoModel()
         {
             var asyncLoop = new AsyncLoop("PosMining.Stake2", this.FullNodeLogger.Object, token => { return Task.CompletedTask; });
-            this.asyncLoopFactory.Setup(a => a.Run("PosMining.Stake",
+            this.asyncProvider.Setup(a => a.CreateAndRunAsyncLoop("PosMining.Stake",
                 It.IsAny<Func<CancellationToken, Task>>(), It.IsAny<CancellationToken>(),
                 It.Is<TimeSpan>(t => t.Milliseconds == 500), TimeSpans.Second))
                         .Callback<string, Func<CancellationToken, Task>, CancellationToken, TimeSpan?, TimeSpan?>((name, func, token, repeat, start) =>
@@ -115,7 +121,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
                     throw new InvalidOperationException("End the loop");
                 });
 
-            this.posMinting.Stake(new PosMinting.WalletSecret() { WalletName = "wallet1", WalletPassword = "myPassword" });
+            this.posMinting.Stake(new WalletSecret() { WalletName = "wallet1", WalletPassword = "myPassword" });
             asyncLoop.Run();
 
             GetStakingInfoModel model = this.posMinting.GetGetStakingInfoModel();
@@ -126,7 +132,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         public void Stake_StakingLoopThrowsConsensusErrorException_AddsErrorToRpcStakingInfoModel()
         {
             var asyncLoop = new AsyncLoop("PosMining.Stake2", this.FullNodeLogger.Object, token => { return Task.CompletedTask; });
-            this.asyncLoopFactory.Setup(a => a.Run("PosMining.Stake",
+            this.asyncProvider.Setup(a => a.CreateAndRunAsyncLoop("PosMining.Stake",
                 It.IsAny<Func<CancellationToken, Task>>(), It.IsAny<CancellationToken>(),
                 It.Is<TimeSpan>(t => t.Milliseconds == 500), TimeSpans.Second))
                  .Callback<string, Func<CancellationToken, Task>, CancellationToken, TimeSpan?, TimeSpan?>((name, func, token, repeat, start) =>
@@ -149,7 +155,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
                     throw new InvalidOperationException("End the loop");
                 });
 
-            this.posMinting.Stake(new PosMinting.WalletSecret() { WalletName = "wallet1", WalletPassword = "myPassword" });
+            this.posMinting.Stake(new WalletSecret() { WalletName = "wallet1", WalletPassword = "myPassword" });
             asyncLoop.Run();
 
             GetStakingInfoModel model = this.posMinting.GetGetStakingInfoModel();
@@ -163,7 +169,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
 
             Func<CancellationToken, Task> stakingLoopFunction = null;
             CancellationToken stakingLoopToken = default(CancellationToken);
-            this.asyncLoopFactory.Setup(a => a.Run("PosMining.Stake",
+            this.asyncProvider.Setup(a => a.CreateAndRunAsyncLoop("PosMining.Stake",
                 It.IsAny<Func<CancellationToken, Task>>(), It.IsAny<CancellationToken>(),
                 It.Is<TimeSpan>(t => t.Milliseconds == 500), TimeSpans.Second))
                  .Callback<string, Func<CancellationToken, Task>, CancellationToken, TimeSpan?, TimeSpan?>((name, func, token, repeat, start) =>
@@ -190,7 +196,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
                     throw new InvalidOperationException("End the loop");
                 });
 
-            this.posMinting.Stake(new PosMinting.WalletSecret() { WalletName = "wallet1", WalletPassword = "myPassword" });
+            this.posMinting.Stake(new WalletSecret() { WalletName = "wallet1", WalletPassword = "myPassword" });
             stakingLoopFunction(stakingLoopToken);
             stakingLoopFunction(stakingLoopToken);
 
@@ -199,6 +205,75 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
             GetStakingInfoModel model = this.posMinting.GetGetStakingInfoModel();
             Assert.Null(model.Errors);
             Assert.False(model.Enabled);
+        }
+
+        [Fact]
+        public async Task GenerateBlocksAsync_does_not_use_small_coins()
+        {
+            var walletSecret = new WalletSecret() { WalletName = "wallet", WalletPassword = "password" };
+            var wallet = new Wallet.Wallet()
+            {
+                Network = this.network
+            };
+            var milliseconds550MinutesAgo = (uint)Math.Max(this.chainIndexer.Tip.Header.Time - TimeSpan.FromMinutes(550).Milliseconds, 0);
+            this.AddAccountWithSpendableOutputs(wallet);
+            var spendableTransactions = wallet.GetAllSpendableTransactions(this.chainIndexer.Tip.Height, 0).ToList();
+
+            this.walletManager.Setup(w => w.GetSpendableTransactionsInWalletForStaking(It.IsAny<string>(), It.IsAny<int>()))
+                .Returns(spendableTransactions);
+
+            var fetchedUtxos = spendableTransactions
+                .Select(t => new UnspentOutputs(t.Transaction.Id, new Coins()
+                {
+                    CoinBase = false,
+                    CoinStake = false,
+                    Height = 0,
+                    Outputs = { new TxOut(t.Transaction.Amount ?? Money.Zero, t.Address.ScriptPubKey) },
+                    Time = milliseconds550MinutesAgo,
+                    Version = 1
+                }))
+                .ToArray();
+            var fetchCoinsResponse = new FetchCoinsResponse(fetchedUtxos, this.chainIndexer.Tip.HashBlock);
+
+            fetchCoinsResponse.UnspentOutputs
+                .Where(u => u.Outputs.Any(o => o.Value < this.posMinting.MinimumStakingCoinValue)).Should()
+                .NotBeEmpty("otherwise we are not sure the code actually excludes them");
+            fetchCoinsResponse.UnspentOutputs
+                .Where(u => u.Outputs.Any(o => o.Value >= this.posMinting.MinimumStakingCoinValue)).Should()
+                .NotBeEmpty("otherwise we are not sure the code actually includes them");
+
+            this.coinView.Setup(c => c.FetchCoins(It.IsAny<uint256[]>(), It.IsAny<CancellationToken>()))
+                .Returns(fetchCoinsResponse);
+
+            this.consensusManager.Setup(c => c.Tip).Returns(this.chainIndexer.Tip);
+            this.dateTimeProvider.Setup(c => c.GetAdjustedTimeAsUnixTimestamp())
+                .Returns(this.chainIndexer.Tip.Header.Time + 16);
+            var ct = CancellationToken.None;
+            var utxoStakeDescriptions = await this.posMinting.GetUtxoStakeDescriptionsAsync(walletSecret, ct);
+
+
+            utxoStakeDescriptions.Select(d => d.TxOut.Value).Where(v => v < this.posMinting.MinimumStakingCoinValue)
+                .Should().BeEmpty("small coins should not be included");
+            utxoStakeDescriptions.Select(d => d.TxOut.Value).Where(v => v >= this.posMinting.MinimumStakingCoinValue)
+                .Should().NotBeEmpty("big enough coins should be included");
+
+            var expectedAmounts = spendableTransactions.Select(s => s.Transaction.Amount)
+                .Where(a => a >= this.posMinting.MinimumStakingCoinValue).ToArray();
+            utxoStakeDescriptions.Count.Should().Be(expectedAmounts.Length);
+
+            utxoStakeDescriptions.Select(d => d.TxOut.Value).Should().Contain(expectedAmounts);
+        }
+
+        private void AddAccountWithSpendableOutputs(Wallet.Wallet wallet)
+        {
+            var account = new HdAccount();
+            account.ExternalAddresses.Add(new HdAddress { Index = 1, Transactions = new List<TransactionData> { new TransactionData { Id = new uint256(15), Index = 0, Amount = this.posMinting.MinimumStakingCoinValue - 1 } } });
+            account.ExternalAddresses.Add(new HdAddress { Index = 1, Transactions = new List<TransactionData> { new TransactionData { Id = new uint256(16), Index = 0, Amount = this.posMinting.MinimumStakingCoinValue } } });
+            account.ExternalAddresses.Add(new HdAddress { Index = 2, Transactions = new List<TransactionData> { new TransactionData { Id = new uint256(17), Index = 0, Amount = 2 * Money.COIN } } });
+            account.ExternalAddresses.Add(new HdAddress { Index = 2, Transactions = new List<TransactionData> { new TransactionData { Id = new uint256(18), Index = 0, Amount = 2 * Money.CENT } } });
+            account.ExternalAddresses.Add(new HdAddress { Index = 3, Transactions = new List<TransactionData> { new TransactionData { Id = new uint256(19), Index = 0, Amount = 1 * Money.NANO } } });
+            account.ExternalAddresses.Add(new HdAddress { Index = 4, Transactions = null });
+            wallet.AccountsRoot.Add(new AccountRoot() { Accounts = new[] { account }, CoinType = CoinType.Stratis });
         }
 
         // the difficulty tests are ported from: https://github.com/bitcoin/bitcoin/blob/3e1ee310437f4c93113f6121425beffdc94702c2/src/test/blockchain_tests.cpp
@@ -255,12 +330,12 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void GetDifficulty_BlockNull_UsesConsensusLoopTipAndStakeValidator_FindsBlock_ReturnsDifficulty()
         {
-            this.chain = WalletTestsHelpers.GenerateChainWithHeight(3, this.network);
-            this.consensusLoop.Setup(c => c.Tip)
-                .Returns(this.chain.Tip);
+            this.chainIndexer = WalletTestsHelpers.GenerateChainWithHeight(3, this.network);
+            this.consensusManager.Setup(c => c.Tip)
+                .Returns(this.chainIndexer.Tip);
 
             ChainedHeader chainedHeader = CreateChainedBlockWithNBits(this.network, 0x12345678);
-            this.stakeValidator.Setup(s => s.GetLastPowPosChainedBlock(this.stakeChain.Object, It.Is<ChainedHeader>(c => c.HashBlock == this.chain.Tip.HashBlock), false))
+            this.stakeValidator.Setup(s => s.GetLastPowPosChainedBlock(this.stakeChain.Object, It.Is<ChainedHeader>(c => c.HashBlock == this.chainIndexer.Tip.HashBlock), false))
                 .Returns(chainedHeader);
 
             this.posMinting = this.InitializePosMinting();
@@ -272,7 +347,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void GetDifficulty_BlockNull_NoConsensusTip_ReturnsDefaultDifficulty()
         {
-            this.consensusLoop.Setup(c => c.Tip)
+            this.consensusManager.Setup(c => c.Tip)
                 .Returns((ChainedHeader)null);
 
             double result = this.posMinting.GetDifficulty(null);
@@ -283,7 +358,7 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void GetNetworkWeight_NoConsensusLoopTip_ReturnsZero()
         {
-            this.consensusLoop.Setup(c => c.Tip)
+            this.consensusManager.Setup(c => c.Tip)
                 .Returns((ChainedHeader)null);
 
             double result = this.posMinting.GetNetworkWeight();
@@ -294,10 +369,10 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void GetNetworkWeight_UsingConsensusLoop_HavingMoreThan73Blocks_CalculatesNetworkWeightUsingLatestBlocks()
         {
-            this.chain = GenerateChainWithBlockTimeAndHeight(75, this.network, 60, 0x1df88f6f);
+            this.chainIndexer = GenerateChainWithBlockTimeAndHeight(75, this.network, 60, 0x1df88f6f);
             this.InitializePosMinting();
-            this.consensusLoop.Setup(c => c.Tip)
-                .Returns(this.chain.Tip);
+            this.consensusManager.Setup(c => c.Tip)
+                .Returns(this.chainIndexer.Tip);
 
             double weight = this.posMinting.GetNetworkWeight();
 
@@ -307,10 +382,10 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void GetNetworkWeight_UsingConsensusLoop_HavingLessThan73Blocks_CalculatesNetworkWeightUsingLatestBlocks()
         {
-            this.chain = GenerateChainWithBlockTimeAndHeight(50, this.network, 60, 0x1df88f6f);
+            this.chainIndexer = GenerateChainWithBlockTimeAndHeight(50, this.network, 60, 0x1df88f6f);
             this.InitializePosMinting();
-            this.consensusLoop.Setup(c => c.Tip)
-                .Returns(this.chain.Tip);
+            this.consensusManager.Setup(c => c.Tip)
+                .Returns(this.chainIndexer.Tip);
 
             double weight = this.posMinting.GetNetworkWeight();
 
@@ -320,19 +395,19 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void GetNetworkWeight_NonPosBlocksInbetweenPosBlocks_SkipsPowBlocks_CalculatedNetworkWeightUsingLatestBlocks()
         {
-            this.chain = GenerateChainWithBlockTimeAndHeight(73, this.network, 60, 0x1df88f6f);
+            this.chainIndexer = GenerateChainWithBlockTimeAndHeight(73, this.network, 60, 0x1df88f6f);
             // the following non-pos blocks should be excluded.
-            AddBlockToChainWithBlockTimeAndDifficulty(this.chain, 3, 60, 0x12345678, this.network);
+            AddBlockToChainWithBlockTimeAndDifficulty(this.chainIndexer, 3, 60, 0x12345678, this.network);
 
             foreach (int blockHeight in new int[] { 74, 75, 76 })
             {
-                uint256 blockHash = this.chain.GetBlock(blockHeight).HashBlock;
+                uint256 blockHash = this.chainIndexer.GetHeader(blockHeight).HashBlock;
                 this.powBlocks.Add(blockHash);
             }
 
             this.InitializePosMinting();
-            this.consensusLoop.Setup(c => c.Tip)
-                .Returns(this.chain.Tip);
+            this.consensusManager.Setup(c => c.Tip)
+                .Returns(this.chainIndexer.Tip);
 
             double weight = this.posMinting.GetNetworkWeight();
 
@@ -342,13 +417,13 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void GetNetworkWeight_UsesLast73Blocks_CalculatedNetworkWeightUsingLatestBlocks()
         {
-            this.chain = GenerateChainWithBlockTimeAndHeight(5, this.network, 60, 0x12345678);
-            // only the last 72 blocks should be included. 
+            this.chainIndexer = GenerateChainWithBlockTimeAndHeight(5, this.network, 60, 0x12345678);
+            // only the last 72 blocks should be included.
             // it skips the first block because it cannot determine it for a single block so we need to add 73.
-            AddBlockToChainWithBlockTimeAndDifficulty(this.chain, 73, 60, 0x1df88f6f, this.network);
+            AddBlockToChainWithBlockTimeAndDifficulty(this.chainIndexer, 73, 60, 0x1df88f6f, this.network);
             this.InitializePosMinting();
-            this.consensusLoop.Setup(c => c.Tip)
-                .Returns(this.chain.Tip);
+            this.consensusManager.Setup(c => c.Tip)
+                .Returns(this.chainIndexer.Tip);
 
             double weight = this.posMinting.GetNetworkWeight();
 
@@ -358,9 +433,9 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void CoinstakeAge_BeforeActivation_Testnet()
         {
-            Assert.True(this.WasUtxoSelectedForStaking(Network.StratisTest, 1000, 1000 - 8)); // utxo depth is 9, mining block at 10
+            Assert.True(this.WasUtxoSelectedForStaking(KnownNetworks.StratisTest, 1000, 1000 - 8)); // utxo depth is 9, mining block at 10
 
-            Assert.False(this.WasUtxoSelectedForStaking(Network.StratisTest, 1000, 1000 - 7)); // utxo depth is 8, mining block at 9
+            Assert.False(this.WasUtxoSelectedForStaking(KnownNetworks.StratisTest, 1000, 1000 - 7)); // utxo depth is 8, mining block at 9
         }
 
         /// <summary>This is a test of coinstake age softfork activation on testnet.</summary>
@@ -371,9 +446,9 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
             int activationHeight = PosConsensusOptions.CoinstakeMinConfirmationActivationHeightTestnet;
             int afterActivationHeight = activationHeight + 1000;
 
-            Assert.True(this.WasUtxoSelectedForStaking(Network.StratisTest, afterActivationHeight, afterActivationHeight - 18));
+            Assert.True(this.WasUtxoSelectedForStaking(KnownNetworks.StratisTest, afterActivationHeight, afterActivationHeight - 18));
 
-            Assert.False(this.WasUtxoSelectedForStaking(Network.StratisTest, afterActivationHeight, afterActivationHeight - 17));
+            Assert.False(this.WasUtxoSelectedForStaking(KnownNetworks.StratisTest, afterActivationHeight, afterActivationHeight - 17));
         }
 
         /// <summary>This is a test of coinstake age softfork activation on testnet.</summary>
@@ -383,11 +458,11 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         {
             int activationHeight = PosConsensusOptions.CoinstakeMinConfirmationActivationHeightTestnet;
 
-            Assert.True(this.WasUtxoSelectedForStaking(Network.StratisTest, activationHeight - 2, activationHeight - 10)); // mining block before activation
+            Assert.True(this.WasUtxoSelectedForStaking(KnownNetworks.StratisTest, activationHeight - 2, activationHeight - 10)); // mining block before activation
 
-            Assert.True(this.WasUtxoSelectedForStaking(Network.StratisTest, activationHeight - 1, activationHeight - 19)); // mining activation block
+            Assert.True(this.WasUtxoSelectedForStaking(KnownNetworks.StratisTest, activationHeight - 1, activationHeight - 19)); // mining activation block
 
-            Assert.False(this.WasUtxoSelectedForStaking(Network.StratisTest, activationHeight - 1, activationHeight - 18)); // mining activation block
+            Assert.False(this.WasUtxoSelectedForStaking(KnownNetworks.StratisTest, activationHeight - 1, activationHeight - 18)); // mining activation block
         }
 
         /// <summary>This is a test of coinstake age softfork activation on mainnet.</summary>
@@ -395,9 +470,9 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         [Fact]
         public void CoinstakeAge_BeforeActivation_Mainnet()
         {
-            Assert.True(this.WasUtxoSelectedForStaking(Network.StratisMain, 1000, 1000 - 48)); // utxo depth is 49, mining block at 50
+            Assert.True(this.WasUtxoSelectedForStaking(KnownNetworks.StratisMain, 1000, 1000 - 48)); // utxo depth is 49, mining block at 50
 
-            Assert.False(this.WasUtxoSelectedForStaking(Network.StratisMain, 1000, 1000 - 47)); // utxo depth is 48, mining block at 49
+            Assert.False(this.WasUtxoSelectedForStaking(KnownNetworks.StratisMain, 1000, 1000 - 47)); // utxo depth is 48, mining block at 49
         }
 
         /// <summary>This is a test of coinstake age softfork activation on mainnet.</summary>
@@ -408,9 +483,9 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
             int activationHeight = PosConsensusOptions.CoinstakeMinConfirmationActivationHeightMainnet;
             int afterActivationHeight = activationHeight + 1000;
 
-            Assert.True(this.WasUtxoSelectedForStaking(Network.StratisMain, afterActivationHeight, afterActivationHeight - 498));
+            Assert.True(this.WasUtxoSelectedForStaking(KnownNetworks.StratisMain, afterActivationHeight, afterActivationHeight - 498));
 
-            Assert.False(this.WasUtxoSelectedForStaking(Network.StratisMain, afterActivationHeight, afterActivationHeight - 497));
+            Assert.False(this.WasUtxoSelectedForStaking(KnownNetworks.StratisMain, afterActivationHeight, afterActivationHeight - 497));
         }
 
         /// <summary>This is a test of coinstake age softfork activation on mainnet.</summary>
@@ -420,28 +495,28 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         {
             int activationHeight = PosConsensusOptions.CoinstakeMinConfirmationActivationHeightMainnet;
 
-            Assert.True(this.WasUtxoSelectedForStaking(Network.StratisMain, activationHeight - 2, activationHeight - 50)); // mining block before activation
+            Assert.True(this.WasUtxoSelectedForStaking(KnownNetworks.StratisMain, activationHeight - 2, activationHeight - 50)); // mining block before activation
 
-            Assert.True(this.WasUtxoSelectedForStaking(Network.StratisMain, activationHeight - 1, activationHeight - 499)); // mining activation block
+            Assert.True(this.WasUtxoSelectedForStaking(KnownNetworks.StratisMain, activationHeight - 1, activationHeight - 499)); // mining activation block
 
-            Assert.False(this.WasUtxoSelectedForStaking(Network.StratisMain, activationHeight - 1, activationHeight - 498)); // mining activation block
+            Assert.False(this.WasUtxoSelectedForStaking(KnownNetworks.StratisMain, activationHeight - 1, activationHeight - 498)); // mining activation block
         }
 
         private bool WasUtxoSelectedForStaking(Network network, int chainTipHeight, int utxoHeight)
         {
             this.network = network;
             this.network.Consensus.Options = new PosConsensusOptions();
-            this.chain = GenerateChainWithBlockTimeAndHeight(2, this.network, 60, 0x1df88f6f);
+            this.chainIndexer = GenerateChainWithBlockTimeAndHeight(2, this.network, 60, 0x1df88f6f);
 
             PosMinting miner = this.InitializePosMinting();
 
-            ChainedHeader chainTip = this.chain.Tip;
+            ChainedHeader chainTip = this.chainIndexer.Tip;
             chainTip.SetPrivatePropertyValue("Height", chainTipHeight);
             chainTip.Previous.SetPrivatePropertyValue("Height", utxoHeight);
 
-            var descriptions = new List<PosMinting.UtxoStakeDescription>();
+            var descriptions = new List<UtxoStakeDescription>();
 
-            var utxoDescription = new PosMinting.UtxoStakeDescription();
+            var utxoDescription = new UtxoStakeDescription();
             utxoDescription.TxOut = new TxOut(new Money(100), new Mock<IDestination>().Object);
             utxoDescription.OutPoint = new OutPoint(uint256.One, 0);
             utxoDescription.HashBlock = chainTip.Previous.HashBlock;
@@ -451,15 +526,15 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
 
             descriptions.Add(utxoDescription);
 
-            List<PosMinting.UtxoStakeDescription> suitableCoins = miner.GetUtxoStakeDescriptionsSuitableForStaking(descriptions, chainTip, chainTip.Header.Time + 64, long.MaxValue);
+            List<UtxoStakeDescription> suitableCoins = miner.GetUtxoStakeDescriptionsSuitableForStakingAsync(descriptions, chainTip, chainTip.Header.Time + 64, long.MaxValue).GetAwaiter().GetResult();
             return suitableCoins.Count == 1;
         }
 
-        private static void AddBlockToChainWithBlockTimeAndDifficulty(ConcurrentChain chain, int blockAmount, int incrementSeconds, uint nbits, Network network)
+        private static void AddBlockToChainWithBlockTimeAndDifficulty(ChainIndexer chainIndexer, int blockAmount, int incrementSeconds, uint nbits, Network network)
         {
-            uint256 prevBlockHash = chain.Tip.HashBlock;
+            uint256 prevBlockHash = chainIndexer.Tip.HashBlock;
             uint nonce = RandomUtils.GetUInt32();
-            DateTime blockTime = Utils.UnixTimeToDateTime(chain.Tip.Header.Time).UtcDateTime;
+            DateTime blockTime = Utils.UnixTimeToDateTime(chainIndexer.Tip.Header.Time).UtcDateTime;
             for (int i = 0; i < blockAmount; i++)
             {
                 Block block = network.Consensus.ConsensusFactory.CreateBlock();
@@ -470,14 +545,14 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
                 block.Header.HashPrevBlock = prevBlockHash;
                 block.Header.Nonce = nonce;
                 block.Header.Bits = new Target(nbits);
-                chain.SetTip(block.Header);
+                chainIndexer.SetTip(block.Header);
                 prevBlockHash = block.GetHash();
             }
         }
 
-        public static ConcurrentChain GenerateChainWithBlockTimeAndHeight(int blockAmount, Network network, int incrementSeconds, uint nbits)
+        public static ChainIndexer GenerateChainWithBlockTimeAndHeight(int blockAmount, Network network, int incrementSeconds, uint nbits)
         {
-            var chain = new ConcurrentChain(network);
+            var chain = new ChainIndexer(network);
             uint nonce = RandomUtils.GetUInt32();
             uint256 prevBlockHash = chain.Genesis.HashBlock;
             DateTime blockTime = Utils.UnixTimeToDateTime(chain.Genesis.Header.Time).UtcDateTime;
@@ -519,23 +594,25 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
         private PosMinting InitializePosMinting()
         {
             var posBlockAssembler = new Mock<PosBlockDefinition>(
-                this.consensusLoop.Object,
+                this.consensusManager.Object,
                 this.dateTimeProvider.Object,
                 this.LoggerFactory.Object,
                 this.txMempool.Object,
                 this.mempoolSchedulerLock,
+                this.minerSettings,
                 this.network,
                 this.stakeChain.Object,
                 this.stakeValidator.Object);
 
+            posBlockAssembler.Setup(a => a.Build(It.IsAny<ChainedHeader>(), It.IsAny<Script>()))
+                .Returns(new BlockTemplate(this.network));
             var blockBuilder = new MockPosBlockProvider(posBlockAssembler.Object);
 
             return new PosMinting(
                 blockBuilder,
-                this.consensusLoop.Object,
-                this.chain,
+                this.consensusManager.Object,
+                this.chainIndexer,
                 this.network,
-                this.connectionManager.Object,
                 this.dateTimeProvider.Object,
                 this.initialBlockDownloadState.Object,
                 this.nodeLifetime.Object,
@@ -545,9 +622,10 @@ namespace Stratis.Bitcoin.Features.Miner.Tests
                 this.mempoolSchedulerLock,
                 this.txMempool.Object,
                 this.walletManager.Object,
-                this.asyncLoopFactory.Object,
+                this.asyncProvider.Object,
                 this.timeSyncBehaviorState.Object,
-                this.LoggerFactory.Object);
+                this.LoggerFactory.Object,
+                this.minerSettings);
         }
 
         private static ChainedHeader CreateChainedBlockWithNBits(Network network, uint bits)

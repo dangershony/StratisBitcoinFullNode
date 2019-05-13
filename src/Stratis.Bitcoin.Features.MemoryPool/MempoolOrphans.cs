@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
-using Stratis.Bitcoin.Features.Consensus;
+using Stratis.Bitcoin.EventBus.CoreEvents;
 using Stratis.Bitcoin.Features.Consensus.CoinViews;
 using Stratis.Bitcoin.P2P.Peer;
 using Stratis.Bitcoin.Utilities;
@@ -26,13 +26,13 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         public const int OrphanTxExpireInterval = 5 * 60;
 
         /// <summary>Thread safe access to the best chain of block headers (that the node is aware of) from genesis.</summary>
-        private readonly ConcurrentChain chain;
+        private readonly ChainIndexer chainIndexer;
 
         /// <summary>Node notifications available to subscribe to.</summary>
-        private readonly Signals.Signals signals;
+        private readonly Signals.ISignals signals;
 
         /// <summary>Coin view of the memory pool.</summary>
-        private readonly CoinView coinView;
+        private readonly ICoinView coinView;
 
         /// <summary>Date and time information provider.</summary>
         private readonly IDateTimeProvider dateTimeProvider;
@@ -68,16 +68,16 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         private readonly object lockObject;
 
         public MempoolOrphans(
-            ConcurrentChain chain,
-            Signals.Signals signals,
+            ChainIndexer chainIndexer,
+            Signals.ISignals signals,
             IMempoolValidator validator,
-            CoinView coinView,
+            ICoinView coinView,
             IDateTimeProvider dateTimeProvider,
             MempoolSettings mempoolSettings,
             ILoggerFactory loggerFactory,
             MempoolManager mempoolManager)
         {
-            this.chain = chain;
+            this.chainIndexer = chainIndexer;
             this.signals = signals;
             this.coinView = coinView;
             this.dateTimeProvider = dateTimeProvider;
@@ -118,32 +118,26 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <returns>A list of orphan transactions.</returns>
         public List<OrphanTx> OrphansList() // for testing
         {
-            this.logger.LogTrace("()");
-
             List<OrphanTx> result;
             lock (this.lockObject)
             {
                 result = this.mapOrphanTransactions.Values.ToList();
             }
 
-            this.logger.LogTrace("(-):{0}", result.Count);
             return result;
         }
 
         /// <summary>
         /// Orphan list count.
         /// </summary>
-        public int OrphansCount() 
+        public int OrphansCount()
         {
-            this.logger.LogTrace("()");
-
             int result;
             lock (this.lockObject)
             {
                 result = this.mapOrphanTransactions.Count;
             }
 
-            this.logger.LogTrace("(-):{0}", result);
             return result;
         }
 
@@ -152,8 +146,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// </summary>
         public void RemoveForBlock(List<Transaction> transactionsToRemove)
         {
-            this.logger.LogTrace("({0}.{1}:'{2}')", nameof(transactionsToRemove), nameof(transactionsToRemove.Count), transactionsToRemove.Count);
-
             lock (this.lockObject)
             {
                 foreach (Transaction transaction in transactionsToRemove)
@@ -161,8 +153,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                     this.EraseOrphanTxLock(transaction.GetHash());
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -172,21 +162,19 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <returns>Whether the transaction id is present.</returns>
         public async Task<bool> AlreadyHaveAsync(uint256 trxid)
         {
-            this.logger.LogTrace("({0}:'{1}')", nameof(trxid), trxid);
-
             // Use pcoinsTip->HaveCoinsInCache as a quick approximation to exclude
             // requesting or processing some txs which have already been included in a block
             bool isTxPresent = false;
             lock(this.lockObject)
             {
-                if (this.chain.Tip.HashBlock != this.hashRecentRejectsChainTip)
+                if (this.chainIndexer.Tip.HashBlock != this.hashRecentRejectsChainTip)
                 {
                     // If the chain tip has changed previously rejected transactions
                     // might be now valid, e.g. due to a nLockTime'd tx becoming valid,
                     // or a double-spend. Reset the rejects filter and give those
                     // txs a second chance.
                     this.logger.LogTrace("Executing task to clear rejected transactions.");
-                    this.hashRecentRejectsChainTip = this.chain.Tip.HashBlock;
+                    this.hashRecentRejectsChainTip = this.chainIndexer.Tip.HashBlock;
                     this.recentRejects.Clear();
                 }
 
@@ -196,9 +184,8 @@ namespace Stratis.Bitcoin.Features.MemoryPool
             if (!isTxPresent)
             {
                 isTxPresent = await this.mempoolManager.ExistsAsync(trxid).ConfigureAwait(false);
-            }                                
+            }
 
-            this.logger.LogTrace("(-):{0}", isTxPresent);
             return isTxPresent;
         }
 
@@ -210,7 +197,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <param name="tx">The new transaction received.</param>
         public async Task ProcessesOrphansAsync(MempoolBehavior behavior, Transaction tx)
         {
-            this.logger.LogTrace("({0}:'{1}',{2}:'{3}')", nameof(behavior), behavior.AttachedPeer.RemoteSocketEndpoint, nameof(tx), tx?.GetHash());
             var workQueue = new Queue<OutPoint>();
             var eraseQueue = new List<uint256>();
 
@@ -222,12 +208,16 @@ namespace Stratis.Bitcoin.Features.MemoryPool
             var setMisbehaving = new List<ulong>();
             while (workQueue.Any())
             {
-                // mapOrphanTransactionsByPrev.TryGet() does a .ToList() to take a new collection
-                // of orphans as this collection may be modified later by another thread
-                List<OrphanTx> itByPrev;
+                List<OrphanTx> itByPrev = null;
                 lock (this.lockObject)
                 {
-                    itByPrev = this.mapOrphanTransactionsByPrev.TryGet(workQueue.Dequeue());
+                    List<OrphanTx> prevOrphans = this.mapOrphanTransactionsByPrev.TryGet(workQueue.Dequeue());
+
+                    if (prevOrphans != null)
+                    {
+                        // Create a copy of the list so we can manage it outside of the lock.
+                        itByPrev = prevOrphans.ToList();
+                    }
                 }
 
                 if (itByPrev == null)
@@ -235,7 +225,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
 
                 foreach (OrphanTx mi in itByPrev)
                 {
-                    Transaction orphanTx = mi.Tx; 
+                    Transaction orphanTx = mi.Tx;
                     uint256 orphanHash = orphanTx.GetHash();
                     ulong fromPeer = mi.NodeId;
 
@@ -252,7 +242,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
 
                         behavior.RelayTransaction(orphanTx.GetHash());
 
-                        this.signals.SignalTransaction(orphanTx);
+                        this.signals.Publish(new TransactionReceived(orphanTx));
 
                         for (int index = 0; index < orphanTx.Outputs.Count; index++)
                             workQueue.Enqueue(new OutPoint(orphanHash, index));
@@ -270,7 +260,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                             setMisbehaving.Add(fromPeer);
                             this.logger.LogInformation("invalid orphan tx {0}", orphanHash);
                         }
-                    
+
                         // Has inputs but not accepted to mempool
                         // Probably non-standard or insufficient fee/priority
                         this.logger.LogInformation("removed orphan tx {0}", orphanHash);
@@ -281,11 +271,8 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                             // witness-stripped transactions, as they can have been malleated.
                             // See https://github.com/bitcoin/bitcoin/issues/8279 for details.
 
-                            lock (this.lockObject)
-                            {
-                                this.recentRejects.TryAdd(orphanHash, orphanHash);
-                            }
-                        }
+                            this.AddToRecentRejects(orphanHash);
+                         }
                     }
 
                     // TODO: implement sanity checks.
@@ -303,8 +290,18 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                     }
                 }
             }
+        }
 
-            this.logger.LogTrace("(-)");
+        /// <summary>
+        /// Adds transaction hash to recent rejects.
+        /// </summary>
+        /// <param name="orphanHash">Hash to add.</param>
+        public void AddToRecentRejects(uint256 orphanHash)
+        {
+            lock (this.lockObject)
+            {
+                this.recentRejects.TryAdd(orphanHash, orphanHash);
+            }
         }
 
         /// <summary>
@@ -317,9 +314,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <returns>Whether the transaction was added to orphans.</returns>
         public bool ProcessesOrphansMissingInputs(INetworkPeer from, Transaction tx)
         {
-            this.logger.LogTrace("({0}:'{1}',{2}:'{3}')", nameof(from), from?.RemoteSocketEndpoint, nameof(tx), tx.GetHash());
             // It may be the case that the orphans parents have all been rejected
-
             bool rejectedParents;
             lock (this.lockObject)
             {
@@ -350,7 +345,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
             if (nEvicted > 0)
                 this.logger.LogInformation("mapOrphan overflow, removed {0} tx", nEvicted);
 
-            this.logger.LogTrace("(-):{0}", ret);
             return ret;
         }
 
@@ -363,7 +357,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <returns>The number of transactions evicted.</returns>
         public int LimitOrphanTxSize(int maxOrphanTx)
         {
-            this.logger.LogTrace("({0}:{1})", nameof(maxOrphanTx), maxOrphanTx);
             int nEvicted = 0;
             long nNow = this.dateTimeProvider.GetTime();
             if (this.nNextSweep <= nNow)
@@ -392,7 +385,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                         nMinExpTime = Math.Min(maybeErase.TimeExpire, nMinExpTime);
                     }
                 }
-               
+
                 // Sweep again 5 minutes after the next entry that expires in order to batch the linear scan.
                 this.nNextSweep = nMinExpTime + OrphanTxExpireInterval;
 
@@ -408,12 +401,11 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                     // Evict a random orphan:
                     int randomCount = this.random.Next(this.mapOrphanTransactions.Count);
                     uint256 erase = this.mapOrphanTransactions.ElementAt(randomCount).Key;
-                    this.EraseOrphanTxLock(erase); 
+                    this.EraseOrphanTxLock(erase);
                     ++nEvicted;
                 }
             }
 
-            this.logger.LogTrace("(-):{0}", nEvicted);
             return nEvicted;
         }
 
@@ -425,8 +417,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <returns>Whether the orphan transaction was added.</returns>
         public bool AddOrphanTx(ulong nodeId, Transaction tx)
         {
-            this.logger.LogTrace("({0}:{1},{2}:'{3}')", nameof(nodeId), nodeId, nameof(tx), tx.GetHash());
-
             lock (this.lockObject)
             {
                 uint256 hash = tx.GetHash();
@@ -444,7 +434,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                 // 100 orphans, each of which is at most 99,999 bytes big is
                 // at most 10 megabytes of orphans and somewhat more byprev index (in the worst case):
                 int sz = MempoolValidator.GetTransactionWeight(tx, this.Validator.ConsensusOptions);
-                if (sz >= this.chain.Network.Consensus.Option<PowConsensusOptions>().MaxStandardTxWeight)
+                if (sz >= this.chainIndexer.Network.Consensus.Options.MaxStandardTxWeight)
                 {
                     this.logger.LogInformation("ignoring large orphan tx (size: {0}, hash: {1})", sz, hash);
                     this.logger.LogTrace("(-)[LARGE_ORPH]:false");
@@ -477,7 +467,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                 this.Validator.PerformanceCounter.SetMempoolOrphanSize(orphanSize);
             }
 
-            this.logger.LogTrace("(-):true");
             return true;
         }
 
@@ -488,8 +477,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <returns>Whether erased.</returns>
         private bool EraseOrphanTxLock(uint256 hash)
         {
-            this.logger.LogTrace("({0}:'{1}')", nameof(hash), hash);
-
             OrphanTx orphTx = this.mapOrphanTransactions.TryGet(hash);
 
             if (orphTx == null)
@@ -516,7 +503,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
             int orphanSize = this.mapOrphanTransactions.Count;
             this.Validator.PerformanceCounter.SetMempoolOrphanSize(orphanSize);
 
-            this.logger.LogTrace("(-):true");
             return true;
         }
 
@@ -526,8 +512,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <param name="peerId">Peer node id</param>
         public void EraseOrphansFor(ulong peerId)
         {
-            this.logger.LogTrace("({0}:{1})", nameof(peerId), peerId);
-
             lock (this.lockObject)
             {
                 this.logger.LogTrace("Executing task to erase orphan transactions.");
@@ -546,8 +530,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                 if (erased > 0)
                     this.logger.LogInformation("Erased {0} orphan tx from peer {1}", erased, peerId);
             }
-
-            this.logger.LogTrace("(-)");
         }
     }
 }

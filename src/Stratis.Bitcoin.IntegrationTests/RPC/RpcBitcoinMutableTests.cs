@@ -5,21 +5,29 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NBitcoin;
-using NBitcoin.RPC;
 using Newtonsoft.Json.Linq;
-using Stratis.Bitcoin.IntegrationTests.Common;
+using Stratis.Bitcoin.Features.RPC;
 using Stratis.Bitcoin.IntegrationTests.Common.EnvironmentMockUpHelpers;
+using Stratis.Bitcoin.Tests.Common;
 using Xunit;
 
 namespace Stratis.Bitcoin.IntegrationTests.RPC
 {
     /// <summary>
-    /// These tests are for RPC tests that require modifying the chain/nodes. 
+    /// These tests are for RPC tests that require modifying the chain/nodes.
     /// Setup of the chain or nodes can be done in each test.
     /// </summary>
     public class RpcBitcoinMutableTests
     {
         private const string BitcoinCoreVersion15 = "0.15.1";
+        private readonly Network regTest;
+        private readonly Network testNet;
+
+        public RpcBitcoinMutableTests()
+        {
+            this.regTest = KnownNetworks.RegTest;
+            this.testNet = KnownNetworks.TestNet;
+        }
 
         /// <summary>
         /// <seealso cref="https://github.com/MetacoSA/NBitcoin/blob/master/NBitcoin.Tests/RPCClientTests.cs">NBitcoin test CanGetRawMemPool</seealso>
@@ -29,8 +37,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode();
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode().Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
@@ -48,19 +55,19 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         /// <seealso cref="https://github.com/MetacoSA/NBitcoin/blob/master/NBitcoin.Tests/RPCClientTests.cs">NBitcoin test CanAddNodes</seealso>
         /// </summary>
         [Fact]
-        public void AddNodeWithValidNodeThenExecutesSuccessfully()
+        public void CanAddRemoveNode()
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode nodeA = builder.CreateBitcoinCoreNode();
-                CoreNode nodeB = builder.CreateBitcoinCoreNode();
-                builder.StartAll();
+                CoreNode nodeA = builder.CreateBitcoinCoreNode().Start();
+                CoreNode nodeB = builder.CreateBitcoinCoreNode().Start();
+
                 RPCClient rpc = nodeA.CreateRPCClient();
-                rpc.RemoveNode(nodeA.Endpoint);
+                rpc.RemoveNodeAsync(nodeA.Endpoint);
                 rpc.AddNode(nodeB.Endpoint);
 
                 AddedNodeInfo[] info = null;
-                TestHelper.WaitLoop(() =>
+                TestBase.WaitLoop(() =>
                 {
                     info = rpc.GetAddedNodeInfo(true);
                     return info != null && info.Length > 0;
@@ -77,7 +84,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
                 Assert.Null(oneInfo);
                 rpc.RemoveNode(nodeB.Endpoint);
 
-                TestHelper.WaitLoop(() =>
+                TestBase.WaitLoop(() =>
                 {
                     info = rpc.GetAddedNodeInfo(true);
                     return info.Length == 0;
@@ -92,12 +99,10 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
-                builder.StartAll();
                 RPCResponse response = rpcClient.SendCommand(RPCOperations.getinfo);
                 Assert.NotNull(response.Result);
             }
@@ -108,15 +113,14 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
                 RPCResponse response = rpcClient.SendCommand(RPCOperations.getblockhash, 0);
                 string actualGenesis = (string)response.Result;
-                Assert.Equal(Network.RegTest.GetGenesis().GetHash().ToString(), actualGenesis);
-                Assert.Equal(Network.RegTest.GetGenesis().GetHash(), rpcClient.GetBestBlockHash());
+                Assert.Equal(this.regTest.GetGenesis().GetHash().ToString(), actualGenesis);
+                Assert.Equal(this.regTest.GetGenesis().GetHash(), rpcClient.GetBestBlockHash());
             }
         }
 
@@ -125,8 +129,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
                 rpcClient.Generate(101);
@@ -144,16 +147,15 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
                 BlockHeader response = rpcClient.GetBlockHeader(0);
-                Assert.Equal(Network.RegTest.GetGenesis().Header.ToBytes(), response.ToBytes());
-                
+                Assert.Equal(this.regTest.GetGenesis().Header.ToBytes(), response.ToBytes());
+
                 response = rpcClient.GetBlockHeader(0);
-                Assert.Equal(Network.RegTest.GenesisHash, response.GetHash());
+                Assert.Equal(this.regTest.GenesisHash, response.GetHash());
             }
         }
 
@@ -162,8 +164,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
@@ -178,8 +179,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
@@ -192,8 +192,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
@@ -208,8 +207,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
@@ -224,15 +222,14 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
-                Transaction tx = Network.TestNet.GetGenesis().Transactions[0];
+                Transaction tx = this.testNet.GetGenesis().Transactions[0];
                 Transaction tx2 = rpcClient.DecodeRawTransaction(tx.ToBytes());
 
-                Assert.True(JToken.DeepEquals(tx.ToString(RawFormat.Satoshi), tx2.ToString(RawFormat.Satoshi)));
+                Assert.True(JToken.DeepEquals(tx.ToString(this.testNet, RawFormat.Satoshi), tx2.ToString(this.testNet, RawFormat.Satoshi)));
             }
         }
         [Fact]
@@ -240,9 +237,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
@@ -297,8 +292,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
@@ -323,13 +317,12 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             string accountName = "account";
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
                 var key = new Key();
-                rpcClient.ImportAddress(key.PubKey.GetAddress(Network.RegTest), accountName, false);
+                rpcClient.ImportAddress(key.PubKey.GetAddress(this.regTest), accountName, false);
                 BitcoinAddress address = rpcClient.GetAccountAddress(accountName);
                 BitcoinSecret secret = rpcClient.DumpPrivKey(address);
                 BitcoinSecret secret2 = rpcClient.GetAccountSecret(accountName);
@@ -345,8 +338,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
             string accountName = "account";
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                builder.StartAll();
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15).Start();
 
                 RPCClient rpcClient = node.CreateRPCClient();
 
@@ -359,7 +351,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
 
                 builder.Nodes[0].Restart();
                 rpcClient = node.CreateRPCClient();
-                rpcClient.ImportAddress(key.PubKey.GetAddress(Network.RegTest), accountName, false);
+                rpcClient.ImportAddress(key.PubKey.GetAddress(this.regTest), accountName, false);
                 BitcoinAddress address = rpcClient.GetAccountAddress(accountName);
                 rpcClient.WalletPassphrase(passphrase, 60);
                 BitcoinSecret secret = rpcClient.DumpPrivKey(address);
@@ -375,20 +367,22 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
         {
             using (NodeBuilder builder = NodeBuilder.Create(this))
             {
-                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15);
-                node.CookieAuth = true;
+                CoreNode node = builder.CreateBitcoinCoreNode(version: BitcoinCoreVersion15, useCookieAuth: true).Start();
 
-                builder.StartAll();
                 RPCClient rpcClient = node.CreateRPCClient();
                 rpcClient.GetBlockCount();
                 node.Restart();
                 rpcClient = node.CreateRPCClient();
                 rpcClient.GetBlockCount();
-                Assert.Throws<ArgumentException>(() => new RPCClient("cookiefile=Data\\invalid.cookie", new Uri("http://localhost/"), Network.RegTest));
-                Assert.Throws<FileNotFoundException>(() => new RPCClient("cookiefile=Data\\not_found.cookie", new Uri("http://localhost/"), Network.RegTest));
 
-                rpcClient = new RPCClient("bla:bla", null as Uri, Network.RegTest);
-                Assert.Equal("http://127.0.0.1:" + Network.RegTest.RPCPort + "/", rpcClient.Address.AbsoluteUri);
+                string invalidCookiePath = Path.Combine("Data", "invalid.cookie");
+                string notFoundCookiePath = Path.Combine("Data", "not_found.cookie");
+                Assert.Throws<ArgumentException>(() => new RPCClient($"cookiefile={invalidCookiePath}", new Uri("http://localhost/"), this.regTest));
+                Assert.Throws<FileNotFoundException>(() => new RPCClient($"cookiefile={notFoundCookiePath}", new Uri("http://localhost/"), this.regTest));
+
+                var uri = new Uri("http://127.0.0.1:" + this.regTest.DefaultRPCPort + "/");
+                rpcClient = new RPCClient("bla:bla", uri, this.regTest);
+                Assert.Equal(uri.OriginalString, rpcClient.Address.AbsoluteUri);
 
                 rpcClient = node.CreateRPCClient();
                 rpcClient = rpcClient.PrepareBatch();
@@ -403,7 +397,7 @@ namespace Stratis.Bitcoin.IntegrationTests.RPC
                 rpcClient.SendBatch();
                 blockCount = blockCountAsync.GetAwaiter().GetResult();
 
-                rpcClient = new RPCClient("bla:bla", "http://toto/", Network.RegTest);
+                rpcClient = new RPCClient("bla:bla", new Uri("http://toto/"), this.regTest);
             }
         }
     }

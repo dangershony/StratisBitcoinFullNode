@@ -52,23 +52,6 @@ namespace NBitcoin.Crypto
             }
         }
 
-        public ECDSASignature(Stream derSig)
-        {
-            try
-            {
-                var decoder = new Asn1InputStream(derSig);
-                var seq = decoder.ReadObject() as DerSequence;
-                if(seq == null || seq.Count != 2)
-                    throw new FormatException(InvalidDERSignature);
-                this._R = ((DerInteger)seq[0]).Value;
-                this._S = ((DerInteger)seq[1]).Value;
-            }
-            catch(Exception ex)
-            {
-                throw new FormatException(InvalidDERSignature, ex);
-            }
-        }
-
         /**
         * What we get back from the signer are the two components of a signature, r and s. To get a flat byte stream
         * of the type used by Bitcoin we have to encode them using DER encoding, which is just a way to pack the two
@@ -103,6 +86,20 @@ namespace NBitcoin.Crypto
             }
             else
                 return this;
+        }
+
+        /// <summary>
+        /// Allow creation of signature with non-LowS for test purposes
+        /// </summary>
+        /// <remarks>Not to be used under normal circumstances</remarks>
+        public ECDSASignature MakeNonCanonical()
+        {
+            if (!this.IsLowS)
+            {
+                return this;
+            }
+            else
+                return new ECDSASignature(this.R, ECKey.CURVE_ORDER.Subtract(this.S));
         }
 
         public bool IsLowS

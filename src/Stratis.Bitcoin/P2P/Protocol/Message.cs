@@ -7,6 +7,7 @@ using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
 using NBitcoin.Protocol;
 using Stratis.Bitcoin.P2P.Protocol.Payloads;
+using TracerAttributes;
 
 namespace Stratis.Bitcoin.P2P.Protocol
 {
@@ -41,12 +42,14 @@ namespace Stratis.Bitcoin.P2P.Protocol
         }
 
         private byte[] command = new byte[CommandSize];
+
         public string Command
         {
             get
             {
                 return Encoders.ASCII.EncodeData(this.command);
             }
+
             private set
             {
                 this.command = Encoders.ASCII.DecodeData(value.Trim().PadRight(12, '\0'));
@@ -54,12 +57,14 @@ namespace Stratis.Bitcoin.P2P.Protocol
         }
 
         private Payload payloadObject;
+
         public Payload Payload
         {
             get
             {
                 return this.payloadObject;
             }
+
             set
             {
                 this.payloadObject = value;
@@ -78,6 +83,7 @@ namespace Stratis.Bitcoin.P2P.Protocol
             return payload != null;
         }
 
+        [NoTrace]
         public void ReadWrite(BitcoinStream stream)
         {
             if ((this.Payload == null) && stream.Serializing)
@@ -126,21 +132,27 @@ namespace Stratis.Bitcoin.P2P.Protocol
                     }
                 }
 
-                var payloadStream = new BitcoinStream(payloadBytes);
-                payloadStream.ConsensusFactory = stream.ConsensusFactory;
-                payloadStream.CopyParameters(stream);
+                using (var ms = new MemoryStream(payloadBytes))
+                {
+                    var payloadStream = new BitcoinStream(ms, false)
+                    {
+                        ConsensusFactory = stream.ConsensusFactory
+                    };
 
-                Type payloadType = this.payloadProvider.GetCommandType(this.Command);
-                bool unknown = payloadType == typeof(UnknowPayload);
-                if (unknown)
-                    NodeServerTrace.Trace.TraceEvent(TraceEventType.Warning, 0, "Unknown command received : " + this.Command);
+                    payloadStream.CopyParameters(stream);
 
-                object payload = this.payloadObject;
-                payloadStream.ReadWrite(payloadType, ref payload);
-                if (unknown)
-                    ((UnknowPayload)payload).command = this.Command;
+                    Type payloadType = this.payloadProvider.GetCommandType(this.Command);
+                    bool unknown = payloadType == typeof(UnknowPayload);
+                    if (unknown)
+                        NodeServerTrace.Trace.TraceEvent(TraceEventType.Warning, 0, "Unknown command received : " + this.Command);
 
-                this.Payload = (Payload)payload;
+                    object payload = this.payloadObject;
+                    payloadStream.ReadWrite(payloadType, ref payload);
+                    if (unknown)
+                        ((UnknowPayload)payload).UpdateCommand(this.Command);
+
+                    this.Payload = (Payload)payload;
+                }
             }
         }
 
@@ -157,7 +169,7 @@ namespace Stratis.Bitcoin.P2P.Protocol
                 var stream = new BitcoinStream(ms, true);
                 stream.ConsensusFactory = consensusFactory;
                 this.Payload.ReadWrite(stream);
-                length = (int) ms.Position;
+                length = (int)ms.Position;
                 return ms.ToArray();
             }
         }
@@ -167,6 +179,7 @@ namespace Stratis.Bitcoin.P2P.Protocol
             return checksum == Hashes.Hash256(payload, 0, length).GetLow32();
         }
 
+        [NoTrace]
         public override string ToString()
         {
             return string.Format("{0}: {1}", this.Command, this.Payload);

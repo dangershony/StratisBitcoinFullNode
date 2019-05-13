@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
 using NBitcoin.Protocol;
@@ -7,7 +8,6 @@ namespace NBitcoin
 {
     [Flags]
     public enum BlockFlag //block index flags
-
     {
         BLOCK_PROOF_OF_STAKE = (1 << 0), // is proof-of-stake block
         BLOCK_STAKE_ENTROPY = (1 << 1), // entropy bit for stake modifier
@@ -32,24 +32,6 @@ namespace NBitcoin
 
         public BlockStake()
         {
-        }
-
-        public BlockStake(byte[] bytes)
-        {
-            this.ReadWrite(bytes);
-        }
-
-        public BlockStake(Block block)
-        {
-            this.StakeModifierV2 = uint256.Zero;
-            this.HashProof = uint256.Zero;
-
-            if (IsProofOfStake(block))
-            {
-                this.SetProofOfStake();
-                this.StakeTime = block.Transactions[1].Time;
-                this.PrevoutStake = block.Transactions[1].Inputs[0].PrevOut;
-            }
         }
 
         public BlockFlag Flags
@@ -117,6 +99,37 @@ namespace NBitcoin
         }
 
         /// <summary>
+        /// Constructs a stake block from a given block.
+        /// </summary>
+        public static BlockStake Load(Block block)
+        {
+            var blockStake = new BlockStake
+            {
+                StakeModifierV2 = uint256.Zero,
+                HashProof = uint256.Zero
+            };
+
+            if (IsProofOfStake(block))
+            {
+                blockStake.SetProofOfStake();
+                blockStake.StakeTime = block.Transactions[1].Time;
+                blockStake.PrevoutStake = block.Transactions[1].Inputs[0].PrevOut;
+            }
+
+            return blockStake;
+        }
+
+        /// <summary>
+        /// Constructs a stake block from a set bytes and the given network.
+        /// </summary>
+        public static BlockStake Load(byte[] bytes, ConsensusFactory consensusFactory)
+        {
+            var blockStake = new BlockStake();
+            blockStake.ReadWrite(bytes, consensusFactory);
+            return blockStake;
+        }
+
+        /// <summary>
         /// Check PoW and that the blocks connect correctly
         /// </summary>
         /// <param name="network">The network being used</param>
@@ -126,8 +139,10 @@ namespace NBitcoin
         {
             if (network == null)
                 throw new ArgumentNullException("network");
+
             if (chainedHeader.Height != 0 && chainedHeader.Previous == null)
                 return false;
+
             bool heightCorrect = chainedHeader.Height == 0 || chainedHeader.Height == chainedHeader.Previous.Height + 1;
             bool genesisCorrect = chainedHeader.Height != 0 || chainedHeader.HashBlock == network.GetGenesis().GetHash();
             bool hashPrevCorrect = chainedHeader.Height == 0 || chainedHeader.Header.HashPrevBlock == chainedHeader.Previous.HashBlock;
@@ -146,6 +161,8 @@ namespace NBitcoin
     /// </remarks>
     public class PosTransaction : Transaction
     {
+        public bool IsColdCoinStake { get; set; }
+
         public PosTransaction() : base()
         {
         }
@@ -159,6 +176,19 @@ namespace NBitcoin
         {
             this.FromBytes(bytes);
         }
+
+        public override bool IsProtocolTransaction()
+        {
+            return this.IsCoinStake || this.IsCoinBase;
+        }
+    }
+
+    public class ProvenHeaderConsensusFactory : PosConsensusFactory
+    {
+        public override BlockHeader CreateBlockHeader()
+        {
+            return base.CreateProvenBlockHeader();
+        }
     }
 
     /// <summary>
@@ -166,6 +196,11 @@ namespace NBitcoin
     /// </summary>
     public class PosConsensusFactory : ConsensusFactory
     {
+        public PosConsensusFactory()
+            : base()
+        {
+        }
+
         /// <inheritdoc />
         public override Block CreateBlock()
         {
@@ -178,17 +213,46 @@ namespace NBitcoin
             return new PosBlockHeader();
         }
 
+        public ProvenBlockHeader CreateProvenBlockHeader()
+        {
+            return new ProvenBlockHeader();
+        }
+
+        public ProvenBlockHeader CreateProvenBlockHeader(PosBlock block)
+        {
+            var provenBlockHeader = new ProvenBlockHeader(block);
+
+            // Serialize the size.
+            provenBlockHeader.ToBytes(this);
+
+            return provenBlockHeader;
+        }
+
         /// <inheritdoc />
         public override Transaction CreateTransaction()
         {
             return new PosTransaction();
+        }
+
+        /// <inheritdoc />
+        public override Transaction CreateTransaction(string hex)
+        {
+            return new PosTransaction(hex);
+        }
+
+        /// <inheritdoc />
+        public override Transaction CreateTransaction(byte[] bytes)
+        {
+            return new PosTransaction(bytes);
         }
     }
 
     /// <summary>
     /// A POS block header, this will create a work hash based on the X13 hash algos.
     /// </summary>
+#pragma warning disable 618
     public class PosBlockHeader : BlockHeader
+#pragma warning restore 618
     {
         /// <inheritdoc />
         public override int CurrentVersion => 7;
@@ -206,9 +270,17 @@ namespace NBitcoin
                 return hash;
 
             if (this.version > 6)
-                hash = Hashes.Hash256(this.ToBytes());
+            {
+                using (var hs = new HashStream())
+                {
+                    this.ReadWriteHashingStream(new BitcoinStream(hs, true));
+                    hash = hs.GetHash();
+                }
+            }
             else
+            {
                 hash = this.GetPoWHash();
+            }
 
             innerHashes = this.hashes;
             if (innerHashes != null)
@@ -218,11 +290,15 @@ namespace NBitcoin
 
             return hash;
         }
-        
-        /// /// <inheritdoc />
+
+        /// <inheritdoc />
         public override uint256 GetPoWHash()
         {
-            return HashX13.Instance.Hash(this.ToBytes());
+            using (var ms = new MemoryStream())
+            {
+                this.ReadWriteHashingStream(new BitcoinStream(ms, true));
+                return HashX13.Instance.Hash(ms.ToArray());
+            }
         }
     }
 
@@ -236,7 +312,7 @@ namespace NBitcoin
         /// </summary>
         private BlockSignature blockSignature = new BlockSignature();
 
-        internal PosBlock(BlockHeader blockHeader) : base(blockHeader)
+        public PosBlock(BlockHeader blockHeader) : base(blockHeader)
         {
         }
 
@@ -258,6 +334,19 @@ namespace NBitcoin
             stream.ReadWrite(ref this.blockSignature);
 
             this.BlockSize = stream.Serializing ? stream.Counter.WrittenBytes : stream.Counter.ReadBytes;
+        }
+
+        /// <summary>
+        /// Gets the block's coinstake transaction or returns the coinbase transaction if there is no coinstake.
+        /// </summary>
+        /// <returns>Coinstake transaction or coinbase transaction.</returns>
+        /// <remarks>
+        /// <para>In PoS blocks, coinstake transaction is the second transaction in the block.</para>
+        /// <para>In PoW there isn't a coinstake transaction, return coinbase instead to be able to compute stake modifier for the next eventual PoS block.</para>
+        /// </remarks>
+        public Transaction GetProtocolTransaction()
+        {
+            return (this.Transactions.Count > 1 && this.Transactions[1].IsCoinStake) ? this.Transactions[1] : this.Transactions[0];
         }
     }
 }

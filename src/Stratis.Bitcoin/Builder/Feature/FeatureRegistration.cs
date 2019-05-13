@@ -64,13 +64,14 @@ namespace Stratis.Bitcoin.Builder.Feature
     public class FeatureRegistration<TImplementation> : IFeatureRegistration where TImplementation : class, IFullNodeFeature
     {
         /// <summary>List of delegates to configure services of the feature.</summary>
-        public readonly List<Action<IServiceCollection>> ConfigureServicesDelegates;
+        public List<Action<IServiceCollection>> ConfigureServicesDelegates { get; private set; }
 
         /// <summary>Initializes the instance of the object.</summary>
         public FeatureRegistration()
         {
             this.ConfigureServicesDelegates = new List<Action<IServiceCollection>>();
             this.FeatureType = typeof(TImplementation);
+
             this.dependencies = new List<Type>();
         }
 
@@ -130,10 +131,8 @@ namespace Stratis.Bitcoin.Builder.Feature
         {
             foreach (Type dependency in this.dependencies)
             {
-                if (!featureRegistrations.Any(x => x.FeatureType == dependency))
-                {
+                if (featureRegistrations.All(x => !dependency.IsAssignableFrom(x.FeatureType)))
                     throw new MissingDependencyException($"Dependency feature {dependency.Name} cannot be found.");
-                }
             }
         }
 

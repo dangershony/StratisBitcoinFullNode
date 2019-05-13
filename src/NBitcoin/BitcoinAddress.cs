@@ -5,25 +5,25 @@ using NBitcoin.DataEncoders;
 namespace NBitcoin
 {
     /// <summary>
-    /// Base58 representaiton of a script hash
+    /// Base58 representation of a script hash
     /// </summary>
     public class BitcoinScriptAddress : BitcoinAddress, IBase58Data
     {
         public BitcoinScriptAddress(string base58, Network expectedNetwork)
-            : base(Validate(base58, ref expectedNetwork), expectedNetwork)
+            : base(Validate(base58, expectedNetwork), expectedNetwork)
         {
             byte[] decoded = Encoders.Base58Check.DecodeData(base58);
             this._Hash = new ScriptId(new uint160(decoded.Skip(expectedNetwork.GetVersionBytes(Base58Type.SCRIPT_ADDRESS, true).Length).ToArray()));
         }
 
-        private static string Validate(string base58, ref Network expectedNetwork)
+        private static string Validate(string base58, Network expectedNetwork)
         {
-            if (IsValid(base58, ref expectedNetwork))
+            if (IsValid(base58, expectedNetwork))
                 return base58;
             throw new FormatException("Invalid BitcoinScriptAddress");
         }
 
-        public static bool IsValid(string base58, ref Network expectedNetwork)
+        public static bool IsValid(string base58, Network expectedNetwork)
         {
             if (base58 == null)
                 throw new ArgumentNullException("base58");

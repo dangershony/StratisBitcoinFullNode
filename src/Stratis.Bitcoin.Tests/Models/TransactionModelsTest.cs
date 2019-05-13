@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using NBitcoin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Stratis.Bitcoin.Controllers.Models;
 using Stratis.Bitcoin.Features.RPC;
+using Stratis.Bitcoin.Tests.Common;
 using Xunit;
 
 namespace Stratis.Bitcoin.Tests.Models
@@ -27,9 +27,10 @@ namespace Stratis.Bitcoin.Tests.Models
 
         public TransactionModelsTest()
         {
-            this.txBlock10CoinbaseModelBrief = new TransactionBriefModel(Transaction.Parse(TxBlock10Hex));
-            this.txBlock460373CoinbaseModelVerbose = new TransactionVerboseModel(Transaction.Parse(TxBlock460373CoinbaseHex), Network.Main);
-            this.txTwoInTwoOutModelVerbose = new TransactionVerboseModel(Transaction.Parse(TxTwoInTwoOutHex), Network.Main);
+            var network = KnownNetworks.Main;
+            this.txBlock10CoinbaseModelBrief = new TransactionBriefModel(network.CreateTransaction(TxBlock10Hex));
+            this.txBlock460373CoinbaseModelVerbose = new TransactionVerboseModel(network.CreateTransaction(TxBlock460373CoinbaseHex), network);
+            this.txTwoInTwoOutModelVerbose = new TransactionVerboseModel(network.CreateTransaction(TxTwoInTwoOutHex), network);
         }
 
         public void Dispose()
@@ -53,22 +54,26 @@ namespace Stratis.Bitcoin.Tests.Models
         [Fact]
         public void TransactionModelVerboseRenderTest()
         {
-            var expectedPropertyNameOrder = new string[] { "hex", "txid", "size", "version", "locktime", "vin", "vout" };
+            var expectedPropertyNameOrder = new string[] { "hex", "txid", "hash", "version", "size", "vsize", "locktime", "vin", "vout" };
             JObject obj = ModelToJObject(this.txBlock460373CoinbaseModelVerbose);
             Assert.True(obj.HasValues);
 
             int actualElements = obj.Children().Count();
             string actualHex = obj.Value<string>("hex");
             string actualTxid = obj.Value<string>("txid");
+            string actualHash = obj.Value<string>("hash");
             int? actualSize = obj.Value<int>("size");
+            int? actualVSize = obj.Value<int>("vsize");
             var actualVersion = obj.Value<int?>("version");
             var actualLocktime = obj.Value<int?>("locktime");
             IEnumerable<string> actualPropertyNameOrder = obj.Children().Select(o => (o as JProperty)?.Name);
 
-            Assert.Equal(7, actualElements);
+            Assert.Equal(9, actualElements);
             Assert.Equal(TxBlock460373CoinbaseHex, actualHex);
             Assert.Equal(TxBlock460373CoinbaseHash, actualTxid);
+            Assert.Equal(TxBlock460373CoinbaseHash, actualHash);
             Assert.Equal(160, actualSize);
+            Assert.Equal(160, actualVSize);
             Assert.Equal(1, actualVersion);
             Assert.Equal(0, actualLocktime);
             Assert.Equal(expectedPropertyNameOrder, actualPropertyNameOrder);

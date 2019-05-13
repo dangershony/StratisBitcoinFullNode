@@ -94,18 +94,21 @@ namespace NBitcoin.BitcoinCore
         {
             this.Value = this.Outputs
                 .Where(o => !this.IsNull(o))
-                .Sum(o=> o.Value);
+                .Sum(o => o.Value);
         }
 
         private bool IsNull(TxOut o) => o.Value.Satoshi == -1;
         public bool IsEmpty => this.Outputs.Count == 0;
 
+        /// <summary>
+        /// Remove the last items that are <see cref="IsNull"/>, this method may reduce the size of the collection.
+        /// </summary>
         private void Cleanup()
         {
             int count = this.Outputs.Count;
 
             // Remove spent outputs at the end of vout.
-            for(int i = count - 1; i >= 0; i--)
+            for (int i = count - 1; i >= 0; i--)
             {
                 if (this.IsNull(this.Outputs[i]))
                     this.Outputs.RemoveAt(i);
@@ -141,7 +144,7 @@ namespace NBitcoin.BitcoinCore
                     byte chAvail = 0;
                     for (uint i = 0; i < 8 && 2 + b * 8 + i < this.Outputs.Count; i++)
                     {
-                        if(!this.IsNull(this.Outputs[2 + (int)b * 8 + (int)i]))
+                        if (!this.IsNull(this.Outputs[2 + (int)b * 8 + (int)i]))
                             chAvail |= (byte)(1 << (int)i);
                     }
 
@@ -160,7 +163,7 @@ namespace NBitcoin.BitcoinCore
                 // coinbase height
                 stream.ReadWriteAsVarInt(ref this.nHeight);
 
-                if (stream.ConsensusFactory.Consensus.IsProofOfStake)
+                if (stream.ConsensusFactory is PosConsensusFactory)
                 {
                     stream.ReadWrite(ref this.fCoinStake);
                     stream.ReadWrite(ref this.nTime);
@@ -215,7 +218,7 @@ namespace NBitcoin.BitcoinCore
                 //// coinbase height
                 stream.ReadWriteAsVarInt(ref this.nHeight);
 
-                if (stream.ConsensusFactory.Consensus.IsProofOfStake)
+                if (stream.ConsensusFactory is PosConsensusFactory)
                 {
                     stream.ReadWrite(ref this.fCoinStake);
                     stream.ReadWrite(ref this.nTime);
@@ -277,13 +280,14 @@ namespace NBitcoin.BitcoinCore
 
         public void ClearUnspendable()
         {
-            for(int i = 0; i < this.Outputs.Count; i++)
+            for (int i = 0; i < this.Outputs.Count; i++)
             {
                 TxOut o = this.Outputs[i];
                 if (o.ScriptPubKey.IsUnspendable)
                     this.Outputs[i] = NullTxOut;
             }
 
+            // Remove empty outputs form the end of the collection.
             this.Cleanup();
         }
 

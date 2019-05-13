@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
-using NBitcoin;
 using Stratis.Bitcoin.Connection;
+using Stratis.Bitcoin.Tests.Common;
 using Stratis.Bitcoin.Tests.Common.Logging;
 using Stratis.Bitcoin.Utilities.JsonErrors;
 using Xunit;
@@ -15,15 +15,17 @@ namespace Stratis.Bitcoin.Tests.Controllers
         private readonly Mock<IConnectionManager> connectionManager;
         private ConnectionManagerController controller;
         private readonly Mock<ILoggerFactory> mockLoggerFactory;
+        private readonly Mock<IPeerBanning> peerBanning;
 
         public ConnectionManagerControllerTest()
         {
             this.connectionManager = new Mock<IConnectionManager>();
+            this.peerBanning = new Mock<IPeerBanning>();
             this.mockLoggerFactory = new Mock<ILoggerFactory>();
             this.mockLoggerFactory.Setup(i => i.CreateLogger(It.IsAny<string>())).Returns(new Mock<ILogger>().Object);
             this.connectionManager.Setup(i => i.Network)
-                .Returns(Network.StratisTest);
-            this.controller = new ConnectionManagerController(this.connectionManager.Object, this.LoggerFactory.Object);
+                .Returns(KnownNetworks.StratisTest);
+            this.controller = new ConnectionManagerController(this.connectionManager.Object, this.LoggerFactory.Object, this.peerBanning.Object);
         }
 
         [Fact]
@@ -45,7 +47,7 @@ namespace Stratis.Bitcoin.Tests.Controllers
         [Fact]
         public void AddNodeAPI_InvalidEndpoint_ThrowsException()
         {
-            string endpoint = "a.b.c.d";
+            string endpoint = "-1.0.0.0";
             string command = "onetry";
 
             IActionResult result = this.controller.AddNodeAPI(endpoint, command);

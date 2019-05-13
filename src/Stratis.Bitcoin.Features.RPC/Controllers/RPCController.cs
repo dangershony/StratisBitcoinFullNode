@@ -7,8 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Primitives;
-using NBitcoin.RPC;
+using Newtonsoft.Json.Linq;
 using Stratis.Bitcoin.Controllers;
 using Stratis.Bitcoin.Utilities;
 using Stratis.Bitcoin.Utilities.JsonErrors;
@@ -74,7 +73,7 @@ namespace Stratis.Bitcoin.Features.RPC.Controllers
         }
 
         /// <summary>
-        /// Processes a RPCRequest.
+        /// Processes a Remote Procedural Call.
         /// </summary>
         /// <param name="request">The request to process.</param>
         /// <returns></returns>
@@ -82,37 +81,58 @@ namespace Stratis.Bitcoin.Features.RPC.Controllers
         {
             // Find the binding to 127.0.0.1 or the first available. The logic in RPC settings ensures there will be at least 1.
             IPEndPoint nodeEndPoint = this.rpcSettings.Bind.Where(b => b.Address.ToString() == "127.0.0.1").FirstOrDefault() ?? this.rpcSettings.Bind[0];
-            IRPCClient rpcClient = this.rpcClientFactory.Create($"{this.rpcSettings.RpcUser}:{this.rpcSettings.RpcPassword}", new Uri($"http://{nodeEndPoint}"), this.fullNode.Network);            
+            IRPCClient rpcClient = this.rpcClientFactory.Create(this.rpcSettings, new Uri($"http://{nodeEndPoint}"), this.fullNode.Network);
 
             return rpcClient.SendCommand(request);
         }
 
         /// <summary>
-        /// Call an RPC method by name.
+        /// Makes a Remote Procedural Call method by name.
         /// </summary>
+        /// <param name="body">A JObject containing the name of the method to process.</param>
         /// <returns>A JSON result that varies depending on the RPC method.</returns>
         [Route("callbyname")]
-        [HttpGet]
-        public IActionResult CallByName([FromQuery]string methodName)
+        [HttpPost]
+        public IActionResult CallByName([FromBody]JObject body)
         {
+            Guard.NotNull(body, nameof(body));
+
             try
             {
+                if (!this.rpcSettings.Server)
+                {
+                    return ErrorHelpers.BuildErrorResponse(HttpStatusCode.MethodNotAllowed, "Method not allowed", "Method not allowed when RPC is disabled.");
+                }
+
+                StringComparison ignoreCase = StringComparison.InvariantCultureIgnoreCase;
+                string methodName = (string)body.GetValue("methodName", ignoreCase);
+
                 ControllerActionDescriptor actionDescriptor = null;
                 if (!this.GetActionDescriptors()?.TryGetValue(methodName, out actionDescriptor) ?? false)
                     throw new Exception($"RPC method '{ methodName }' not found.");
 
                 // Prepare the named parameters that were passed via the query string in the order that they are expected by SendCommand.
-                List<ControllerParameterDescriptor> paramInfo = actionDescriptor.Parameters.OfType<ControllerParameterDescriptor>().ToList();
-                var param = new object[paramInfo.Count];
-                for (int i = 0; i < paramInfo.Count; i++)
+                List<ControllerParameterDescriptor> paramInfos = actionDescriptor.Parameters.OfType<ControllerParameterDescriptor>().ToList();
+
+                var paramsAsObjects = new object[paramInfos.Count];
+                for (int i = 0; i < paramInfos.Count; i++)
                 {
-                    ControllerParameterDescriptor pInfo = paramInfo[i];
-                    KeyValuePair<string, StringValues> stringValues = this.Request.Query.FirstOrDefault(p => p.Key.ToLower() == pInfo.Name.ToLower());
-                    param[i] = (stringValues.Key == null) ? pInfo.ParameterInfo.HasDefaultValue ? pInfo.ParameterInfo.DefaultValue.ToString() : null : stringValues.Value[0];
+                    ControllerParameterDescriptor pInfo = paramInfos[i];
+                    bool hasValue = body.TryGetValue(pInfo.Name, ignoreCase, out JToken jValue);
+                    if (hasValue && !jValue.HasValues)
+                    {
+                        paramsAsObjects[i] = jValue.ToString();
+                    }
+                    else
+                    {
+                        paramsAsObjects[i] = pInfo.ParameterInfo.DefaultValue?.ToString();
+                    }
                 }
 
+                RPCRequest request = new RPCRequest(methodName, paramsAsObjects);
+
                 // Build RPC request object.
-                RPCResponse response = this.SendRPCRequest(new RPCRequest(methodName, param));
+                RPCResponse response = this.SendRPCRequest(request);
 
                 // Throw error if any.
                 if (response?.Error?.Message != null)
@@ -129,7 +149,7 @@ namespace Stratis.Bitcoin.Features.RPC.Controllers
         }
 
         /// <summary>
-        /// Lists the available RPC methods.
+        /// Lists the available Remote Procedural Call methods on this node.
         /// </summary>
         /// <returns>A JSON result that lists the RPC methods.</returns>
         [Route("listmethods")]
@@ -138,6 +158,11 @@ namespace Stratis.Bitcoin.Features.RPC.Controllers
         {
             try
             {
+                if (!this.rpcSettings.Server)
+                {
+                    return ErrorHelpers.BuildErrorResponse(HttpStatusCode.MethodNotAllowed, "Method not allowed", "Method not allowed when RPC is disabled.");
+                }
+
                 var listMethods = new List<Models.RpcCommandModel>();
                 foreach (ControllerActionDescriptor descriptor in this.GetActionDescriptors().Values.Where(desc => desc.ActionName == desc.ActionName.ToLower()))
                 {

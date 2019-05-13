@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Reflection;
+using NBitcoin.DataEncoders;
 
 namespace NBitcoin
 {
@@ -39,6 +40,10 @@ namespace NBitcoin
         /// </summary>
         private readonly TypeInfo transactionType = typeof(Transaction).GetTypeInfo();
 
+        public ConsensusFactory()
+        {
+        }
+
         /// <summary>
         /// Check if the generic type is assignable from <see cref="BlockHeader"/>.
         /// </summary>
@@ -70,12 +75,6 @@ namespace NBitcoin
         }
 
         /// <summary>
-        /// Represents the parent of this class.
-        /// For simplicity (and migration from NBitcoin) I made this a property however this design can be revised later.
-        /// </summary>
-        public Consensus Consensus { get; set; }
-
-        /// <summary>
         /// Check weather a type is assignable within the collection of types in the give dictionary.
         /// </summary>
         /// <typeparam name="T">The generic type to check.</typeparam>
@@ -102,18 +101,16 @@ namespace NBitcoin
         public virtual T TryCreateNew<T>() where T : IBitcoinSerializable
         {
             object result = null;
+
             if (IsBlock<T>())
-            {
                 result = (T)(object)CreateBlock();
-            }
+
             if (IsBlockHeader<T>())
-            {
                 result = (T)(object)CreateBlockHeader();
-            }
+
             if (IsTransaction<T>())
-            {
                 result = (T)(object)CreateTransaction();
-            }
+
             return (T)result;
         }
 
@@ -167,6 +164,26 @@ namespace NBitcoin
         public virtual Transaction CreateTransaction()
         {
             return new Transaction();
+        }
+
+        /// <summary>
+        /// Create a <see cref="Transaction"/> instance from a hex string representation.
+        /// </summary>
+        public virtual Transaction CreateTransaction(string hex)
+        {
+            var transaction = new Transaction();
+            transaction.FromBytes(Encoders.Hex.DecodeData(hex));
+            return transaction;
+        }
+
+        /// <summary>
+        /// Create a <see cref="Transaction"/> instance from a byte array representation.
+        /// </summary>
+        public virtual Transaction CreateTransaction(byte[] bytes)
+        {
+            var transaction = new Transaction();
+            transaction.FromBytes(bytes);
+            return transaction;
         }
     }
 

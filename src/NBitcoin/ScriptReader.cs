@@ -236,6 +236,8 @@ namespace NBitcoin
                     return "OP_CLTV";
                 case OpcodeType.OP_CHECKSEQUENCEVERIFY:
                     return "OP_CSV";
+                case OpcodeType.OP_CHECKCOLDSTAKEVERIFY:
+                    return "OP_CHECKCOLDSTAKEVERIFY";
 
                 // expanson
                 case OpcodeType.OP_NOP1:
@@ -252,8 +254,6 @@ namespace NBitcoin
                     return "OP_NOP8";
                 case OpcodeType.OP_NOP9:
                     return "OP_NOP9";
-                case OpcodeType.OP_NOP10:
-                    return "OP_NOP10";
 
                 default:
                     return Enum.GetName(typeof(OpcodeType), opcode);
@@ -282,6 +282,8 @@ namespace NBitcoin
             _OpcodeByName.AddOrReplace("OP_NOP2", OpcodeType.OP_CHECKLOCKTIMEVERIFY);
             _OpcodeByName.AddOrReplace("OP_CHECKSEQUENCEVERIFY", OpcodeType.OP_CHECKSEQUENCEVERIFY);
             _OpcodeByName.AddOrReplace("OP_NOP3", OpcodeType.OP_CHECKSEQUENCEVERIFY);
+            _OpcodeByName.AddOrReplace("OP_CHECKCOLDSTAKEVERIFY", OpcodeType.OP_CHECKCOLDSTAKEVERIFY);
+            _OpcodeByName.AddOrReplace("OP_NOP10", OpcodeType.OP_CHECKCOLDSTAKEVERIFY);
 
             foreach(object[] op in new[]
             {
@@ -323,7 +325,7 @@ namespace NBitcoin
                 op.Code = (OpcodeType)(byte)data.Length;
             else if(data.Length <= 0xFF)
                 op.Code = OpcodeType.OP_PUSHDATA1;
-#if !(PORTABLE || NETCORE)
+#if !NETCORE
             else if(data.LongLength <= 0xFFFF)
                 op.Code = OpcodeType.OP_PUSHDATA2;
             else if(data.LongLength <= 0xFFFFFFFF)
@@ -504,9 +506,11 @@ namespace NBitcoin
 
         public byte[] ToBytes()
         {
-            var ms = new MemoryStream();
-            WriteTo(ms);
-            return ms.ToArray();
+            using (var ms = new MemoryStream())
+            {
+                WriteTo(ms);
+                return ms.ToArray();
+            }
         }
 
         public override string ToString()

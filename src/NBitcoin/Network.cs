@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using NBitcoin.DataEncoders;
+using NBitcoin.Networks;
 using NBitcoin.Protocol;
 using NBitcoin.Stealth;
 
@@ -33,17 +33,37 @@ namespace NBitcoin
         WITNESS_SCRIPT_ADDRESS
     }
 
-    public abstract partial class Network
+    public enum NetworkType
     {
-        private static readonly ConcurrentDictionary<string, Network> NetworksContainer = new ConcurrentDictionary<string, Network>();
+        Mainnet,
+        Testnet,
+        Regtest
+    }
 
+    /// <summary>
+    /// A container of all network instances of a certain high level network.
+    /// Every network normally comes in 3 flavors mainnet, testnet and regtest.
+    /// </summary>
+    public class NetworksSelector
+    {
+        public NetworksSelector(Func<Network> mainnet, Func<Network> testnet, Func<Network> regtest)
+        {
+            this.Mainnet = mainnet;
+            this.Testnet = testnet;
+            this.Regtest = regtest;
+        }
+
+        public Func<Network> Mainnet { get; }
+
+        public Func<Network> Testnet { get; }
+
+        public Func<Network> Regtest { get; }
+    }
+
+    public abstract class Network
+    {
         protected Block Genesis;
 
-        protected Network()
-        {
-            this.Consensus = new Consensus();
-        }
-        
         /// <summary>
         /// Maximal value for the calculated time offset.
         /// If the value is over this limit, the time syncing feature will be switched off.
@@ -58,7 +78,14 @@ namespace NBitcoin
         /// <summary>
         /// Mininum fee rate for all transactions.
         /// Fees smaller than this are considered zero fee for transaction creation.
+        /// Be careful setting this: if you set it to zero then a transaction spammer can cheaply fill blocks using
+        /// 1-satoshi-fee transactions. It should be set above the real cost to you of processing a transaction.
         /// </summary>
+        /// <remarks>
+        /// The <see cref="MinRelayTxFee"/> and <see cref="MinTxFee"/> are typically the same value to prevent dos attacks on the network.
+        /// If <see cref="MinRelayTxFee"/> is less than <see cref="MinTxFee"/>, an attacker can broadcast a lot of transactions with fees between these two values,
+        /// which will lead to transactions filling the mempool without ever being mined.
+        /// </remarks>
         public long MinTxFee { get; protected set; }
 
         /// <summary>
@@ -69,27 +96,49 @@ namespace NBitcoin
         /// <summary>
         /// The minimum fee under which transactions may be rejected from being relayed.
         /// </summary>
+        /// <remarks>
+        /// The <see cref="MinRelayTxFee"/> and <see cref="MinTxFee"/> are typically the same value to prevent dos attacks on the network.
+        /// If <see cref="MinRelayTxFee"/> is less than <see cref="MinTxFee"/>, an attacker can broadcast a lot of transactions with fees between these two values,
+        /// which will lead to transactions filling the mempool without ever being mined.
+        /// </remarks>
         public long MinRelayTxFee { get; protected set; }
 
         /// <summary>
         /// Port on which to listen for incoming RPC connections.
         /// </summary>
-        public int RPCPort { get; protected set; }
+        public int DefaultRPCPort { get; protected set; }
 
         /// <summary>
-        /// The default port on which nodes of this network communicate with external clients. 
+        /// Port on which to listen for incoming API connections.
+        /// </summary>
+        public int DefaultAPIPort { get; protected set; }
+
+        /// <summary>
+        /// The default port on which nodes of this network communicate with external clients.
         /// </summary>
         public int DefaultPort { get; protected set; }
 
         /// <summary>
+        /// The default maximum number of outbound connections a node on this network will form.
+        /// </summary>
+        public int DefaultMaxOutboundConnections { get; protected set; }
+
+        /// <summary>
+        /// The default maximum number of inbound connections a node on this network will accept.
+        /// </summary>
+        public int DefaultMaxInboundConnections { get; protected set; }
+
+        /// <summary>
         /// The consensus for this network.
         /// </summary>
-        public Consensus Consensus { get; protected set; }
+        public IConsensus Consensus { get; protected set; }
 
         /// <summary>
         /// The name of the network.
         /// </summary>
         public string Name { get; protected set; }
+
+        public NetworkType NetworkType { get; protected set; }
 
         /// <summary>
         /// A list of additional names the network can be referred as.
@@ -202,39 +251,19 @@ namespace NBitcoin
         public Money GenesisReward { get; protected set; }
 
         /// <summary>
-        /// Register an immutable <see cref="Network"/> instance so it is queryable through <see cref="GetNetwork(string)"/> and <see cref="GetNetworks()"/>.
+        /// The list of script templates regarded as standard.
+        /// Standardness is a distinct property from consensus validity.
+        /// A non-standard transaction can still be mined/staked by a willing node and the resulting block will be accepted by the network.
+        /// However, a non-standard transaction will typically not be relayed between nodes.
         /// </summary>
-        public static Network Register(Network network)
-        {
-            IEnumerable<string> networkNames = network.AdditionalNames != null ? new[] { network.Name }.Concat(network.AdditionalNames) : new[] { network.Name };
-
-            foreach (string networkName in networkNames)
-            {
-                // Performs a series of checks before registering the network to the list of available networks.
-                if (string.IsNullOrEmpty(networkName))
-                    throw new InvalidOperationException("A network name needs to be provided.");
-
-                if (GetNetwork(networkName) != null)
-                    throw new InvalidOperationException("The network " + networkName + " is already registered.");
-
-                if (network.GetGenesis() == null)
-                    throw new InvalidOperationException("A genesis block needs to be provided.");
-
-                if (network.Consensus == null)
-                    throw new InvalidOperationException("A consensus needs to be provided.");
-
-                NetworksContainer.TryAdd(networkName.ToLowerInvariant(), network);
-            }
-
-            return network;
-        }
+        public IStandardScriptsRegistry StandardScriptsRegistry { get; protected set; }
 
         /// <summary>
         /// Mines a new genesis block, to use with a new network.
         /// Typically, 3 such genesis blocks need to be created when bootstrapping a new coin: for Main, Test and Reg networks.
         /// </summary>
         /// <param name="consensusFactory">
-        /// The consensus factory used to create transactions and blocks. 
+        /// The consensus factory used to create transactions and blocks.
         /// Use <see cref="PosConsensusFactory"/> for proof-of-stake based networks.
         /// </param>
         /// <param name="coinbaseText">
@@ -243,7 +272,7 @@ namespace NBitcoin
         /// It should be shorter than 92 characters.
         /// </param>
         /// <param name="target">
-        /// The difficulty target under which the hash of the block need to be. 
+        /// The difficulty target under which the hash of the block need to be.
         /// Some more details: As an example, the target for the Stratis Main network is 00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.
         /// To make it harder to mine the genesis block, have more zeros at the beginning (keeping the length the same). This will make the target smaller, so finding a number under it will be more difficult.
         /// To make it easier to mine the genesis block ,do the opposite. Example of an easy one: 00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.
@@ -253,7 +282,7 @@ namespace NBitcoin
         /// Specify how many coins to put in the genesis transaction's output. These coins are unspendable.
         /// </param>
         /// <param name="version">
-        /// The version of the transaction and the block header set in the genesis block. 
+        /// The version of the transaction and the block header set in the genesis block.
         /// </param>
         /// <example>
         /// The following example shows the creation of a genesis block.
@@ -272,17 +301,14 @@ namespace NBitcoin
         /// <returns>A genesis block.</returns>
         public static Block MineGenesisBlock(ConsensusFactory consensusFactory, string coinbaseText, Target target, Money genesisReward, int version = 1)
         {
-            if (target == null)
-                throw new ArgumentException($"Parameter '{nameof(target)}' cannot be null. Example use: new Target(new uint256(\"0000ffff00000000000000000000000000000000000000000000000000000000\"))");
-
             if (consensusFactory == null)
-            {
-                throw new ArgumentException($"Parameter '{nameof(consensusFactory)}' cannot be null. Use 'new ConsensusFactory()' for Bitcoin-like proof-of-work blockchains" +
-                                            "and 'new PosConsensusFactory()' for Stratis-like proof-of-stake blockchains.");
-            }
+                throw new ArgumentException($"Parameter '{nameof(consensusFactory)}' cannot be null. Use 'new ConsensusFactory()' for Bitcoin-like proof-of-work blockchains and 'new PosConsensusFactory()' for Stratis-like proof-of-stake blockchains.");
 
             if (string.IsNullOrEmpty(coinbaseText))
                 throw new ArgumentException($"Parameter '{nameof(coinbaseText)}' cannot be null. Use a news headline or any other appropriate string.");
+
+            if (target == null)
+                throw new ArgumentException($"Parameter '{nameof(target)}' cannot be null. Example use: new Target(new uint256(\"0000ffff00000000000000000000000000000000000000000000000000000000\"))");
 
             if (coinbaseText.Length >= 92)
                 throw new ArgumentException($"Parameter '{nameof(coinbaseText)}' should be shorter than 92 characters.");
@@ -366,7 +392,7 @@ namespace NBitcoin
             throw new FormatException("Invalid Base58 version");
         }
 
-        private Base58Type? GetBase58Type(string base58)
+        public Base58Type? GetBase58Type(string base58)
         {
             byte[] bytes = Encoders.Base58Check.DecodeData(base58);
             for (int i = 0; i < this.Base58Prefixes.Length; i++)
@@ -377,32 +403,7 @@ namespace NBitcoin
                 if (bytes.Length < prefix.Length)
                     continue;
                 if (Utils.ArrayEqual(bytes, 0, prefix, 0, prefix.Length))
-                    return (Base58Type) i;
-            }
-            return null;
-        }
-
-        internal static Network GetNetworkFromBase58Data(string base58, Base58Type? expectedType = null)
-        {
-            foreach (Network network in GetNetworks())
-            {
-                Base58Type? type = network.GetBase58Type(base58);
-                if (type.HasValue)
-                {
-                    if (expectedType != null && expectedType.Value != type.Value)
-                        continue;
-                    if (type.Value == Base58Type.COLORED_ADDRESS)
-                    {
-                        byte[] raw = Encoders.Base58Check.DecodeData(base58);
-                        byte[] version = network.GetVersionBytes(type.Value, false);
-                        if (version == null)
-                            continue;
-                        raw = raw.Skip(version.Length).ToArray();
-                        base58 = Encoders.Base58Check.EncodeData(raw);
-                        return GetNetworkFromBase58Data(base58, null);
-                    }
-                    return network;
-                }
+                    return (Base58Type)i;
             }
             return null;
         }
@@ -427,7 +428,7 @@ namespace NBitcoin
             if (str == null)
                 throw new ArgumentNullException("str");
 
-            IEnumerable<Network> networks = expectedNetwork == null ? GetNetworks() : new[] { expectedNetwork };
+            IEnumerable<Network> networks = expectedNetwork == null ? NetworkRegistration.GetNetworks() : new[] { expectedNetwork };
             bool maybeb58 = true;
             for (int i = 0; i < str.Length; i++)
             {
@@ -649,44 +650,10 @@ namespace NBitcoin
 
         public Block GetGenesis()
         {
-            return this.Genesis.Clone(network: this);
+            return Block.Load(this.Genesis.ToBytes(this.Consensus.ConsensusFactory), this.Consensus.ConsensusFactory);
         }
 
         public uint256 GenesisHash => this.Consensus.HashGenesisBlock;
-
-        public static IEnumerable<Network> GetNetworks()
-        {
-            yield return Main;
-            yield return TestNet;
-            yield return RegTest;
-
-            if (NetworksContainer.Any())
-            {
-                List<Network> others = NetworksContainer.Values.Distinct().ToList();
-
-                foreach (Network network in others)
-                    yield return network;
-            }
-        }
-
-        /// <summary>
-        /// Get network from name
-        /// </summary>
-        /// <param name="name">main,mainnet,testnet,test,testnet3,reg,regtest,seg,segnet</param>
-        /// <returns>The network or null of the name does not match any network</returns>
-        public static Network GetNetwork(string name)
-        {
-            if (name == null)
-                throw new ArgumentNullException("name");
-
-            if (NetworksContainer.Any())
-            {
-                name = name.ToLowerInvariant();
-                return NetworksContainer.TryGet(name);
-            }
-
-            return null;
-        }
 
         public Money GetReward(int nHeight)
         {
@@ -788,6 +755,26 @@ namespace NBitcoin
                     Endpoint = Utils.ParseIpEndpoint(seed, defaultPort)
                 };
             }
+        }
+
+        public Block CreateBlock()
+        {
+            return this.Consensus.ConsensusFactory.CreateBlock();
+        }
+
+        public Transaction CreateTransaction()
+        {
+            return this.Consensus.ConsensusFactory.CreateTransaction();
+        }
+
+        public Transaction CreateTransaction(string hex)
+        {
+            return this.Consensus.ConsensusFactory.CreateTransaction(hex);
+        }
+
+        public Transaction CreateTransaction(byte[] bytes)
+        {
+            return this.Consensus.ConsensusFactory.CreateTransaction(bytes);
         }
     }
 }

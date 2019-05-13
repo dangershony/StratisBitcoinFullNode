@@ -26,11 +26,10 @@ namespace Stratis.Bitcoin.Configuration.Settings
         public int MaxTipAge { get; private set; }
 
         /// <summary>
-        /// Initializes an instance of the object from the default configuration.
+        /// Maximum memory to use for unconsume blocks in MB.
+        /// Used in consensus manager to set <seealso cref="ConsensusManager.MaxUnconsumedBlocksDataBytes"/>
         /// </summary>
-        public ConsensusSettings() : this(NodeSettings.Default())
-        {
-        }
+        public int MaxBlockMemoryInMB { get; private set; }
 
         /// <summary>
         /// Initializes an instance of the object from the node configuration.
@@ -41,15 +40,13 @@ namespace Stratis.Bitcoin.Configuration.Settings
             Guard.NotNull(nodeSettings, nameof(nodeSettings));
 
             this.logger = nodeSettings.LoggerFactory.CreateLogger(typeof(ConsensusSettings).FullName);
-            this.logger.LogTrace("({0}:'{1}')", nameof(nodeSettings), nodeSettings.Network.Name);
 
             TextFileConfiguration config = nodeSettings.ConfigReader;
 
             this.UseCheckpoints = config.GetOrDefault<bool>("checkpoints", true, this.logger);
             this.BlockAssumedValid = config.GetOrDefault<uint256>("assumevalid", nodeSettings.Network.Consensus.DefaultAssumeValid, this.logger);
             this.MaxTipAge = config.GetOrDefault("maxtipage", nodeSettings.Network.MaxTipAge, this.logger);
-
-            this.logger.LogTrace("(-)");
+            this.MaxBlockMemoryInMB = config.GetOrDefault("maxblkmem", 200, this.logger);
         }
 
         /// <summary>Prints the help information on how to configure the Consensus settings to the logger.</summary>
@@ -63,8 +60,9 @@ namespace Stratis.Bitcoin.Configuration.Settings
             builder.AppendLine($"-checkpoints=<0 or 1>     Use checkpoints. Default 1.");
             builder.AppendLine($"-assumevalid=<hex>        If this block is in the chain assume that it and its ancestors are valid and potentially skip their script verification (0 to verify all). Defaults to { network.Consensus.DefaultAssumeValid }.");
             builder.AppendLine($"-maxtipage=<number>       Max tip age. Default {network.MaxTipAge}.");
+            builder.AppendLine($"-maxblkmem=<number>       Max memory to use for unconsumed blocks in MB. Default 200.");
 
-            NodeSettings.Default().Logger.LogInformation(builder.ToString());
+            NodeSettings.Default(network).Logger.LogInformation(builder.ToString());
         }
 
         /// <summary>
@@ -81,6 +79,7 @@ namespace Stratis.Bitcoin.Configuration.Settings
             builder.AppendLine($"#assumevalid={network.Consensus.DefaultAssumeValid}");
             builder.AppendLine($"#Max tip age. Default {network.MaxTipAge}.");
             builder.AppendLine($"#maxtipage={network.MaxTipAge}");
+            builder.AppendLine($"#maxblkmem=200");
         }
     }
 }

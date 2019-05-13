@@ -32,5 +32,17 @@ namespace Stratis.Bitcoin.Primitives
         {
             return this.ChainedHeader.ToString();
         }
+
+        /// <summary>
+        /// Update the <see cref="ChainedHeader" /> (if not null) with a new provided header.
+        /// </summary>
+        /// <param name="newHeader">The new header to set.</param>
+        /// <remarks>Use this method very carefully because it could cause race conditions if used at the wrong moment.</remarks>
+        public void SetHeader(BlockHeader newHeader)
+        {
+            Guard.NotNull(newHeader, nameof(newHeader));
+
+            this.ChainedHeader.SetHeader(newHeader);
+        }
     }
 }

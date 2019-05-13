@@ -5,12 +5,15 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Connection;
+using Stratis.Bitcoin.EventBus.CoreEvents;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.P2P.Peer;
 using Stratis.Bitcoin.P2P.Protocol;
 using Stratis.Bitcoin.P2P.Protocol.Behaviors;
 using Stratis.Bitcoin.P2P.Protocol.Payloads;
 using Stratis.Bitcoin.Utilities;
+using Stratis.Bitcoin.Utilities.Extensions;
+using TracerAttributes;
 
 namespace Stratis.Bitcoin.Features.MemoryPool
 {
@@ -48,7 +51,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         private readonly IInitialBlockDownloadState initialBlockDownloadState;
 
         /// <summary>Peer notifications available to subscribe to.</summary>
-        private readonly Signals.Signals signals;
+        private readonly Signals.ISignals signals;
 
         /// <summary>Instance logger for the memory pool behavior component.</summary>
         private readonly ILogger logger;
@@ -76,13 +79,24 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// </summary>
         private readonly object lockObject;
 
+        /// <summary>
+        /// If the attached peer is whitelisted for relaying.
+        /// This is turned on if the peer is whitelisted and whitelistrelay mempool option is also on.
+        /// </summary>
+        private bool isPeerWhitelistedForRelay;
+
+        /// <summary>
+        /// Whether the attached peer should only be relayed blocks (no transactions).
+        /// </summary>
+        private bool isBlocksOnlyMode;
+
         public MempoolBehavior(
             IMempoolValidator validator,
             MempoolManager mempoolManager,
             MempoolOrphans orphans,
             IConnectionManager connectionManager,
             IInitialBlockDownloadState initialBlockDownloadState,
-            Signals.Signals signals,
+            Signals.ISignals signals,
             ILoggerFactory loggerFactory,
             Network network)
         {
@@ -99,32 +113,31 @@ namespace Stratis.Bitcoin.Features.MemoryPool
             this.lockObject = new object();
             this.inventoryTxToSend = new HashSet<uint256>();
             this.filterInventoryKnown = new HashSet<uint256>();
+            this.isPeerWhitelistedForRelay = false;
+            this.isBlocksOnlyMode = false;
         }
-        
+
         /// <summary>Time of last memory pool request in unix time.</summary>
-        public long LastMempoolReq { get; private set; } 
+        public long LastMempoolReq { get; private set; }
 
         /// <inheritdoc />
+        [NoTrace]
         protected override void AttachCore()
         {
-            this.logger.LogTrace("()");
-
             this.AttachedPeer.MessageReceived.Register(this.OnMessageReceivedAsync);
-
-            this.logger.LogTrace("(-)");
+            this.isPeerWhitelistedForRelay = this.AttachedPeer.IsWhitelisted() && this.mempoolManager.mempoolSettings.WhiteListRelay;
+            this.isBlocksOnlyMode = !this.connectionManager.ConnectionSettings.RelayTxes && !this.isPeerWhitelistedForRelay;
         }
 
         /// <inheritdoc />
+        [NoTrace]
         protected override void DetachCore()
         {
-            this.logger.LogTrace("()");
-
             this.AttachedPeer.MessageReceived.Unregister(this.OnMessageReceivedAsync);
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <inheritdoc />
+        [NoTrace]
         public override object Clone()
         {
             return new MempoolBehavior(this.validator, this.mempoolManager, this.orphans, this.connectionManager, this.initialBlockDownloadState, this.signals, this.loggerFactory, this.network);
@@ -140,8 +153,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// </remarks>
         private async Task OnMessageReceivedAsync(INetworkPeer peer, IncomingMessage message)
         {
-            this.logger.LogTrace("({0}:'{1}',{2}:'{3}')", nameof(peer), peer.RemoteSocketEndpoint, nameof(message), message.Message.Command);
-
             try
             {
                 await this.ProcessMessageAsync(peer, message).ConfigureAwait(false);
@@ -156,8 +167,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                 this.logger.LogError("Exception occurred: {0}", ex.ToString());
                 throw;
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -168,8 +177,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <param name="message">Incoming message.</param>
         private async Task ProcessMessageAsync(INetworkPeer peer, IncomingMessage message)
         {
-            this.logger.LogTrace("({0}:'{1}',{2}:'{3}')", nameof(peer), peer.RemoteSocketEndpoint, nameof(message), message.Message.Command);
-
             try
             {
                 switch (message.Message.Payload)
@@ -196,8 +203,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                 this.logger.LogTrace("(-)[CANCELED_EXCEPTION]");
                 return;
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -209,7 +214,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         private async Task SendMempoolPayloadAsync(INetworkPeer peer, MempoolPayload message)
         {
             Guard.NotNull(peer, nameof(peer));
-            this.logger.LogTrace("({0}:'{1}',{2}:'{3}')", nameof(peer), peer.RemoteSocketEndpoint, nameof(message), message.Command);
             if (peer != this.AttachedPeer)
             {
                 this.logger.LogDebug("Attached peer '{0}' does not match the originating peer '{1}'.", this.AttachedPeer?.RemoteSocketEndpoint, peer.RemoteSocketEndpoint);
@@ -265,8 +269,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
             this.logger.LogTrace("Sending transaction inventory to peer '{0}'.", peer.RemoteSocketEndpoint);
             await this.SendAsTxInventoryAsync(peer, transactionsToSend);
             this.LastMempoolReq = this.mempoolManager.DateTimeProvider.GetTime();
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -278,7 +280,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         private async Task ProcessInvAsync(INetworkPeer peer, InvPayload invPayload)
         {
             Guard.NotNull(peer, nameof(peer));
-            this.logger.LogTrace("({0}:'{1}',{2}.{3}.{4}:{5})", nameof(peer), peer.RemoteSocketEndpoint, nameof(invPayload), nameof(invPayload.Inventory), nameof(invPayload.Inventory.Count), invPayload.Inventory.Count);
 
             if (invPayload.Inventory.Count > ConnectionManager.MaxInventorySize)
             {
@@ -293,46 +294,41 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                 return;
             }
 
-            bool blocksOnly = !this.connectionManager.ConnectionSettings.RelayTxes;
-            // Allow whitelisted peers to send data other than blocks in blocks only mode if whitelistrelay is true
-            if (peer.Behavior<ConnectionManagerBehavior>().Whitelisted && this.mempoolManager.mempoolSettings.WhiteListRelay)
-                blocksOnly = false;
-
             //uint32_t nFetchFlags = GetFetchFlags(pfrom, chainActive.Tip(), chainparams.GetConsensus());
 
-            var send = new GetDataPayload();
-            foreach (InventoryVector inv in invPayload.Inventory.Where(inv => inv.Type.HasFlag(InventoryType.MSG_TX)))
+            var inventoryTxs = invPayload.Inventory.Where(inv => inv.Type.HasFlag(InventoryType.MSG_TX));
+
+            lock (this.lockObject)
             {
-                //inv.type |= nFetchFlags;
+                foreach (var inv in inventoryTxs)
+                {
+                    this.filterInventoryKnown.Add(inv.Hash);
+                }
+            }
 
-                if (blocksOnly)
-                    this.logger.LogInformation("Transaction ID '{0}' inventory sent in violation of protocol peer '{1}'.", inv.Hash, peer.RemoteSocketEndpoint);
-
-                if (await this.orphans.AlreadyHaveAsync(inv.Hash))
+            var send = new GetDataPayload();
+            foreach (var inv in inventoryTxs)
+            {
+                if (await this.orphans.AlreadyHaveAsync(inv.Hash).ConfigureAwait(false))
                 {
                     this.logger.LogDebug("Transaction ID '{0}' already in orphans, skipped.", inv.Hash);
                     continue;
                 }
 
-                send.Inventory.Add(inv);
-            }
-
-            // add to known inventory
-            lock (this.lockObject)
-            {
-                foreach (InventoryVector inventoryVector in send.Inventory)
+                if (this.isBlocksOnlyMode)
                 {
-                    this.filterInventoryKnown.Add(inventoryVector.Hash);                    
+                    this.logger.LogDebug("Transaction ID '{0}' inventory sent in violation of protocol peer '{1}'.", inv.Hash, peer.RemoteSocketEndpoint);
+                    continue;
                 }
+
+                send.Inventory.Add(new InventoryVector(peer.AddSupportedOptions(InventoryType.MSG_TX), inv.Hash));
             }
 
-            if (peer.IsConnected)
+            if (peer.IsConnected && (send.Inventory.Count > 0))
             {
-                this.logger.LogTrace("Sending transaction inventory to peer '{0}'.", peer.RemoteSocketEndpoint);
+                this.logger.LogTrace("Asking for transaction data from peer '{0}'.", peer.RemoteSocketEndpoint);
                 await peer.SendMessageAsync(send).ConfigureAwait(false);
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -344,7 +340,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         private async Task ProcessGetDataAsync(INetworkPeer peer, GetDataPayload getDataPayload)
         {
             Guard.NotNull(peer, nameof(peer));
-            this.logger.LogTrace("({0}:'{1}',{2}.{3}.{4}:{5})", nameof(peer), peer.RemoteSocketEndpoint, nameof(getDataPayload), nameof(getDataPayload.Inventory), nameof(getDataPayload.Inventory.Count), getDataPayload.Inventory.Count);
 
             foreach (InventoryVector item in getDataPayload.Inventory.Where(inv => inv.Type.HasFlag(InventoryType.MSG_TX)))
             {
@@ -362,8 +357,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                     }
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -374,14 +367,21 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <param name="transactionPayload">The payload for the message.</param>
         private async Task ProcessTxPayloadAsync(INetworkPeer peer, TxPayload transactionPayload)
         {
-            this.logger.LogTrace("({0}:'{1}',{2}.{3}:{4})", nameof(peer), peer.RemoteSocketEndpoint, nameof(transactionPayload), nameof(transactionPayload.Obj), transactionPayload?.Obj?.GetHash());
+            // Stop processing the transaction early if we are in blocks only mode.
+            if (this.isBlocksOnlyMode)
+            {
+                this.logger.LogDebug("Transaction sent in violation of protocol from peer '{0}'.", peer.RemoteSocketEndpoint);
+                this.logger.LogTrace("(-)[BLOCKSONLY]");
+                return;
+            }
+
             Transaction trx = transactionPayload.Obj;
             uint256 trxHash = trx.GetHash();
 
             // add to local filter
             lock (this.lockObject)
             {
-                this.filterInventoryKnown.Add(trxHash);                
+                this.filterInventoryKnown.Add(trxHash);
             }
             this.logger.LogTrace("Added transaction ID '{0}' to known inventory filter.", trxHash);
 
@@ -391,7 +391,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                 await this.validator.SanityCheck();
                 this.RelayTransaction(trxHash);
 
-                this.signals.SignalTransaction(trx);
+                this.signals.Publish(new TransactionReceived(trx));
 
                 long mmsize = state.MempoolSize;
                 long memdyn = state.MempoolDynamicSize;
@@ -406,19 +406,40 @@ namespace Stratis.Bitcoin.Features.MemoryPool
             }
             else
             {
-                if (!trx.HasWitness && state.CorruptionPossible)
+                // Do not use rejection cache for witness transactions or
+                // witness-stripped transactions, as they can have been malleated.
+                // See https://github.com/bitcoin/bitcoin/issues/8279 for details.
+                if (!trx.HasWitness && !state.CorruptionPossible)
                 {
+                    this.orphans.AddToRecentRejects(trxHash);
                 }
 
-                // TODO: Implement Processes whitelistforcerelay
+                // Always relay transactions received from whitelisted peers, even
+                // if they were already in the mempool or rejected from it due
+                // to policy, allowing the node to function as a gateway for
+                // nodes hidden behind it.
+                //
+                // Never relay transactions that we would assign a non-zero DoS
+                // score for, as we expect peers to do the same with us in that
+                // case.
+                if (this.isPeerWhitelistedForRelay)
+                {
+                    if (!state.IsInvalid)
+                    {
+                        this.logger.LogDebug("Force relaying transaction ID '{0}' from whitelisted peer '{1}'.", trxHash, peer.RemoteSocketEndpoint);
+                        this.RelayTransaction(trxHash);
+                    }
+                    else
+                    {
+                        this.logger.LogDebug("Not relaying invalid transaction ID '{0}' from whitelisted peer '{1}' ({2}).", trxHash, peer.RemoteSocketEndpoint, state);
+                    }
+                }
             }
 
             if (state.IsInvalid)
             {
-                this.logger.LogInformation("Transaction ID '{0}' from peer '{1}' was not accepted. Invalid state of '{2}'.", trxHash, peer.RemoteSocketEndpoint, state);
+                this.logger.LogDebug("Transaction ID '{0}' from peer '{1}' was not accepted. Invalid state of '{2}'.", trxHash, peer.RemoteSocketEndpoint, state);
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -428,8 +449,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <param name="trxList">List of transactions.</param>
         private async Task SendAsTxInventoryAsync(INetworkPeer peer, List<uint256> trxList)
         {
-            this.logger.LogTrace("({0}:'{1}',{2}.{3}:{4})", nameof(peer), peer.RemoteSocketEndpoint, nameof(trxList), "trxList.Count", trxList.Count);
-
             var queue = new Queue<InventoryVector>(trxList.Select(s => new InventoryVector(peer.AddSupportedOptions(InventoryType.MSG_TX), s)));
             while (queue.Count > 0)
             {
@@ -440,8 +459,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                     await peer.SendMessageAsync(new InvPayload(items)).ConfigureAwait(false);
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -450,17 +467,13 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <param name="hash">Hash of transaction to add.</param>
         private void AddTransactionToSend(uint256 hash)
         {
-            this.logger.LogTrace("({0}:'{1}')", nameof(hash), hash);
-
             lock (this.lockObject)
             {
                 if (!this.filterInventoryKnown.Contains(hash))
                 {
-                    this.inventoryTxToSend.Add(hash);   
+                    this.inventoryTxToSend.Add(hash);
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -469,8 +482,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
         /// <param name="hash">Hash of the transaction.</param>
         public void RelayTransaction(uint256 hash)
         {
-            this.logger.LogTrace("({0}:'{1}')", nameof(hash), hash);
-
             IReadOnlyNetworkPeerCollection peers = this.connectionManager.ConnectedPeers;
             if (!peers.Any())
             {
@@ -482,29 +493,34 @@ namespace Stratis.Bitcoin.Features.MemoryPool
             IEnumerable<MempoolBehavior> behaviours = peers.Select(s => s.Behavior<MempoolBehavior>());
             foreach (MempoolBehavior mempoolBehavior in behaviours)
             {
-                this.logger.LogTrace("Attempting to relaying transaction ID '{0}' to peer '{1}'.", hash, mempoolBehavior?.AttachedPeer.RemoteSocketEndpoint);
-                if (mempoolBehavior?.AttachedPeer.PeerVersion.Relay ?? false)
+                var peer = mempoolBehavior?.AttachedPeer;
+
+                if (peer == null)
+                {
+                    this.logger.LogTrace("Peer is null, skipped.");
+                    continue;
+                }
+
+                this.logger.LogTrace("Attempting to relaying transaction ID '{0}' to peer '{1}'.", hash, peer.RemoteSocketEndpoint);
+
+                if (peer.PeerVersion.Relay)
                 {
                     mempoolBehavior.AddTransactionToSend(hash);
-                    this.logger.LogTrace("Added transaction ID '{0}' to send inventory of peer '{1}'.", hash, mempoolBehavior?.AttachedPeer.RemoteSocketEndpoint);
+                    this.logger.LogTrace("Added transaction ID '{0}' to send inventory of peer '{1}'.", hash, peer.RemoteSocketEndpoint);
                 }
                 else
                 {
-                    this.logger.LogTrace("Peer '{0}' does not support 'Relay', skipped.", mempoolBehavior?.AttachedPeer.RemoteSocketEndpoint);
+                    this.logger.LogTrace("Peer '{0}' does not support 'Relay', skipped.", peer.RemoteSocketEndpoint);
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
         /// Sends transaction inventory to attached peer.
-        /// This is executed on a 10 second loop when MempoolSignaled is constructed.
+        /// This is executed on a 5 second loop when MempoolSignaled is constructed.
         /// </summary>
         public async Task SendTrickleAsync()
         {
-            this.logger.LogTrace("()");
-
             INetworkPeer peer = this.AttachedPeer;
             if (peer == null)
             {
@@ -514,13 +530,13 @@ namespace Stratis.Bitcoin.Features.MemoryPool
 
             var transactionsToSend = new List<uint256>();
             lock (this.lockObject)
-            { 
+            {
                 if (!this.inventoryTxToSend.Any())
                 {
                     this.logger.LogTrace("(-)[NO_TXS]");
                     return;
                 }
-                            
+
                 this.logger.LogTrace("Creating list of transaction inventory to send.");
 
                 // Determine transactions to relay
@@ -539,7 +555,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                         this.logger.LogTrace("Transaction ID '{0}' not added to inventory list, exists in known inventory filter.", hash);
                         continue;
                     }
-                   
+
                     //if (filterrate && txinfo.feeRate.GetFeePerK() < filterrate) // TODO:filterrate
                     //{
                     //  continue;
@@ -576,8 +592,6 @@ namespace Stratis.Bitcoin.Features.MemoryPool
                     return;
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
     }
 }

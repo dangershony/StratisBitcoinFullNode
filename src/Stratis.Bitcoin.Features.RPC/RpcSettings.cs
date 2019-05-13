@@ -38,14 +38,7 @@ namespace Stratis.Bitcoin.Features.RPC
         public List<IPEndPoint> Bind { get; set; }
 
         /// <summary>List of IP addresses that are allowed to connect to RPC interfaces.</summary>
-        public List<IPAddress> AllowIp { get; set; }
-
-        /// <summary>
-        /// Initializes an instance of the object from the default node configuration.
-        /// </summary>
-        public RpcSettings() : this(NodeSettings.Default())
-        {
-        }
+        public List<IPAddressBlock> AllowIp { get; set; }
 
         /// <summary>
         /// Initializes an instance of the object from the node configuration.
@@ -56,19 +49,16 @@ namespace Stratis.Bitcoin.Features.RPC
             Guard.NotNull(nodeSettings, nameof(nodeSettings));
 
             this.logger = nodeSettings.LoggerFactory.CreateLogger(typeof(RpcSettings).FullName);
-            this.logger.LogTrace("({0}:'{1}')", nameof(nodeSettings), nodeSettings.Network.Name);
 
             this.Bind = new List<IPEndPoint>();
             this.DefaultBindings = new List<IPEndPoint>();
-            this.AllowIp = new List<IPAddress>();
-            
+            this.AllowIp = new List<IPAddressBlock>();
+
             // Get values from config
             this.LoadSettingsFromConfig(nodeSettings);
 
             // Check validity of settings
             this.CheckConfigurationValidity(nodeSettings.Logger);
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -80,7 +70,7 @@ namespace Stratis.Bitcoin.Features.RPC
             TextFileConfiguration config = nodeSettings.ConfigReader;
 
             this.Server = config.GetOrDefault<bool>("server", false, this.logger);
-            this.RPCPort = config.GetOrDefault<int>("rpcport", nodeSettings.Network.RPCPort, this.logger);
+            this.RPCPort = config.GetOrDefault<int>("rpcport", nodeSettings.Network.DefaultRPCPort, this.logger);
 
             if (this.Server)
             {
@@ -91,7 +81,7 @@ namespace Stratis.Bitcoin.Features.RPC
                 {
                     this.AllowIp = config
                         .GetAll("rpcallowip", this.logger)
-                        .Select(p => IPAddress.Parse(p))
+                        .Select(p => IPAddressBlock.Parse(p))
                         .ToList();
                 }
                 catch (FormatException)
@@ -158,13 +148,13 @@ namespace Stratis.Bitcoin.Features.RPC
         /// <param name="network">The network to use.</param>
         public static void PrintHelp(Network network)
         {
-            NodeSettings defaults = NodeSettings.Default();
+            NodeSettings defaults = NodeSettings.Default(network);
             var builder = new StringBuilder();
 
             builder.AppendLine($"-server=<0 or 1>          Accept command line and JSON-RPC commands. Default false.");
             builder.AppendLine($"-rpcuser=<string>         Username for JSON-RPC connections");
             builder.AppendLine($"-rpcpassword=<string>     Password for JSON-RPC connections");
-            builder.AppendLine($"-rpcport=<0-65535>        Listen for JSON-RPC connections on <port>. Default: {network.RPCPort} or (reg)testnet: {Network.TestNet.RPCPort}");
+            builder.AppendLine($"-rpcport=<0-65535>        Listen for JSON-RPC connections on <port>. Default: {network.DefaultRPCPort}");
             builder.AppendLine($"-rpcbind=<ip:port>        Bind to given address to listen for JSON-RPC connections. This option can be specified multiple times. Default: bind to all interfaces");
             builder.AppendLine($"-rpcallowip=<ip>          Allow JSON-RPC connections from specified source. This option can be specified multiple times.");
 

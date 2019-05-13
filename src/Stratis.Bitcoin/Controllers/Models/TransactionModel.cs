@@ -36,7 +36,7 @@ namespace Stratis.Bitcoin.Controllers.Models
     }
 
     /// <summary>
-    /// Creates a concise transaction model containing the hashed transaction. 
+    /// Creates a concise transaction model containing the hashed transaction.
     /// </summary>
     [JsonConverter(typeof(ToStringJsonConverter))]
     public class TransactionBriefModel : TransactionModel
@@ -51,7 +51,7 @@ namespace Stratis.Bitcoin.Controllers.Models
     }
 
     /// <summary>
-    /// Creates a more robust transaction model. 
+    /// Creates a more robust transaction model.
     /// </summary>
     public class TransactionVerboseModel : TransactionModel
     {
@@ -71,7 +71,9 @@ namespace Stratis.Bitcoin.Controllers.Models
             if (trx != null)
             {
                 this.TxId = trx.GetHash().ToString();
+                this.Hash = trx.HasWitness ? trx.GetWitHash().ToString() : trx.GetHash().ToString();
                 this.Size = trx.GetSerializedSize();
+                this.VSize = trx.HasWitness ? trx.GetVirtualSize() : trx.GetSerializedSize();
                 this.Version = trx.Version;
                 this.LockTime = trx.LockTime;
 
@@ -94,45 +96,57 @@ namespace Stratis.Bitcoin.Controllers.Models
         [JsonProperty(Order = 1, PropertyName = "txid")]
         public string TxId { get; set; }
 
-        /// <summary>The serialized transaction size.</summary>
-        [JsonProperty(Order = 2, PropertyName = "size")]
-        public int Size { get; set; }
+        /// <summary>The transaction hash (differs from txid for witness transactions).</summary>
+        [JsonProperty(Order = 2, PropertyName = "hash")]
+        public string Hash { get; set; }
 
         /// <summary>The transaction version number (typically 1).</summary>
         [JsonProperty(Order = 3, PropertyName = "version")]
         public uint Version { get; set; }
 
+        /// <summary>The serialized transaction size.</summary>
+        [JsonProperty(Order = 4, PropertyName = "size")]
+        public int Size { get; set; }
+
+        /// <summary>The virtual transaction size (differs from size for witness transactions).</summary>
+        [JsonProperty(Order = 5, PropertyName = "vsize")]
+        public int VSize { get; set; }
+
+        /// <summary>The transaction's weight (between vsize*4-3 and vsize*4).</summary>
+        [JsonProperty(Order = 6, PropertyName = "weight", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int Weight { get; set; }
+
         /// <summary>If nonzero, block height or timestamp when transaction is final.</summary>
-        [JsonProperty(Order = 4, PropertyName = "locktime")]
+        [JsonProperty(Order = 7, PropertyName = "locktime")]
         public uint LockTime { get; set; }
 
         /// <summary>A list of inputs.</summary>
-        [JsonProperty(Order = 5, PropertyName = "vin")]
+        [JsonProperty(Order = 8, PropertyName = "vin")]
         public List<Vin> VIn { get; set; }
 
         /// <summary>A list of outputs.</summary>
-        [JsonProperty(Order = 6, PropertyName = "vout")]
+        [JsonProperty(Order = 9, PropertyName = "vout")]
         public List<Vout> VOut { get; set; }
 
         /// <summary>The hash of the block containing this transaction.</summary>
-        [JsonProperty(Order = 7, PropertyName = "blockhash", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        [JsonProperty(Order = 10, PropertyName = "blockhash", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string BlockHash { get; set; }
 
         /// <summary>The number of confirmations of the transaction.</summary>
-        [JsonProperty(Order = 8, PropertyName = "confirmations", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        [JsonProperty(Order = 11, PropertyName = "confirmations", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int? Confirmations { get; set; }
 
         /// <summary>The time the transaction was added to a block.</summary>
-        [JsonProperty(Order = 9, PropertyName = "time", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        [JsonProperty(Order = 12, PropertyName = "time", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public uint? Time { get; set; }
 
         /// <summary>The time the block was confirmed.</summary>
-        [JsonProperty(Order = 10, PropertyName = "blocktime", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        [JsonProperty(Order = 13, PropertyName = "blocktime", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public uint? BlockTime { get; set; }
     }
 
     /// <summary>
-    /// A class describing a transaction input. 
+    /// A class describing a transaction input.
     /// </summary>
     public class Vin
     {
@@ -141,7 +155,7 @@ namespace Stratis.Bitcoin.Controllers.Models
         }
 
         /// <summary>
-        /// Initializes a <see cref="Vin"/> instance. 
+        /// Initializes a <see cref="Vin"/> instance.
         /// </summary>
         /// <param name="prevOut">The previous output being used as an input.</param>
         /// <param name="sequence">The transaction's sequence number.</param>
@@ -158,6 +172,7 @@ namespace Stratis.Bitcoin.Controllers.Models
                 this.VOut = prevOut.N;
                 this.ScriptSig = new Script(scriptSig);
             }
+
             this.Sequence = (uint)sequence;
         }
 
@@ -183,7 +198,7 @@ namespace Stratis.Bitcoin.Controllers.Models
     }
 
     /// <summary>
-    /// A class describing a transaction output. 
+    /// A class describing a transaction output.
     /// </summary>
     public class Vout
     {
@@ -192,14 +207,14 @@ namespace Stratis.Bitcoin.Controllers.Models
         }
 
         /// <summary>
-        /// Initializes an instance of the <see cref="Vout"/> class. 
+        /// Initializes an instance of the <see cref="Vout"/> class.
         /// </summary>
-        /// <param name="N">The index of the output.</param>
+        /// <param name="n">The index of the output.</param>
         /// <param name="txout">A <see cref="TxOut"/></param>
         /// <param name="network">The network where the transaction occured.</param>
-        public Vout(int N, TxOut txout, Network network)
+        public Vout(int n, TxOut txout, Network network)
         {
-            this.N = N;
+            this.N = n;
             this.Value = txout.Value.ToDecimal(MoneyUnit.BTC);
             this.ScriptPubKey = new ScriptPubKey(txout.ScriptPubKey, network);
         }
@@ -264,25 +279,22 @@ namespace Stratis.Bitcoin.Controllers.Models
         {
             var destinations = new List<TxDestination> { script.GetDestination(network) };
             this.Type = this.GetScriptType(script.FindTemplate(network));
+
             if (destinations[0] == null)
             {
-                destinations = script.GetDestinationPublicKeys(network)
-                                    .Select(p => p.Hash)
-                                    .ToList<TxDestination>();
+                destinations = script.GetDestinationPublicKeys(network).Select(p => p.Hash).ToList<TxDestination>();
             }
-            else
+
+            if (destinations.Count == 1)
             {
-                if (destinations.Count == 1)
-                {
-                    this.ReqSigs = 1;
-                    this.Addresses = new List<string> { destinations[0].GetAddress(network).ToString() };
-                }
-                else
-                {
-                    PayToMultiSigTemplateParameters multi = PayToMultiSigTemplate.Instance.ExtractScriptPubKeyParameters(network, script);
-                    this.ReqSigs = multi.SignatureCount;
-                    this.Addresses = multi.PubKeys.Select(m => m.GetAddress(network).ToString()).ToList();
-                }
+                this.ReqSigs = 1;
+                this.Addresses = new List<string> { destinations[0].GetAddress(network).ToString() };
+            }
+            else if (destinations.Count > 1)
+            {
+                PayToMultiSigTemplateParameters multi = PayToMultiSigTemplate.Instance.ExtractScriptPubKeyParameters(script);
+                this.ReqSigs = multi.SignatureCount;
+                this.Addresses = multi.PubKeys.Select(m => m.GetAddress(network).ToString()).ToList();
             }
         }
 
@@ -324,6 +336,7 @@ namespace Stratis.Bitcoin.Controllers.Models
                 case TxOutType.TX_NULL_DATA:
                     return "nulldata";
             }
+
             return "nonstandard";
         }
     }

@@ -8,10 +8,12 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.Protocol;
+using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.P2P.Protocol;
 using Stratis.Bitcoin.P2P.Protocol.Behaviors;
 using Stratis.Bitcoin.P2P.Protocol.Payloads;
 using Stratis.Bitcoin.Utilities;
+using TracerAttributes;
 
 namespace Stratis.Bitcoin.P2P.Peer
 {
@@ -62,34 +64,29 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <summary>Specification of network services that the peer must provide.</summary>
         public NetworkPeerServices RequiredServices { get; set; }
 
-        /// <summary><c>true</c> to require the peer to support SPV, <c>false</c> otherwise.</summary>
-        public bool SupportSPV { get; set; }
-
         /// <summary>
         /// Checks a version payload from a peer against the requirements.
         /// </summary>
         /// <param name="version">Version payload to check.</param>
+        /// <param name="inbound">Set to <c>true</c> if this is an inbound connection and <c>false</c> otherwise.</param>
+        /// <param name="reason">The reason the check failed.</param>
         /// <returns><c>true</c> if the version payload satisfies the protocol requirements, <c>false</c> otherwise.</returns>
-        public virtual bool Check(VersionPayload version)
+        public virtual bool Check(VersionPayload version, bool inbound, out string reason)
         {
+            reason = string.Empty;
             if (this.MinVersion != null)
             {
                 if (version.Version < this.MinVersion.Value)
+                {
+                    reason = "peer version is too low";
                     return false;
+                }
             }
 
-            if ((this.RequiredServices & version.Services) != this.RequiredServices)
+            if (!inbound && ((this.RequiredServices & version.Services) != this.RequiredServices))
             {
+                reason = "network service not supported";
                 return false;
-            }
-
-            if (this.SupportSPV)
-            {
-                if (version.Version < ProtocolVersion.MEMPOOL_GD_VERSION)
-                    return false;
-
-                if ((ProtocolVersion.NO_BLOOM_VERSION <= version.Version) && ((version.Services & NetworkPeerServices.NODE_BLOOM) == 0))
-                    return false;
             }
 
             return true;
@@ -98,8 +95,8 @@ namespace Stratis.Bitcoin.P2P.Peer
 
     /// <inheritdoc/>
     /// <remarks>
-    /// All instances of this object must be disposed or disconnected. <see cref="Disconnect(string, Exception)"/> and disposing methods 
-    /// have the same functionality and the disconnecting method is provided only for better readability of the code. 
+    /// All instances of this object must be disposed or disconnected. <see cref="Disconnect(string, Exception)"/> and disposing methods
+    /// have the same functionality and the disconnecting method is provided only for better readability of the code.
     /// <para>It is safe to try to disconnect or dispose this object multiple times, only the first call will be processed.</para>
     /// </remarks>
     public class NetworkPeer : INetworkPeer
@@ -111,17 +108,15 @@ namespace Stratis.Bitcoin.P2P.Peer
         private class DisconnectedExecutionAsyncContext
         {
             /// <summary>
-            /// Set to <c>true</c> if <see cref="NetworkPeer.onDisconnected"/> was 
+            /// Set to <c>true</c> if <see cref="NetworkPeer.onDisconnected"/> was
             /// called from within the current async context, set to <c>false</c> otherwise.
             /// </summary>
             public bool DisconnectCallbackRequested { get; set; }
         }
 
-        /// <summary>Factory for creating loggers.</summary>
-        private readonly ILoggerFactory loggerFactory;
-
         /// <summary>Tracker for endpoints known to be self. </summary>
         private readonly ISelfEndpointTracker selfEndpointTracker;
+        private readonly IAsyncProvider asyncProvider;
 
         /// <summary>Instance logger.</summary>
         private readonly ILogger logger;
@@ -133,12 +128,12 @@ namespace Stratis.Bitcoin.P2P.Peer
         public NetworkPeerState State { get; private set; }
 
         /// <summary>Table of valid transitions between peer states.</summary>
-        private static readonly Dictionary<NetworkPeerState, NetworkPeerState[]> stateTransitionTable = new Dictionary<NetworkPeerState, NetworkPeerState[]>()
+        private static readonly Dictionary<NetworkPeerState, NetworkPeerState[]> StateTransitionTable = new Dictionary<NetworkPeerState, NetworkPeerState[]>()
         {
-            { NetworkPeerState.Created, new []{ NetworkPeerState.Connected, NetworkPeerState.Offline, NetworkPeerState.Failed} },
-            { NetworkPeerState.Connected, new []{ NetworkPeerState.HandShaked, NetworkPeerState.Disconnecting, NetworkPeerState.Offline, NetworkPeerState.Failed} },
-            { NetworkPeerState.HandShaked, new []{ NetworkPeerState.Disconnecting, NetworkPeerState.Offline, NetworkPeerState.Failed} },
-            { NetworkPeerState.Disconnecting, new []{ NetworkPeerState.Offline, NetworkPeerState.Failed} },
+            { NetworkPeerState.Created, new[] { NetworkPeerState.Connected, NetworkPeerState.Offline, NetworkPeerState.Failed} },
+            { NetworkPeerState.Connected, new[] { NetworkPeerState.HandShaked, NetworkPeerState.Disconnecting, NetworkPeerState.Offline, NetworkPeerState.Failed} },
+            { NetworkPeerState.HandShaked, new[] { NetworkPeerState.Disconnecting, NetworkPeerState.Offline, NetworkPeerState.Failed} },
+            { NetworkPeerState.Disconnecting, new[] { NetworkPeerState.Offline, NetworkPeerState.Failed} },
             { NetworkPeerState.Offline, new NetworkPeerState[] {} },
             { NetworkPeerState.Failed, new NetworkPeerState[] {} }
         };
@@ -156,7 +151,7 @@ namespace Stratis.Bitcoin.P2P.Peer
         public bool Inbound { get; private set; }
 
         /// <inheritdoc/>
-        public NetworkPeerBehaviorsCollection Behaviors { get; private set; }
+        public List<INetworkPeerBehavior> Behaviors { get; private set; }
 
         /// <inheritdoc/>
         public IPEndPoint PeerEndPoint { get; private set; }
@@ -169,6 +164,7 @@ namespace Stratis.Bitcoin.P2P.Peer
 
         /// <summary>Statistics about the number of bytes transferred from and to the peer.</summary>
         private PerformanceCounter counter;
+
         /// <inheritdoc/>
         public PerformanceCounter Counter
         {
@@ -211,10 +207,10 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <inheritdoc/>
         public VersionPayload PeerVersion { get; private set; }
 
-        /// <summary>Set to <c>1</c> if the peer disconnection has been initiated, <c>0</c> otherwise.</summary> 
+        /// <summary>Set to <c>1</c> if the peer disconnection has been initiated, <c>0</c> otherwise.</summary>
         private int disconnected;
 
-        /// <summary>Set to <c>1</c> if the peer disposal has been initiated, <c>0</c> otherwise.</summary> 
+        /// <summary>Set to <c>1</c> if the peer disposal has been initiated, <c>0</c> otherwise.</summary>
         private int disposed;
 
         /// <summary>
@@ -253,6 +249,12 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <summary>Callback that is invoked when peer has finished disconnecting, or <c>null</c> when no notification after the disconnection is required.</summary>
         private readonly Action<INetworkPeer> onDisconnected;
 
+        /// <summary>Callback that is invoked just before a message is to be sent to a peer, or <c>null</c> when nothing needs to be called.</summary>
+        private readonly Action<IPEndPoint, Payload> onSendingMessage;
+
+        /// <summary>A queue for sending payload messages to peers.</summary>
+        private readonly IAsyncDelegateDequeuer<Payload> asyncPayloadsQueue;
+
         /// <summary>
         /// Initializes parts of the object that are common for both inbound and outbound peers.
         /// </summary>
@@ -271,9 +273,10 @@ namespace Stratis.Bitcoin.P2P.Peer
             IDateTimeProvider dateTimeProvider,
             ILoggerFactory loggerFactory,
             ISelfEndpointTracker selfEndpointTracker,
-            Action<INetworkPeer> onDisconnected = null)
+            IAsyncProvider asyncProvider,
+            Action<INetworkPeer> onDisconnected = null,
+            Action<IPEndPoint, Payload> onSendingMessage = null)
         {
-            this.loggerFactory = loggerFactory;
             this.dateTimeProvider = dateTimeProvider;
 
             this.preferredTransactionOptions = parameters.PreferredTransactionOptions;
@@ -287,17 +290,21 @@ namespace Stratis.Bitcoin.P2P.Peer
             this.RemoteSocketPort = this.RemoteSocketEndpoint.Port;
 
             this.Network = network;
-            this.Behaviors = new NetworkPeerBehaviorsCollection(this);
+            this.Behaviors = new List<INetworkPeerBehavior>();
             this.selfEndpointTracker = selfEndpointTracker;
-
+            this.asyncProvider = asyncProvider;
             this.onDisconnectedAsyncContext = new AsyncLocal<DisconnectedExecutionAsyncContext>();
 
             this.ConnectionParameters = parameters ?? new NetworkPeerConnectionParameters();
-            this.MyVersion = this.ConnectionParameters.CreateVersion(this.PeerEndPoint, network, this.dateTimeProvider.GetTimeOffset());
+            this.MyVersion = this.ConnectionParameters.CreateVersion(this.selfEndpointTracker.MyExternalAddress, this.PeerEndPoint, network, this.dateTimeProvider.GetTimeOffset());
 
             this.MessageReceived = new AsyncExecutionEvent<INetworkPeer, IncomingMessage>();
             this.StateChanged = new AsyncExecutionEvent<INetworkPeer, NetworkPeerState>();
             this.onDisconnected = onDisconnected;
+            this.onSendingMessage = onSendingMessage;
+
+            string dequeuerName = $"{nameof(NetworkPeer)}-{nameof(this.asyncPayloadsQueue)}-{this.PeerEndPoint.ToString()}";
+            this.asyncPayloadsQueue = asyncProvider.CreateAndRunAsyncDelegateDequeuer<Payload>(dequeuerName, this.SendMessageHandledAsync);
         }
 
         /// <summary>
@@ -318,8 +325,11 @@ namespace Stratis.Bitcoin.P2P.Peer
             IDateTimeProvider dateTimeProvider,
             ILoggerFactory loggerFactory,
             ISelfEndpointTracker selfEndpointTracker,
-            Action<INetworkPeer> onDisconnected = null)
-            : this(false, peerEndPoint, network, parameters, dateTimeProvider, loggerFactory, selfEndpointTracker, onDisconnected)
+            IAsyncProvider asyncProvider,
+            Action<INetworkPeer> onDisconnected = null,
+            Action<IPEndPoint, Payload> onSendingMessage = null
+            )
+            : this(false, peerEndPoint, network, parameters, dateTimeProvider, loggerFactory, selfEndpointTracker, asyncProvider, onDisconnected, onSendingMessage)
         {
             var client = new TcpClient(AddressFamily.InterNetworkV6);
             client.Client.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
@@ -329,9 +339,6 @@ namespace Stratis.Bitcoin.P2P.Peer
             this.Connection = networkPeerFactory.CreateNetworkPeerConnection(this, client, this.ProcessMessageAsync);
 
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName, $"[{this.Connection.Id}-{peerEndPoint}] ");
-            this.logger.LogTrace("()");
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -354,20 +361,19 @@ namespace Stratis.Bitcoin.P2P.Peer
             INetworkPeerFactory networkPeerFactory,
             ILoggerFactory loggerFactory,
             ISelfEndpointTracker selfEndpointTracker,
-            Action<INetworkPeer> onDisconnected = null)
-            : this(true, peerEndPoint, network, parameters, dateTimeProvider, loggerFactory, selfEndpointTracker, onDisconnected)
+            IAsyncProvider asyncProvider,
+            Action<INetworkPeer> onDisconnected = null,
+            Action<IPEndPoint, Payload> onSendingMessage = null)
+            : this(true, peerEndPoint, network, parameters, dateTimeProvider, loggerFactory, selfEndpointTracker, asyncProvider, onDisconnected, onSendingMessage)
         {
             this.Connection = networkPeerFactory.CreateNetworkPeerConnection(this, client, this.ProcessMessageAsync);
 
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName, $"[{this.Connection.Id}-{peerEndPoint}] ");
-            this.logger.LogTrace("()");
 
             this.logger.LogTrace("Connected to peer '{0}'.", this.PeerEndPoint);
 
             this.InitDefaultBehaviors(this.ConnectionParameters);
             this.Connection.StartReceiveMessages();
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -377,11 +383,9 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <remarks>This method is not thread safe.</remarks>
         private async Task SetStateAsync(NetworkPeerState newState)
         {
-            this.logger.LogTrace("({0}:{1},{2}:{3})", nameof(newState), newState, nameof(this.State), this.State);
-
             NetworkPeerState previous = this.State;
 
-            if (stateTransitionTable[previous].Contains(newState))
+            if (StateTransitionTable[previous].Contains(newState))
             {
                 this.State = newState;
 
@@ -398,15 +402,11 @@ namespace Stratis.Bitcoin.P2P.Peer
             {
                 this.logger.LogDebug("Illegal transition from {0} to {1} occurred.", previous, newState);
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <inheritdoc/>
         public async Task ConnectAsync(CancellationToken cancellation = default(CancellationToken))
         {
-            this.logger.LogTrace("()");
-
             try
             {
                 this.logger.LogTrace("Connecting to '{0}'.", this.PeerEndPoint);
@@ -448,8 +448,6 @@ namespace Stratis.Bitcoin.P2P.Peer
                 this.logger.LogTrace("(-)[EXCEPTION]");
                 throw;
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -458,8 +456,6 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <param name="previous">Previous network state of the peer.</param>
         private async Task OnStateChangedAsync(NetworkPeerState previous)
         {
-            this.logger.LogTrace("({0}:{1},{2}:{3})", nameof(previous), previous, nameof(this.State), this.State);
-
             bool insideCallback = this.onDisconnectedAsyncContext.Value == null;
             if (!insideCallback)
                 this.onDisconnectedAsyncContext.Value = new DisconnectedExecutionAsyncContext();
@@ -483,8 +479,6 @@ namespace Stratis.Bitcoin.P2P.Peer
                     this.onDisconnectedAsyncContext.Value = null;
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -494,8 +488,6 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <param name="cancellation">Cancellation token to abort message processing.</param>
         private async Task ProcessMessageAsync(IncomingMessage message, CancellationToken cancellation)
         {
-            this.logger.LogTrace("({0}:'{1}')", nameof(message), message.Message.Command);
-
             try
             {
                 switch (message.Message.Payload)
@@ -535,8 +527,6 @@ namespace Stratis.Bitcoin.P2P.Peer
 
                 this.onDisconnectedAsyncContext.Value = null;
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -546,14 +536,14 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <param name="cancellation">Cancellation token to abort message processing.</param>
         private async Task ProcessVersionMessageAsync(VersionPayload version, CancellationToken cancellation)
         {
-            this.logger.LogTrace("({0}:'{1}')", nameof(version), version);
-
             this.logger.LogTrace("Peer's state is {0}.", this.State);
 
             switch (this.State)
             {
                 case NetworkPeerState.Connected:
-                    if (this.Inbound) await this.ProcessInitialVersionPayloadAsync(version, cancellation).ConfigureAwait(false);
+                    if (this.Inbound)
+                        await this.ProcessInitialVersionPayloadAsync(version, cancellation).ConfigureAwait(false);
+
                     break;
 
                 case NetworkPeerState.HandShaked:
@@ -566,14 +556,13 @@ namespace Stratis.Bitcoin.P2P.Peer
 
                         await this.SendMessageAsync(rejectPayload, cancellation).ConfigureAwait(false);
                     }
+
                     break;
             }
 
             this.TimeOffset = this.dateTimeProvider.GetTimeOffset() - version.Timestamp;
             if ((version.Services & NetworkPeerServices.NODE_WITNESS) != 0)
                 this.SupportedTransactionOptions |= TransactionOptions.Witness;
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -584,8 +573,6 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <exception cref="OperationCanceledException">Thrown if the response to our "version" message is not received on time.</exception>
         private async Task ProcessInitialVersionPayloadAsync(VersionPayload version, CancellationToken cancellation)
         {
-            this.logger.LogTrace("({0}:'{1}')", nameof(version), version);
-
             this.PeerVersion = version;
             bool connectedToSelf = version.Nonce == this.ConnectionParameters.Nonce;
 
@@ -609,11 +596,18 @@ namespace Stratis.Bitcoin.P2P.Peer
                 {
                     await this.RespondToHandShakeAsync(cancellationSource.Token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException ex)
                 {
-                    this.logger.LogTrace("Remote peer haven't responded within 10 seconds of the handshake completion, dropping connection.");
-
-                    this.Disconnect("Handshake timeout");
+                    if (ex.CancellationToken == cancellationSource.Token)
+                    {
+                        this.logger.LogTrace("Remote peer hasn't responded within 10 seconds of the handshake completion, dropping connection.");
+                        this.Disconnect("Handshake timeout");
+                    }
+                    else
+                    {
+                        this.logger.LogTrace("Handshake problem, dropping connection. Problem: '{0}'.", ex.Message);
+                        this.Disconnect($"Handshake problem, reason: '{ex.Message}'.");
+                    }
 
                     this.logger.LogTrace("(-)[HANDSHAKE_TIMEDOUT]");
                     throw;
@@ -628,8 +622,6 @@ namespace Stratis.Bitcoin.P2P.Peer
                     throw;
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
@@ -638,27 +630,27 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <param name="parameters">Various settings and requirements related to how the connections with peers are going to be established, including the default behaviors template.</param>
         private void InitDefaultBehaviors(NetworkPeerConnectionParameters parameters)
         {
-            this.logger.LogTrace("()");
-
             this.advertize = parameters.Advertize;
             this.preferredTransactionOptions = parameters.PreferredTransactionOptions;
 
-            this.Behaviors.DelayAttach = true;
             foreach (INetworkPeerBehavior behavior in parameters.TemplateBehaviors)
             {
                 this.Behaviors.Add(behavior.Clone());
             }
 
-            this.Behaviors.DelayAttach = false;
-
-            this.logger.LogTrace("(-)");
+            if ((this.State == NetworkPeerState.Connected) || (this.State == NetworkPeerState.HandShaked))
+            {
+                foreach (INetworkPeerBehavior behavior in this.Behaviors)
+                {
+                    behavior.Attach(this);
+                }
+            }
         }
 
         /// <inheritdoc/>
-        public async Task SendMessageAsync(Payload payload, CancellationToken cancellation = default(CancellationToken))
+        public void SendMessage(Payload payload)
         {
             Guard.NotNull(payload, nameof(payload));
-            this.logger.LogTrace("({0}:'{1}')", nameof(payload), payload);
 
             if (!this.IsConnected)
             {
@@ -666,9 +658,45 @@ namespace Stratis.Bitcoin.P2P.Peer
                 throw new OperationCanceledException("The peer has been disconnected");
             }
 
-            await this.Connection.SendAsync(payload, cancellation).ConfigureAwait(false);
+            this.asyncPayloadsQueue.Enqueue(payload);
+        }
 
-            this.logger.LogTrace("(-)");
+        /// <summary>
+        /// This is used by the <see cref="asyncPayloadsQueue"/> to send payloads messages to peers under a separate thread.
+        /// If a message is sent inside the state change even and the send fails this could cause a deadlock,
+        /// to avoid that if there is any danger of a deadlock it better to use the SendMessage method and go via the queue.
+        /// </summary>
+        private async Task SendMessageHandledAsync(Payload payload, CancellationToken cancellation = default(CancellationToken))
+        {
+            try
+            {
+                await this.SendMessageAsync(payload, cancellation);
+            }
+            catch (OperationCanceledException)
+            {
+                this.logger.LogTrace("Connection to '{0}' cancelled.", this.PeerEndPoint);
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogError("Exception occurred while connecting to peer '{0}': {1}", this.PeerEndPoint, ex is SocketException ? ex.Message : ex.ToString());
+                throw;
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task SendMessageAsync(Payload payload, CancellationToken cancellation = default(CancellationToken))
+        {
+            Guard.NotNull(payload, nameof(payload));
+
+            if (!this.IsConnected)
+            {
+                this.logger.LogTrace("(-)[NOT_CONNECTED]");
+                throw new OperationCanceledException("The peer has been disconnected");
+            }
+
+            this.onSendingMessage?.Invoke(this.RemoteSocketEndpoint, payload);
+
+            await this.Connection.SendAsync(payload, cancellation).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
@@ -680,10 +708,8 @@ namespace Stratis.Bitcoin.P2P.Peer
         /// <inheritdoc/>
         public async Task VersionHandshakeAsync(NetworkPeerRequirement requirements, CancellationToken cancellationToken)
         {
-            this.logger.LogTrace("({0}.{1}:{2})", nameof(requirements), nameof(requirements.RequiredServices), requirements?.RequiredServices);
-
             requirements = requirements ?? new NetworkPeerRequirement();
-            using (var listener = new NetworkPeerListener(this))
+            using (var listener = new NetworkPeerListener(this, this.asyncProvider))
             {
                 this.logger.LogTrace("Sending my version.");
                 await this.SendMessageAsync(this.MyVersion, cancellationToken).ConfigureAwait(false);
@@ -718,15 +744,16 @@ namespace Stratis.Bitcoin.P2P.Peer
                                 return;
                             }
 
-                            if (!requirements.Check(versionPayload))
+                            if (!requirements.Check(versionPayload, this.Inbound, out string reason))
                             {
                                 this.logger.LogTrace("(-)[UNSUPPORTED_REQUIREMENTS]");
-                                this.Disconnect("The peer does not support the required services requirement");
+                                this.Disconnect("The peer does not support the required services requirement, reason: " + reason);
                                 return;
                             }
 
                             this.logger.LogTrace("Sending version acknowledgement.");
                             await this.SendMessageAsync(new VerAckPayload(), cancellationToken).ConfigureAwait(false);
+                            this.selfEndpointTracker.UpdateAndAssignMyExternalAddress(versionPayload.AddressFrom, false);
                             break;
 
                         case VerAckPayload verAckPayload:
@@ -750,16 +777,12 @@ namespace Stratis.Bitcoin.P2P.Peer
                     await this.SendMessageAsync(addrPayload, cancellationToken).ConfigureAwait(false);
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <inheritdoc/>
         public async Task RespondToHandShakeAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            this.logger.LogTrace("()");
-
-            using (var listener = new NetworkPeerListener(this))
+            using (var listener = new NetworkPeerListener(this, this.asyncProvider))
             {
                 this.logger.LogTrace("Responding to handshake with my version.");
                 await this.SendMessageAsync(this.MyVersion, cancellationToken).ConfigureAwait(false);
@@ -784,15 +807,11 @@ namespace Stratis.Bitcoin.P2P.Peer
                     }
                 }
             }
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <inheritdoc/>
         public void Disconnect(string reason, Exception exception = null)
         {
-            this.logger.LogTrace("({0}:'{1}')", nameof(reason), reason);
-
             if (Interlocked.CompareExchange(ref this.disconnected, 1, 0) == 1)
             {
                 this.logger.LogTrace("(-)[DISCONNECTED]");
@@ -814,18 +833,14 @@ namespace Stratis.Bitcoin.P2P.Peer
 
             NetworkPeerState newState = exception == null ? NetworkPeerState.Offline : NetworkPeerState.Failed;
             this.SetStateAsync(newState).GetAwaiter().GetResult();
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <summary>
         /// Executes <see cref="onDisconnected"/> callback if no callbacks are currently executing in the same async context,
-        /// schedules <see cref="onDisconnected"/> execution after the callback otherwise. 
+        /// schedules <see cref="onDisconnected"/> execution after the callback otherwise.
         /// </summary>
         private void ExecuteDisconnectedCallbackWhenSafe()
         {
-            this.logger.LogTrace("()");
-
             if (this.onDisconnected != null)
             {
                 // Value wasn't set in this async context, which means that we are outside of the callbacks execution and it is allowed to call `onDisconnected`.
@@ -842,16 +857,11 @@ namespace Stratis.Bitcoin.P2P.Peer
             }
             else
                 this.logger.LogTrace("Disconnection callback is not specified.");
-
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <inheritdoc />
         public void Dispose()
         {
-            this.logger.LogTrace("()");
-
             if (Interlocked.CompareExchange(ref this.disposed, 1, 0) == 1)
             {
                 this.logger.LogTrace("(-)[DISPOSED]");
@@ -867,6 +877,7 @@ namespace Stratis.Bitcoin.P2P.Peer
                 try
                 {
                     behavior.Detach();
+                    behavior.Dispose();
                 }
                 catch (Exception ex)
                 {
@@ -874,12 +885,11 @@ namespace Stratis.Bitcoin.P2P.Peer
                 }
             }
 
+            this.asyncPayloadsQueue.Dispose();
             this.Connection.Dispose();
 
             this.MessageReceived.Dispose();
             this.StateChanged.Dispose();
-
-            this.logger.LogTrace("(-)");
         }
 
         /// <inheritdoc />
@@ -895,9 +905,10 @@ namespace Stratis.Bitcoin.P2P.Peer
         }
 
         /// <inheritdoc />
-        public T Behavior<T>() where T : NetworkPeerBehavior
+        [NoTrace]
+        public T Behavior<T>() where T : INetworkPeerBehavior
         {
-            return this.Behaviors.Find<T>();
+            return this.Behaviors.OfType<T>().FirstOrDefault();
         }
     }
 }

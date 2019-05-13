@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Base.Deployments;
+using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Consensus.Rules;
 using Stratis.Bitcoin.Utilities;
 
@@ -13,7 +14,6 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
     /// <remarks>
     /// More info here https://github.com/bitcoin/bips/blob/master/bip-0030.mediawiki
     /// </remarks>
-    [ExecutionRule]
     public class TransactionDuplicationActivationRule : UtxoStoreConsensusRule
     {
         /// <inheritdoc />>
@@ -22,7 +22,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         {
             if (!context.SkipValidation)
             {
-                Block block = context.ValidationContext.Block;
+                Block block = context.ValidationContext.BlockToValidate;
                 DeploymentFlags flags = context.Flags;
                 var utxoRuleContext = context as UtxoRuleContext;
                 UnspentOutputSet view = utxoRuleContext.UnspentOutputSet;
@@ -34,13 +34,14 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
                         UnspentOutputs coins = view.AccessCoins(tx.GetHash());
                         if ((coins != null) && !coins.IsPrunable)
                         {
+                            this.Logger.LogTrace("Transaction '{0}' already found in store", tx.GetHash());
                             this.Logger.LogTrace("(-)[BAD_TX_BIP_30]");
                             ConsensusErrors.BadTransactionBIP30.Throw();
                         }
                     }
                 }
             }
-            else this.Logger.LogTrace("BIP30 validation skipped for checkpointed block at height {0}.", context.ValidationContext.ChainedHeader.Height);
+            else this.Logger.LogTrace("BIP30 validation skipped for checkpointed block at height {0}.", context.ValidationContext.ChainedHeaderToValidate.Height);
 
             return Task.CompletedTask;
         }

@@ -1,10 +1,27 @@
 ﻿using NBitcoin;
 using NBitcoin.DataEncoders;
 using Newtonsoft.Json;
+using Stratis.Bitcoin.Controllers.Converters;
 using Stratis.Bitcoin.Utilities;
 
 namespace Stratis.Bitcoin.Controllers.Models
 {
+    [JsonConverter(typeof(ToStringJsonConverter))]
+    public class HexModel
+    {
+        public string Hex { get; set; }
+
+        public HexModel(string hex)
+        {
+            this.Hex = hex;
+        }
+
+        public override string ToString()
+        {
+            return this.Hex;
+        }
+    }
+
     /// <summary>
     /// Data structure for block headers.
     /// Copied from RPC
@@ -28,6 +45,14 @@ namespace Stratis.Bitcoin.Controllers.Models
             string encodedBytes = Encoders.Hex.EncodeData(bytes);
             this.Bits = encodedBytes;
             this.Nonce = (int)blockHeader.Nonce;
+        }
+
+        /// <summary>
+        /// Constructs a BlockHeaderModel.
+        /// Used when deserializing block header from Json.
+        /// </summary>
+        public BlockHeaderModel()
+        {
         }
 
         /// <summary>

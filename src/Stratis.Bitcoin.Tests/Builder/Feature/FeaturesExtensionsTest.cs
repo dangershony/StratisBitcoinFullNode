@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Builder.Feature;
 using Xunit;
@@ -19,13 +20,17 @@ namespace Stratis.Bitcoin.Tests.Builder.Feature
         private class FeatureA : IFullNodeFeature
         {
             /// <inheritdoc />
+            public bool InitializeBeforeBase { get; set; }
+
+            public string State { get; set; }
+
             public void LoadConfiguration()
             {
                 throw new NotImplementedException();
             }
 
             /// <inheritdoc />
-            public void Initialize()
+            public Task InitializeAsync()
             {
                 throw new NotImplementedException();
             }
@@ -48,13 +53,17 @@ namespace Stratis.Bitcoin.Tests.Builder.Feature
         private class FeatureB : IFullNodeFeature
         {
             /// <inheritdoc />
+            public bool InitializeBeforeBase { get; set; }
+
+            public string State { get; set; }
+
             public void LoadConfiguration()
             {
                 throw new NotImplementedException();
             }
 
             /// <inheritdoc />
-            public void Initialize()
+            public Task InitializeAsync()
             {
                 throw new NotImplementedException();
             }

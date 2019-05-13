@@ -3,12 +3,18 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NBitcoin;
+using NBitcoin.Protocol;
 using Newtonsoft.Json;
+using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
+using Stratis.Bitcoin.Interfaces;
+using Stratis.Bitcoin.Tests.Common;
 using Stratis.Bitcoin.Tests.Common.Logging;
 using Stratis.Bitcoin.Tests.Wallet.Common;
 using Stratis.Bitcoin.Utilities;
@@ -19,10 +25,12 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
 {
     public class WalletManagerTest : LogsTestBase, IClassFixture<WalletFixture>
     {
+        private readonly IBlockStore blockStore;
         private readonly WalletFixture walletFixture;
 
         public WalletManagerTest(WalletFixture walletFixture)
         {
+            this.blockStore = new Mock<IBlockStore>().Object;
             this.walletFixture = walletFixture;
         }
 
@@ -34,9 +42,9 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var chain = new ConcurrentChain(Network.StratisMain);
+            var chain = new ChainIndexer(KnownNetworks.StratisMain);
             uint nonce = RandomUtils.GetUInt32();
-            var block = new Block();
+            var block = this.Network.CreateBlock();
             block.AddTransaction(new Transaction());
             block.UpdateMerkleRoot();
             block.Header.HashPrevBlock = chain.Genesis.HashBlock;
@@ -44,20 +52,21 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             block.Header.BlockTime = DateTimeOffset.Now;
             chain.SetTip(block.Header);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             string password = "test";
+            string passphrase = "test";
 
             // create the wallet
-            Mnemonic mnemonic = walletManager.CreateWallet(password, "mywallet");
+            Mnemonic mnemonic = walletManager.CreateWallet(password, "mywallet", passphrase);
 
             // assert it has saved it to disk and has been created correctly.
             var expectedWallet = JsonConvert.DeserializeObject<Wallet>(File.ReadAllText(dataFolder.WalletPath + "/mywallet.wallet.json"));
             Wallet actualWallet = walletManager.Wallets.ElementAt(0);
 
             Assert.Equal("mywallet", expectedWallet.Name);
-            Assert.Equal(Network.StratisMain, expectedWallet.Network);
+            Assert.Equal(KnownNetworks.StratisMain, expectedWallet.Network);
 
             Assert.Equal(expectedWallet.Name, actualWallet.Name);
             Assert.Equal(expectedWallet.Network, actualWallet.Network);
@@ -133,8 +142,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Assert.Equal(expectedBlockHash, expectedWallet.BlockLocator.ElementAt(1));
             Assert.Equal(expectedWallet.BlockLocator.ElementAt(1), actualWallet.BlockLocator.ElementAt(1));
 
-            Assert.Equal(actualWallet.EncryptedSeed, mnemonic.DeriveExtKey(password).PrivateKey.GetEncryptedBitcoinSecret(password, Network.StratisMain).ToWif());
-            Assert.Equal(expectedWallet.EncryptedSeed, mnemonic.DeriveExtKey(password).PrivateKey.GetEncryptedBitcoinSecret(password, Network.StratisMain).ToWif());
+            Assert.Equal(actualWallet.EncryptedSeed, mnemonic.DeriveExtKey(password).PrivateKey.GetEncryptedBitcoinSecret(password, KnownNetworks.StratisMain).ToWif());
+            Assert.Equal(expectedWallet.EncryptedSeed, mnemonic.DeriveExtKey(password).PrivateKey.GetEncryptedBitcoinSecret(password, KnownNetworks.StratisMain).ToWif());
         }
 
         /// <summary>
@@ -145,9 +154,9 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var chain = new ConcurrentChain(Network.StratisMain);
+            var chain = new ChainIndexer(KnownNetworks.StratisMain);
             uint nonce = RandomUtils.GetUInt32();
-            var block = new Block();
+            var block = this.Network.CreateBlock();
             block.AddTransaction(new Transaction());
             block.UpdateMerkleRoot();
             block.Header.HashPrevBlock = chain.Genesis.HashBlock;
@@ -155,8 +164,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             block.Header.BlockTime = DateTimeOffset.Now;
             chain.SetTip(block.Header);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             string password = "test";
             string passphrase = "this is my magic passphrase";
@@ -169,7 +178,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Wallet actualWallet = walletManager.Wallets.ElementAt(0);
 
             Assert.Equal("mywallet", expectedWallet.Name);
-            Assert.Equal(Network.StratisMain, expectedWallet.Network);
+            Assert.Equal(KnownNetworks.StratisMain, expectedWallet.Network);
 
             Assert.Equal(expectedWallet.Name, actualWallet.Name);
             Assert.Equal(expectedWallet.Network, actualWallet.Network);
@@ -245,8 +254,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Assert.Equal(expectedBlockHash, expectedWallet.BlockLocator.ElementAt(1));
             Assert.Equal(expectedWallet.BlockLocator.ElementAt(1), actualWallet.BlockLocator.ElementAt(1));
 
-            Assert.Equal(actualWallet.EncryptedSeed, mnemonic.DeriveExtKey(passphrase).PrivateKey.GetEncryptedBitcoinSecret(password, Network.StratisMain).ToWif());
-            Assert.Equal(expectedWallet.EncryptedSeed, mnemonic.DeriveExtKey(passphrase).PrivateKey.GetEncryptedBitcoinSecret(password, Network.StratisMain).ToWif());
+            Assert.Equal(actualWallet.EncryptedSeed, mnemonic.DeriveExtKey(passphrase).PrivateKey.GetEncryptedBitcoinSecret(password, KnownNetworks.StratisMain).ToWif());
+            Assert.Equal(expectedWallet.EncryptedSeed, mnemonic.DeriveExtKey(passphrase).PrivateKey.GetEncryptedBitcoinSecret(password, KnownNetworks.StratisMain).ToWif());
         }
 
         [Fact]
@@ -254,26 +263,41 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var chain = new ConcurrentChain(Network.StratisMain);
+            var chain = new ChainIndexer(KnownNetworks.StratisMain);
             uint nonce = RandomUtils.GetUInt32();
-            var block = new Block();
+            var block = this.Network.CreateBlock();
             block.AddTransaction(new Transaction());
             block.UpdateMerkleRoot();
             block.Header.HashPrevBlock = chain.Genesis.HashBlock;
             block.Header.Nonce = nonce;
             chain.SetTip(block.Header);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                                                    dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                                                    dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             string password = "test";
+            string passphrase = "this is my magic passphrase";
 
-            var mnemonicList = new Mnemonic(Wordlist.French, WordCount.Eighteen);
+            var mnemonic = new Mnemonic(Wordlist.French, WordCount.Eighteen);
 
-            // create the wallet
-            Mnemonic mnemonic = walletManager.CreateWallet(password, "mywallet", mnemonicList: mnemonicList.ToString());
+            Mnemonic returnedMnemonic = walletManager.CreateWallet(password, "mywallet", passphrase, mnemonic);
 
-            Assert.Equal(mnemonic.DeriveSeed(), mnemonicList.DeriveSeed());
+            Assert.Equal(mnemonic.DeriveSeed(), returnedMnemonic.DeriveSeed());
+        }
+
+        [Fact]
+        public void CreateWalletWithWalletSetting100UnusedAddressBufferCreates100AddressesToMonitor()
+        {
+            DataFolder dataFolder = CreateDataFolder(this);
+
+            var walletManager = this.CreateWalletManager(dataFolder, this.Network, "-walletaddressbuffer=100");
+
+            walletManager.CreateWallet("test", "mywallet", "this is my magic passphrase", new Mnemonic(Wordlist.English, WordCount.Eighteen));
+
+            HdAccount hdAccount = walletManager.Wallets.Single().AccountsRoot.Single().Accounts.Single();
+
+            Assert.Equal(100, hdAccount.ExternalAddresses.Count);
+            Assert.Equal(100, hdAccount.InternalAddresses.Count);
         }
 
         [Fact]
@@ -284,11 +308,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             loggerFactory.Setup(l => l.CreateLogger(It.IsAny<string>()))
                .Returns(new Mock<ILogger>().Object);
 
-            var walletManager = new WalletManager(loggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                                                  dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(loggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                                                  dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
-            var concurrentChain = new ConcurrentChain(Network.Main);
-            ChainedHeader tip = WalletTestsHelpers.AppendBlock(null, concurrentChain).ChainedHeader;
+            var concurrentChain = new ChainIndexer(this.Network);
+            ChainedHeader tip = WalletTestsHelpers.AppendBlock(this.Network, null, concurrentChain).ChainedHeader;
 
             walletManager.Wallets.Add(WalletTestsHelpers.CreateWallet("wallet1"));
             walletManager.Wallets.Add(WalletTestsHelpers.CreateWallet("wallet2"));
@@ -313,31 +337,31 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
 
             File.WriteAllText(Path.Combine(dataFolder.WalletPath, "testWallet.wallet.json"), JsonConvert.SerializeObject(wallet, Formatting.Indented, new ByteArrayConverter()));
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                                                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                                                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             Wallet result = walletManager.LoadWallet("password", "testWallet");
 
             Assert.Equal("testWallet", result.Name);
-            Assert.Equal(Network.Main, result.Network);
+            Assert.Equal(this.Network, result.Network);
 
             Assert.Single(walletManager.Wallets);
             Assert.Equal("testWallet", walletManager.Wallets.ElementAt(0).Name);
-            Assert.Equal(Network.Main, walletManager.Wallets.ElementAt(0).Network);
+            Assert.Equal(this.Network, walletManager.Wallets.ElementAt(0).Network);
         }
 
         [Fact]
         public void LoadWalletWithNonExistingWalletThrowsFileNotFoundException()
         {
             Assert.Throws<FileNotFoundException>(() =>
-           {
-               DataFolder dataFolder = CreateDataFolder(this);
+            {
+                DataFolder dataFolder = CreateDataFolder(this);
 
-               var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                                                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                                                 dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
-               walletManager.LoadWallet("password", "testWallet");
-           });
+                walletManager.LoadWallet("password", "testWallet");
+            });
         }
 
         [Fact]
@@ -349,14 +373,14 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             string passphrase = "this is my magic passphrase";
             string walletName = "mywallet";
 
-            ConcurrentChain chain = WalletTestsHelpers.PrepareChainWithBlock();
+            ChainIndexer chainIndexer = WalletTestsHelpers.PrepareChainWithBlock();
             // Prepare an existing wallet through this manager and delete the file from disk. Return the created wallet object and mnemonic.
-            (Mnemonic mnemonic, Wallet wallet) deletedWallet = this.CreateWalletOnDiskAndDeleteWallet(dataFolder, password, passphrase, walletName, chain);
+            (Mnemonic mnemonic, Wallet wallet) deletedWallet = this.CreateWalletOnDiskAndDeleteWallet(dataFolder, password, passphrase, walletName, chainIndexer);
             Assert.False(File.Exists(Path.Combine(dataFolder.WalletPath + $"/{walletName}.wallet.json")));
 
             // create a fresh manager.
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // Try to recover it.
             Wallet recoveredWallet = walletManager.RecoverWallet(password, walletName, deletedWallet.mnemonic.ToString(), DateTime.Now.AddDays(1), passphrase);
@@ -440,14 +464,14 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             string password = "test";
             string walletName = "mywallet";
 
-            ConcurrentChain chain = WalletTestsHelpers.PrepareChainWithBlock();
+            ChainIndexer chainIndexer = WalletTestsHelpers.PrepareChainWithBlock();
             // prepare an existing wallet through this manager and delete the file from disk. Return the created wallet object and mnemonic.
-            (Mnemonic mnemonic, Wallet wallet) deletedWallet = this.CreateWalletOnDiskAndDeleteWallet(dataFolder, password, password, walletName, chain);
+            (Mnemonic mnemonic, Wallet wallet) deletedWallet = this.CreateWalletOnDiskAndDeleteWallet(dataFolder, password, password, walletName, chainIndexer);
             Assert.False(File.Exists(Path.Combine(dataFolder.WalletPath + $"/{walletName}.wallet.json")));
 
             // create a fresh manager.
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // try to recover it.
             Wallet recoveredWallet = walletManager.RecoverWallet(password, walletName, deletedWallet.mnemonic.ToString(), DateTime.Now.AddDays(1), password);
@@ -528,8 +552,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // generate 3 wallet with 2 accounts containing 20 external and 20 internal addresses each.
             walletManager.Wallets.Add(WalletTestsHelpers.CreateWallet("wallet1"));
@@ -544,7 +568,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
                 walletManager.LoadKeysLookupLock();
             });
 
-            Assert.Equal(240, walletManager.keysLookup.Count);
+            Assert.Equal(240, walletManager.scriptToAddressLookup.Count);
         }
 
         [Fact]
@@ -553,8 +577,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             DataFolder dataFolder = CreateDataFolder(this);
             Assert.Throws<WalletException>(() =>
             {
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                    dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
                 walletManager.GetUnusedAccount("nonexisting", "password");
             });
@@ -565,8 +589,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("testWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount { Name = "unused" });
             walletManager.Wallets.Add(wallet);
@@ -582,8 +606,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("testWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Clear();
             walletManager.Wallets.Add(wallet);
@@ -591,6 +615,10 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             HdAccount result = walletManager.GetUnusedAccount("testWallet", "password");
 
             Assert.Equal("account 0", result.Name);
+
+            int addressBuffer = new WalletSettings(NodeSettings.Default(this.Network)).UnusedAddressesBuffer;
+            Assert.Equal(addressBuffer, result.ExternalAddresses.Count);
+            Assert.Equal(addressBuffer, result.InternalAddresses.Count);
             Assert.True(File.Exists(Path.Combine(dataFolder.WalletPath + $"/testWallet.wallet.json")));
         }
 
@@ -599,8 +627,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("testWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount { Name = "unused" });
             walletManager.Wallets.Add(wallet);
@@ -616,8 +644,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("testWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Clear();
             walletManager.Wallets.Add(wallet);
@@ -633,13 +661,12 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            Network network = Network.Main;
-            var walletManager = new WalletManager(this.LoggerFactory.Object, network, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("testWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Clear();
 
-            HdAccount result = wallet.AddNewAccount("password", (CoinType)network.Consensus.CoinType, DateTimeOffset.UtcNow);
+            HdAccount result = wallet.AddNewAccount("password", DateTimeOffset.UtcNow);
 
             Assert.Equal(1, wallet.AccountsRoot.ElementAt(0).Accounts.Count);
             var extKey = new ExtKey(Key.Parse(wallet.EncryptedSeed, "password", wallet.Network), wallet.ChainCode);
@@ -657,13 +684,13 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            Network network = Network.Main;
-            var walletManager = new WalletManager(this.LoggerFactory.Object, network, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            Network network = this.Network;
+            var walletManager = new WalletManager(this.LoggerFactory.Object, network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("testWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount { Name = "unused" });
 
-            HdAccount result = wallet.AddNewAccount("password", (CoinType)network.Consensus.CoinType, DateTimeOffset.UtcNow);
+            HdAccount result = wallet.AddNewAccount("password", DateTimeOffset.UtcNow);
 
             Assert.Equal(2, wallet.AccountsRoot.ElementAt(0).Accounts.Count);
             var extKey = new ExtKey(Key.Parse(wallet.EncryptedSeed, "password", wallet.Network), wallet.ChainCode);
@@ -681,8 +708,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             Assert.Throws<WalletException>(() =>
             {
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
                 Wallet wallet = this.walletFixture.GenerateBlankWallet("testWallet", "password");
                 walletManager.Wallets.Add(wallet);
 
@@ -695,8 +722,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             Assert.Throws<WalletException>(() =>
             {
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
                 walletManager.GetUnusedAddress(new WalletAccountReference("nonexisting", "account"));
             });
@@ -707,8 +734,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
@@ -743,11 +770,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         public void GetOrCreateChangeAddressWithWalletHavingUnusedAddressReturnsAddress()
         {
             DataFolder dataFolder = CreateDataFolder(this);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            var bob = new BitcoinSecret(new Key(), Network.RegTest);
-            var alice = new BitcoinSecret(new Key(), Network.RegTest);
+            var bob = new BitcoinSecret(new Key(), KnownNetworks.RegTest);
+            var alice = new BitcoinSecret(new Key(), KnownNetworks.RegTest);
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
                 Index = 0,
@@ -774,8 +801,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             });
             walletManager.Wallets.Add(wallet);
 
-            HdAddress result = walletManager.GetUnusedChangeAddress(new WalletAccountReference(wallet.Name, wallet.AccountsRoot.First().Accounts.First().Name));
-            
+            HdAddress result = walletManager.GetUnusedChangeAddress(new WalletAccountReference(wallet.Name, wallet.AccountsRoot.Single().Accounts.First().Name));
+
             Assert.Equal(alice.GetAddress().ToString(), result.Address);
         }
 
@@ -784,8 +811,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
             Directory.CreateDirectory(dataFolder.WalletPath);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
 
             var extKey = new ExtKey(Key.Parse(wallet.EncryptedSeed, "password", wallet.Network), wallet.ChainCode);
@@ -801,8 +828,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
                 ExternalAddresses = new List<HdAddress>()
             });
             walletManager.Wallets.Add(wallet);
-            
-            HdAddress result = walletManager.GetUnusedChangeAddress(new WalletAccountReference(wallet.Name, wallet.AccountsRoot.First().Accounts.First().Name));
+
+            HdAddress result = walletManager.GetUnusedChangeAddress(new WalletAccountReference(wallet.Name, wallet.AccountsRoot.Single().Accounts.First().Name));
 
             Assert.NotNull(result.Address);
         }
@@ -812,8 +839,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
             Directory.CreateDirectory(dataFolder.WalletPath);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             var extKey = new ExtKey(Key.Parse(wallet.EncryptedSeed, "password", wallet.Network), wallet.ChainCode);
             string accountExtendedPubKey = extKey.Derive(new KeyPath($"m/44'/0'/0'")).Neuter().ToString(wallet.Network);
@@ -857,8 +884,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetHistoryByNameWithExistingWalletReturnsAllAddressesWithTransactions()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
@@ -897,8 +924,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetHistoryByAccountWithExistingAccountReturnsAllAddressesWithTransactions()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
 
             var account = new HdAccount
@@ -939,8 +966,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetHistoryByAccountWithoutHavingAddressesWithTransactionsReturnsEmptyList()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
 
             var account = new HdAccount
@@ -967,8 +994,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             Assert.Throws<WalletException>(() =>
             {
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
                 walletManager.GetHistory("noname");
             });
         }
@@ -976,8 +1003,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetWalletByNameWithExistingWalletReturnsWallet()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             walletManager.Wallets.Add(wallet);
 
@@ -991,8 +1018,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             Assert.Throws<WalletException>(() =>
             {
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
                 walletManager.GetWallet("noname");
             });
         }
@@ -1000,36 +1027,26 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetAccountsByNameWithExistingWalletReturnsAccountsFromWallet()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount { Name = "Account 0" });
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount { Name = "Account 1" });
-            wallet.AccountsRoot.Add(new AccountRoot()
-            {
-                CoinType = CoinType.Stratis,
-                Accounts = new List<HdAccount> { new HdAccount { Name = "Account 2" } }
-            });
-            wallet.AccountsRoot.Add(new AccountRoot()
-            {
-                CoinType = CoinType.Bitcoin,
-                Accounts = new List<HdAccount> { new HdAccount { Name = "Account 3" } }
-            });
+
             walletManager.Wallets.Add(wallet);
 
             IEnumerable<HdAccount> result = walletManager.GetAccounts("myWallet");
 
-            Assert.Equal(3, result.Count());
+            Assert.Equal(2, result.Count());
             Assert.Equal("Account 0", result.ElementAt(0).Name);
             Assert.Equal("Account 1", result.ElementAt(1).Name);
-            Assert.Equal("Account 3", result.ElementAt(2).Name);
         }
 
         [Fact]
         public void GetAccountsByNameWithExistingWalletMissingAccountsReturnsEmptyList()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             wallet.AccountsRoot.Clear();
             walletManager.Wallets.Add(wallet);
@@ -1044,8 +1061,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             Assert.Throws<WalletException>(() =>
             {
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
                 walletManager.GetAccounts("myWallet");
             });
@@ -1054,17 +1071,17 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void LastBlockHeightWithoutWalletsReturnsChainTipHeight()
         {
-            var chain = new ConcurrentChain(Network.StratisMain);
+            var chain = new ChainIndexer(KnownNetworks.StratisMain);
             uint nonce = RandomUtils.GetUInt32();
-            var block = new Block();
-            block.AddTransaction(new Transaction());
+            var block = this.Network.CreateBlock();
+            block.AddTransaction(this.Network.CreateTransaction());
             block.UpdateMerkleRoot();
             block.Header.HashPrevBlock = chain.Genesis.HashBlock;
             block.Header.Nonce = nonce;
             chain.SetTip(block.Header);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             int result = walletManager.LastBlockHeight();
 
@@ -1072,62 +1089,10 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         }
 
         [Fact]
-        public void LastBlockHeightWithWalletsReturnsLowestLastBlockSyncedHeightForAccountRootsOfManagerCoinType()
-        {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
-            Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
-            wallet.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 15;
-            Wallet wallet2 = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet2.AccountsRoot.ElementAt(0).CoinType = CoinType.Bitcoin;
-            wallet2.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 20;
-            Wallet wallet3 = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet3.AccountsRoot.ElementAt(0).CoinType = CoinType.Bitcoin;
-            wallet3.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 56;
-            walletManager.Wallets.Add(wallet);
-            walletManager.Wallets.Add(wallet2);
-            walletManager.Wallets.Add(wallet3);
-
-            int result = walletManager.LastBlockHeight();
-
-            Assert.Equal(20, result);
-        }
-
-        [Fact]
-        public void LastBlockHeightWithWalletsReturnsLowestLastBlockSyncedHeightForAccountRootsOfManagerCoinType2()
-        {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
-            Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
-            wallet.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 15;
-            wallet.AccountsRoot.Add(new AccountRoot()
-            {
-                CoinType = CoinType.Bitcoin,
-                LastBlockSyncedHeight = 12
-            });
-
-            Wallet wallet2 = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet2.AccountsRoot.ElementAt(0).CoinType = CoinType.Bitcoin;
-            wallet2.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 20;
-            Wallet wallet3 = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet3.AccountsRoot.ElementAt(0).CoinType = CoinType.Bitcoin;
-            wallet3.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 56;
-            walletManager.Wallets.Add(wallet);
-            walletManager.Wallets.Add(wallet2);
-            walletManager.Wallets.Add(wallet3);
-
-            int result = walletManager.LastBlockHeight();
-
-            Assert.Equal(12, result);
-        }
-
-        [Fact]
         public void LastBlockHeightWithoutWalletsOfCoinTypeReturnsZero()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             wallet.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
             walletManager.Wallets.Add(wallet);
@@ -1140,107 +1105,48 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void LastReceivedBlockHashWithoutWalletsReturnsChainTipHashBlock()
         {
-            var chain = new ConcurrentChain(Network.StratisMain);
+            var chain = new ChainIndexer(KnownNetworks.StratisMain);
             uint nonce = RandomUtils.GetUInt32();
-            var block = new Block();
-            block.AddTransaction(new Transaction());
+            var block = this.Network.CreateBlock();
+            block.AddTransaction(this.Network.CreateTransaction());
             block.UpdateMerkleRoot();
             block.Header.HashPrevBlock = chain.Genesis.HashBlock;
             block.Header.Nonce = nonce;
             chain.SetTip(block.Header);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             uint256 result = walletManager.LastReceivedBlockHash();
 
             Assert.Equal(chain.Tip.HashBlock, result);
-        }
-
-        [Fact]
-        public void LastReceivedBlockHashWithWalletsReturnsLowestLastBlockSyncedHashForAccountRootsOfManagerCoinType()
-        {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
-            Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
-            wallet.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 15;
-            wallet.AccountsRoot.ElementAt(0).LastBlockSyncedHash = new uint256(15);
-            Wallet wallet2 = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet2.AccountsRoot.ElementAt(0).CoinType = CoinType.Bitcoin;
-            wallet2.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 20;
-            wallet2.AccountsRoot.ElementAt(0).LastBlockSyncedHash = new uint256(20);
-            Wallet wallet3 = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet3.AccountsRoot.ElementAt(0).CoinType = CoinType.Bitcoin;
-            wallet3.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 56;
-            wallet3.AccountsRoot.ElementAt(0).LastBlockSyncedHash = new uint256(56);
-            walletManager.Wallets.Add(wallet);
-            walletManager.Wallets.Add(wallet2);
-            walletManager.Wallets.Add(wallet3);
-
-            uint256 result = walletManager.LastReceivedBlockHash();
-
-            Assert.Equal(new uint256(20), result);
-        }
-
-        [Fact]
-        public void LastReceivedBlockHashWithWalletsReturnsLowestLastReceivedBlockHashForAccountRootsOfManagerCoinType2()
-        {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
-            Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
-            wallet.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 15;
-            wallet.AccountsRoot.ElementAt(0).LastBlockSyncedHash = new uint256(15);
-            wallet.AccountsRoot.Add(new AccountRoot()
-            {
-                CoinType = CoinType.Bitcoin,
-                LastBlockSyncedHeight = 12,
-                LastBlockSyncedHash = new uint256(12)
-            });
-
-            Wallet wallet2 = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet2.AccountsRoot.ElementAt(0).CoinType = CoinType.Bitcoin;
-            wallet2.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 20;
-            wallet2.AccountsRoot.ElementAt(0).LastBlockSyncedHash = new uint256(20);
-            Wallet wallet3 = this.walletFixture.GenerateBlankWallet("myWallet", "password");
-            wallet3.AccountsRoot.ElementAt(0).CoinType = CoinType.Bitcoin;
-            wallet3.AccountsRoot.ElementAt(0).LastBlockSyncedHeight = 56;
-            wallet3.AccountsRoot.ElementAt(0).LastBlockSyncedHash = new uint256(56);
-            walletManager.Wallets.Add(wallet);
-            walletManager.Wallets.Add(wallet2);
-            walletManager.Wallets.Add(wallet3);
-
-            uint256 result = walletManager.LastReceivedBlockHash();
-
-            Assert.Equal(new uint256(12), result);
         }
 
         [Fact]
         public void NoLastReceivedBlockHashInWalletReturnsChainTip()
         {
-            ConcurrentChain chain = WalletTestsHelpers.GenerateChainWithHeight(2, Network.Main);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            ChainIndexer chainIndexer = WalletTestsHelpers.GenerateChainWithHeight(2, this.Network);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             wallet.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
             walletManager.Wallets.Add(wallet);
 
             uint256 result = walletManager.LastReceivedBlockHash();
-            Assert.Equal(chain.Tip.HashBlock, result);
+            Assert.Equal(chainIndexer.Tip.HashBlock, result);
         }
 
         [Fact]
         public void GetSpendableTransactionsWithChainOfHeightZeroReturnsNoTransactions()
         {
-            ConcurrentChain chain = WalletTestsHelpers.GenerateChainWithHeight(0, Network.Main);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            ChainIndexer chainIndexer = WalletTestsHelpers.GenerateChainWithHeight(0, this.Network);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
-                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.Main, 1, 9, 10),
-                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.Main, 2, 9, 10)
+                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(this.Network, 1, 9, 10),
+                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(this.Network, 2, 9, 10)
             });
 
             walletManager.Wallets.Add(wallet);
@@ -1256,15 +1162,15 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetSpendableTransactionsReturnsTransactionsGivenBlockHeight()
         {
-            ConcurrentChain chain = WalletTestsHelpers.GenerateChainWithHeight(10, Network.Main);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            ChainIndexer chainIndexer = WalletTestsHelpers.GenerateChainWithHeight(10, this.Network);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
                 Name = "First expectation",
-                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.Main, 1, 9, 10),
-                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.Main, 2, 9, 10)
+                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(this.Network, 1, 9, 10),
+                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(this.Network, 2, 9, 10)
             });
 
             wallet.AccountsRoot.Add(new AccountRoot()
@@ -1273,8 +1179,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
                 Accounts = new List<HdAccount>
                 {
                     new HdAccount {
-                        ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.StratisMain, 8,9,10),
-                        InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.StratisMain, 8,9,10)
+                        ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(KnownNetworks.StratisMain, 8,9,10),
+                        InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(KnownNetworks.StratisMain, 8,9,10)
                     }
                 }
             });
@@ -1283,16 +1189,16 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             wallet2.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
             wallet2.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
-                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.StratisMain, 1, 3, 5, 7, 9, 10),
-                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.StratisMain, 2, 4, 6, 8, 9, 10)
+                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(KnownNetworks.StratisMain, 1, 3, 5, 7, 9, 10),
+                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(KnownNetworks.StratisMain, 2, 4, 6, 8, 9, 10)
             });
 
             Wallet wallet3 = this.walletFixture.GenerateBlankWallet("myWallet3", "password");
             wallet3.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
                 Name = "Second expectation",
-                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.Main, 5, 9, 11),
-                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.Main, 6, 9, 11)
+                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(this.Network, 5, 9, 11),
+                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(this.Network, 6, 9, 11)
             });
 
             walletManager.Wallets.Add(wallet);
@@ -1323,15 +1229,15 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetSpendableTransactionsWithSpentTransactionsReturnsSpendableTransactionsGivenBlockHeight()
         {
-            ConcurrentChain chain = WalletTestsHelpers.GenerateChainWithHeight(10, Network.Main);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            ChainIndexer chainIndexer = WalletTestsHelpers.GenerateChainWithHeight(10, this.Network);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
                 Name = "First expectation",
-                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.Main, 1, 9, 11).Concat(WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(Network.Main, 1, 9, 11)).ToList(),
-                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.Main, 2, 9, 11).Concat(WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(Network.Main, 2, 9, 11)).ToList()
+                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(this.Network, 1, 9, 11).Concat(WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(this.Network, 1, 9, 11)).ToList(),
+                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(this.Network, 2, 9, 11).Concat(WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(this.Network, 2, 9, 11)).ToList()
             });
 
             walletManager.Wallets.Add(wallet);
@@ -1366,47 +1272,26 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             Assert.Throws<WalletException>(() =>
             {
-                ConcurrentChain chain = WalletTestsHelpers.GenerateChainWithHeight(10, Network.Main);
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                ChainIndexer chainIndexer = WalletTestsHelpers.GenerateChainWithHeight(10, this.Network);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
                 walletManager.GetSpendableTransactionsInWallet("myWallet", confirmations: 1);
             });
         }
 
         [Fact]
-        public void GetSpendableTransactionsWithoutWalletsOfWalletManagerCoinTypeReturnsEmptyList()
-        {
-            ConcurrentChain chain = WalletTestsHelpers.GenerateChainWithHeight(10, Network.Main);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
-
-            Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet2", "password");
-            wallet.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
-            wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
-            {
-                ExternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.StratisMain, 1, 3, 5, 7, 9, 10),
-                InternalAddresses = WalletTestsHelpers.CreateUnspentTransactionsOfBlockHeights(Network.StratisMain, 2, 4, 6, 8, 9, 10)
-            });
-            walletManager.Wallets.Add(wallet);
-
-            IEnumerable<UnspentOutputReference> result = walletManager.GetSpendableTransactionsInWallet("myWallet2", confirmations: 1);
-
-            Assert.Empty(result);
-        }
-
-        [Fact]
         public void GetSpendableTransactionsWithOnlySpentTransactionsReturnsEmptyList()
         {
-            ConcurrentChain chain = WalletTestsHelpers.GenerateChainWithHeight(10, Network.Main);
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            ChainIndexer chainIndexer = WalletTestsHelpers.GenerateChainWithHeight(10, this.Network);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
                 Name = "First expectation",
-                ExternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(Network.Main, 1, 9, 10),
-                InternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(Network.Main, 2, 9, 10)
+                ExternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(this.Network, 1, 9, 10),
+                InternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(this.Network, 2, 9, 10)
             });
 
             walletManager.Wallets.Add(wallet);
@@ -1421,8 +1306,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             Assert.Throws<WalletException>(() =>
             {
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
                 Wallet wallet = walletManager.GetWalletByName("mywallet");
                 Key key = wallet.GetExtendedPrivateKeyForAddress("password", new HdAddress()).PrivateKey;
@@ -1432,8 +1317,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetKeyForAddressWithWalletReturnsAddressExtPrivateKey()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             (Wallet wallet, ExtKey key) data = WalletTestsHelpers.GenerateBlankWalletWithExtKey("myWallet", "password");
 
             var address = new HdAddress
@@ -1463,8 +1348,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             Assert.Throws<WalletException>(() =>
             {
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                    CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
                 (Wallet wallet, ExtKey key) data = WalletTestsHelpers.GenerateBlankWalletWithExtKey("myWallet", "password");
 
                 var address = new HdAddress
@@ -1529,7 +1414,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             };
 
             //Generate a spendable transaction
-            (ConcurrentChain chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
+            (ChainIndexer chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
             TransactionData spendingTransaction = WalletTestsHelpers.CreateTransactionDataFromFirstBlock(chainInfo);
             spendingAddress.Transactions.Add(spendingTransaction);
 
@@ -1550,8 +1435,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             walletFeePolicy.Setup(w => w.GetMinimumFee(258, 50))
                 .Returns(new Money(5000));
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainInfo.chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.LoadKeysLookupLock();
             walletManager.ProcessTransaction(transaction);
@@ -1618,7 +1503,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             };
 
             //Generate a spendable transaction
-            (ConcurrentChain chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
+            (ChainIndexer chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
             TransactionData spendingTransaction = WalletTestsHelpers.CreateTransactionDataFromFirstBlock(chainInfo);
             spendingAddress.Transactions.Add(spendingTransaction);
 
@@ -1641,8 +1526,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             walletFeePolicy.Setup(w => w.GetMinimumFee(258, 50))
                 .Returns(new Money(5000));
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainInfo.chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.LoadKeysLookupLock();
             walletManager.ProcessTransaction(transaction);
@@ -1704,7 +1589,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             };
 
             //Generate a spendable transaction
-            (ConcurrentChain chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
+            (ChainIndexer chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
             TransactionData spendingTransaction = WalletTestsHelpers.CreateTransactionDataFromFirstBlock(chainInfo);
             spendingAddress.Transactions.Add(spendingTransaction);
 
@@ -1725,8 +1610,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             walletFeePolicy.Setup(w => w.GetMinimumFee(258, 50))
                 .Returns(new Money(5000));
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainInfo.chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.LoadKeysLookupLock();
 
@@ -1751,6 +1636,79 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Assert.Equal(transaction.GetHash(), changeAddressResult.Id);
             Assert.Equal(transaction.Outputs[1].Value, changeAddressResult.Amount);
             Assert.Equal(transaction.Outputs[1].ScriptPubKey, changeAddressResult.ScriptPubKey);
+        }
+
+        [Fact]
+        public void ProcessTransactionWithDestinationAsMultisigAddTransactionAsPayment()
+        {
+            DataFolder dataFolder = CreateDataFolder(this);
+            Directory.CreateDirectory(dataFolder.WalletPath);
+
+            Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
+            (ExtKey ExtKey, string ExtPubKey) accountKeys = WalletTestsHelpers.GenerateAccountKeys(wallet, "password", "m/44'/0'/0'");
+            (PubKey PubKey, BitcoinPubKeyAddress Address) spendingKeys = WalletTestsHelpers.GenerateAddressKeys(wallet, accountKeys.ExtPubKey, "0/0");
+            (PubKey PubKey, BitcoinPubKeyAddress Address) changeKeys = WalletTestsHelpers.GenerateAddressKeys(wallet, accountKeys.ExtPubKey, "1/0");
+
+            var spendingAddress = new HdAddress
+            {
+                Index = 0,
+                HdPath = $"m/44'/0'/0'/0/0",
+                Address = spendingKeys.Address.ToString(),
+                Pubkey = spendingKeys.PubKey.ScriptPubKey,
+                ScriptPubKey = spendingKeys.Address.ScriptPubKey,
+                Transactions = new List<TransactionData>()
+            };
+
+            var changeAddress = new HdAddress
+            {
+                Index = 0,
+                HdPath = $"m/44'/0'/0'/1/0",
+                Address = changeKeys.Address.ToString(),
+                Pubkey = changeKeys.PubKey.ScriptPubKey,
+                ScriptPubKey = changeKeys.Address.ScriptPubKey,
+                Transactions = new List<TransactionData>()
+            };
+
+            //Generate a spendable transaction
+            (ChainIndexer chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
+            TransactionData spendingTransaction = WalletTestsHelpers.CreateTransactionDataFromFirstBlock(chainInfo);
+            spendingAddress.Transactions.Add(spendingTransaction);
+
+            wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
+            {
+                Index = 0,
+                Name = "account1",
+                HdPath = "m/44'/0'/0'",
+                ExtendedPubKey = accountKeys.ExtPubKey,
+                ExternalAddresses = new List<HdAddress> { spendingAddress },
+                InternalAddresses = new List<HdAddress> { changeAddress }
+            });
+
+            // setup a payment to yourself
+            Script scriptToHash = new PayToScriptHashTemplate().GenerateScriptPubKey(new Key().PubKey.ScriptPubKey);
+            Transaction transaction = WalletTestsHelpers.SetupValidTransaction(wallet, "password", spendingAddress, scriptToHash, changeAddress, new Money(7500), new Money(5000));
+
+            var walletFeePolicy = new Mock<IWalletFeePolicy>();
+            walletFeePolicy.Setup(w => w.GetMinimumFee(258, 50))
+                .Returns(new Money(5000));
+
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainInfo.chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
+            walletManager.Wallets.Add(wallet);
+            walletManager.LoadKeysLookupLock();
+            walletManager.ProcessTransaction(transaction);
+
+            HdAddress spentAddressResult = wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).ExternalAddresses.ElementAt(0);
+            Assert.Equal(1, spendingAddress.Transactions.Count);
+            Assert.Equal(transaction.GetHash(), spentAddressResult.Transactions.ElementAt(0).SpendingDetails.TransactionId);
+            Assert.Equal(transaction.Outputs[1].Value, spentAddressResult.Transactions.ElementAt(0).SpendingDetails.Payments.ElementAt(0).Amount);
+            Assert.Equal(transaction.Outputs[1].ScriptPubKey, spentAddressResult.Transactions.ElementAt(0).SpendingDetails.Payments.ElementAt(0).DestinationScriptPubKey);
+
+            Assert.Equal(1, wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).InternalAddresses.ElementAt(0).Transactions.Count);
+            TransactionData changeAddressResult = wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).InternalAddresses.ElementAt(0).Transactions.ElementAt(0);
+            Assert.Equal(transaction.GetHash(), changeAddressResult.Id);
+            Assert.Equal(transaction.Outputs[0].Value, changeAddressResult.Amount);
+            Assert.Equal(transaction.Outputs[0].ScriptPubKey, changeAddressResult.ScriptPubKey);
         }
 
         [Fact]
@@ -1796,7 +1754,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             };
 
             //Generate a spendable transaction
-            (ConcurrentChain chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
+            (ChainIndexer chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
             TransactionData spendingTransaction = WalletTestsHelpers.CreateTransactionDataFromFirstBlock(chainInfo);
             spendingAddress.Transactions.Add(spendingTransaction);
 
@@ -1817,14 +1775,14 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             walletFeePolicy.Setup(w => w.GetMinimumFee(258, 50))
                 .Returns(new Money(5000));
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainInfo.chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.LoadKeysLookupLock();
 
             Block block = WalletTestsHelpers.AppendTransactionInNewBlockToChain(chainInfo.chain, transaction);
 
-            int blockHeight = chainInfo.chain.GetBlock(block.GetHash()).Height;
+            int blockHeight = chainInfo.chain.GetHeader(block.GetHash()).Height;
             walletManager.ProcessTransaction(transaction, blockHeight);
 
             HdAddress spentAddressResult = wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).ExternalAddresses.ElementAt(0);
@@ -1892,7 +1850,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             };
 
             //Generate a spendable transaction
-            (ConcurrentChain chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
+            (ChainIndexer chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
             TransactionData spendingTransaction = WalletTestsHelpers.CreateTransactionDataFromFirstBlock(chainInfo);
             spendingAddress.Transactions.Add(spendingTransaction);
 
@@ -1913,8 +1871,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             walletFeePolicy.Setup(w => w.GetMinimumFee(258, 50))
                 .Returns(new Money(5000));
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainInfo.chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.LoadKeysLookupLock();
 
@@ -2027,8 +1985,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         //        var nodeCollection = new NodesCollection();
         //        nodeCollection.Add(node);
 
-        //        var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-        //            dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+        //        var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(this.Network), new WalletSettings(NodeSettings.Default(this.Network)),
+        //            dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default);
         //        walletManager.Wallets.Add(wallet);
 
         //        var result = walletManager.SendTransaction(transaction.ToHex());
@@ -2140,8 +2098,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         //        var nodeCollection = new NodesCollection();
         //        nodeCollection.Add(node);
 
-        //        var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-        //            dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+        //        var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(this.Network), new WalletSettings(NodeSettings.Default(this.Network)),
+        //            dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default);
         //        walletManager.Wallets.Add(wallet);
 
         //        var result = walletManager.SendTransaction(transaction.ToHex());
@@ -2256,8 +2214,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         //        var nodeCollection = new NodesCollection();
         //        nodeCollection.Add(node);
 
-        //        var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-        //            dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+        //        var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(this.Network), new WalletSettings(NodeSettings.Default(this.Network)),
+        //            dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default);
         //        walletManager.Wallets.Add(wallet);
 
         //        var result = walletManager.SendTransaction(transaction.ToHex());
@@ -2282,17 +2240,17 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             uint256 trxId = uint256.Parse("21e74d1daed6dec93d58396a3406803c5fc8d220b59f4b4dd185cab5f7a9a22e");
             int trxCount = 0;
-            var concurrentchain = new ConcurrentChain(Network.Main);
-            ChainedHeader chainedHeader = WalletTestsHelpers.AppendBlock(null, concurrentchain).ChainedHeader;
-            chainedHeader = WalletTestsHelpers.AppendBlock(chainedHeader, concurrentchain).ChainedHeader;
-            chainedHeader = WalletTestsHelpers.AppendBlock(chainedHeader, concurrentchain).ChainedHeader;
+            var concurrentchain = new ChainIndexer(this.Network);
+            ChainedHeader chainedHeader = WalletTestsHelpers.AppendBlock(this.Network, null, concurrentchain).ChainedHeader;
+            chainedHeader = WalletTestsHelpers.AppendBlock(this.Network, chainedHeader, concurrentchain).ChainedHeader;
+            chainedHeader = WalletTestsHelpers.AppendBlock(this.Network, chainedHeader, concurrentchain).ChainedHeader;
 
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
                 Name = "First account",
-                ExternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(Network.Main, 1, 2, 3, 4, 5).ToList(),
-                InternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(Network.Main, 1, 2, 3, 4, 5).ToList()
+                ExternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(this.Network, 1, 2, 3, 4, 5).ToList(),
+                InternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(this.Network, 1, 2, 3, 4, 5).ToList()
             });
 
             // reorg at block 3
@@ -2315,8 +2273,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).InternalAddresses.ElementAt(2).Transactions.First().SpendingDetails.TransactionId = trxId >> trxCount++; ;
             wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).InternalAddresses.ElementAt(2).Transactions.First().SpendingDetails.BlockHeight = 5;
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.LoadKeysLookupLock();
             walletManager.RemoveBlocks(chainedHeader);
@@ -2337,11 +2295,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void ProcessBlockWithoutWalletsSetsWalletTipToBlockHash()
         {
-            var concurrentchain = new ConcurrentChain(Network.Main);
-            (ChainedHeader ChainedHeader, Block Block) blockResult = WalletTestsHelpers.AppendBlock(null, concurrentchain);
+            var concurrentchain = new ChainIndexer(this.Network);
+            (ChainedHeader ChainedHeader, Block Block) blockResult = WalletTestsHelpers.AppendBlock(this.Network, null, concurrentchain);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             walletManager.ProcessBlock(blockResult.Block, blockResult.ChainedHeader);
 
@@ -2391,7 +2349,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             };
 
             //Generate a spendable transaction
-            (ConcurrentChain chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
+            (ChainIndexer chain, uint256 blockhash, Block block) chainInfo = WalletTestsHelpers.CreateChainAndCreateFirstBlockWithPaymentToAddress(wallet.Network, spendingAddress);
 
             TransactionData spendingTransaction = WalletTestsHelpers.CreateTransactionDataFromFirstBlock(chainInfo);
             spendingAddress.Transactions.Add(spendingTransaction);
@@ -2414,13 +2372,13 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             walletFeePolicy.Setup(w => w.GetMinimumFee(258, 50))
                 .Returns(new Money(5000));
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chainInfo.chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, walletFeePolicy.Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chainInfo.chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, walletFeePolicy.Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.LoadKeysLookupLock();
             walletManager.WalletTipHash = block.Header.GetHash();
 
-            ChainedHeader chainedBlock = chainInfo.chain.GetBlock(block.GetHash());
+            ChainedHeader chainedBlock = chainInfo.chain.GetHeader(block.GetHash());
             walletManager.ProcessBlock(block, chainedBlock);
 
             HdAddress spentAddressResult = wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).ExternalAddresses.ElementAt(0);
@@ -2457,11 +2415,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
 
                 Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
 
-                var chain = new ConcurrentChain(wallet.Network.GetGenesis().Header);
-                (ChainedHeader ChainedHeader, Block Block) chainResult = WalletTestsHelpers.AppendBlock(chain.Genesis, chain);
+                var chain = new ChainIndexer(wallet.Network);
+                (ChainedHeader ChainedHeader, Block Block) chainResult = WalletTestsHelpers.AppendBlock(this.Network, chain.Genesis, chain);
 
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                    dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
                 walletManager.Wallets.Add(wallet);
 
                 walletManager.WalletTipHash = new uint256(15012522521);
@@ -2480,12 +2438,12 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
 
                 Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
 
-                var chain = new ConcurrentChain(wallet.Network.GetGenesis().Header);
-                (ChainedHeader ChainedHeader, Block Block) chainResult = WalletTestsHelpers.AppendBlock(chain.Genesis, chain);
-                (ChainedHeader ChainedHeader, Block Block) chainResult2 = WalletTestsHelpers.AppendBlock(chainResult.ChainedHeader, chain);
+                var chain = new ChainIndexer(wallet.Network);
+                (ChainedHeader ChainedHeader, Block Block) chainResult = WalletTestsHelpers.AppendBlock(this.Network, chain.Genesis, chain);
+                (ChainedHeader ChainedHeader, Block Block) chainResult2 = WalletTestsHelpers.AppendBlock(this.Network, chainResult.ChainedHeader, chain);
 
-                var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                    dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+                var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                    dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
                 walletManager.Wallets.Add(wallet);
 
                 walletManager.WalletTipHash = wallet.Network.GetGenesis().Header.GetHash();
@@ -2499,14 +2457,14 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // generate 3 wallet with 2 accounts containing 20 external and 20 internal addresses each.
             walletManager.Wallets.Add(WalletTestsHelpers.CreateWallet("wallet1"));
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.Single().Accounts.First();
 
             // add two unconfirmed transactions
             for (int i = 1; i < 3; i++)
@@ -2515,19 +2473,31 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
                 firstAccount.ExternalAddresses.ElementAt(i).Transactions.Add(new TransactionData { Amount = 10 });
             }
 
-            Assert.Equal(0, firstAccount.GetSpendableAmount().ConfirmedAmount);
-            Assert.Equal(40, firstAccount.GetSpendableAmount().UnConfirmedAmount);
+            Assert.Equal(0, firstAccount.GetBalances().ConfirmedAmount);
+            Assert.Equal(40, firstAccount.GetBalances().UnConfirmedAmount);
         }
 
         [Fact]
         public void GetAccountBalancesReturnsCorrectAccountBalances()
         {
+
             // Arrange.
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
-            
+            // Initialize chain object.
+            var chain = new ChainIndexer(KnownNetworks.StratisMain);
+            uint nonce = RandomUtils.GetUInt32();
+            var block = this.Network.CreateBlock();
+            block.AddTransaction(new Transaction());
+            block.UpdateMerkleRoot();
+            block.Header.HashPrevBlock = chain.Genesis.HashBlock;
+            block.Header.Nonce = nonce;
+            block.Header.BlockTime = DateTimeOffset.Now;
+            chain.SetTip(block.Header);
+
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
+
             HdAccount account = WalletTestsHelpers.CreateAccount("account 1");
             HdAddress accountAddress1 = WalletTestsHelpers.CreateAddress();
             accountAddress1.Transactions.Add(WalletTestsHelpers.CreateTransaction(new uint256(1), new Money(15000), null));
@@ -2556,7 +2526,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
 
             Wallet wallet = WalletTestsHelpers.CreateWallet("myWallet");
             wallet.AccountsRoot.Add(new AccountRoot());
-            wallet.AccountsRoot.First().Accounts = accounts;
+            wallet.AccountsRoot.Single().Accounts = accounts;
 
             walletManager.Wallets.Add(wallet);
 
@@ -2582,14 +2552,14 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // generate 3 wallet with 2 accounts containing 20 external and 20 internal addresses each.
             walletManager.Wallets.Add(WalletTestsHelpers.CreateWallet("wallet1"));
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.Single().Accounts.First();
 
             // add two confirmed transactions
             for (int i = 1; i < 3; i++)
@@ -2598,8 +2568,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
                 firstAccount.ExternalAddresses.ElementAt(i).Transactions.Add(new TransactionData { Amount = 10, BlockHeight = 10 });
             }
 
-            Assert.Equal(40, firstAccount.GetSpendableAmount().ConfirmedAmount);
-            Assert.Equal(0, firstAccount.GetSpendableAmount().UnConfirmedAmount);
+            Assert.Equal(40, firstAccount.GetBalances().ConfirmedAmount);
+            Assert.Equal(0, firstAccount.GetBalances().UnConfirmedAmount);
         }
 
         [Fact]
@@ -2607,14 +2577,14 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // generate 3 wallet with 2 accounts containing 20 external and 20 internal addresses each.
             walletManager.Wallets.Add(WalletTestsHelpers.CreateWallet("wallet1"));
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.Single().Accounts.First();
 
             // add two spent transactions
             for (int i = 1; i < 3; i++)
@@ -2623,8 +2593,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
                 firstAccount.ExternalAddresses.ElementAt(i).Transactions.Add(new TransactionData { Amount = 10, BlockHeight = 10, SpendingDetails = new SpendingDetails() });
             }
 
-            Assert.Equal(0, firstAccount.GetSpendableAmount().ConfirmedAmount);
-            Assert.Equal(0, firstAccount.GetSpendableAmount().UnConfirmedAmount);
+            Assert.Equal(0, firstAccount.GetBalances().ConfirmedAmount);
+            Assert.Equal(0, firstAccount.GetBalances().UnConfirmedAmount);
         }
 
         [Fact]
@@ -2632,14 +2602,14 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // generate 3 wallet with 2 accounts containing 20 external and 20 internal addresses each.
             walletManager.Wallets.Add(WalletTestsHelpers.CreateWallet("wallet1"));
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.Single().Accounts.First();
 
             // add two spent transactions
             for (int i = 1; i < 3; i++)
@@ -2654,8 +2624,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
                 firstAccount.ExternalAddresses.ElementAt(i).Transactions.Add(new TransactionData { Amount = 10, BlockHeight = 10 });
             }
 
-            Assert.Equal(40, firstAccount.GetSpendableAmount().ConfirmedAmount);
-            Assert.Equal(0, firstAccount.GetSpendableAmount().UnConfirmedAmount);
+            Assert.Equal(40, firstAccount.GetBalances().ConfirmedAmount);
+            Assert.Equal(0, firstAccount.GetBalances().UnConfirmedAmount);
         }
 
         [Fact]
@@ -2663,14 +2633,14 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         {
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // generate 3 wallet with 2 accounts containing 20 external and 20 internal addresses each.
             walletManager.Wallets.Add(WalletTestsHelpers.CreateWallet("wallet1"));
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = walletManager.Wallets.First().AccountsRoot.Single().Accounts.First();
 
             // add two spent transactions
             for (int i = 1; i < 3; i++)
@@ -2685,8 +2655,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
                 firstAccount.ExternalAddresses.ElementAt(i).Transactions.Add(new TransactionData { Amount = 10 });
             }
 
-            Assert.Equal(0, firstAccount.GetSpendableAmount().ConfirmedAmount);
-            Assert.Equal(40, firstAccount.GetSpendableAmount().UnConfirmedAmount);
+            Assert.Equal(0, firstAccount.GetBalances().ConfirmedAmount);
+            Assert.Equal(40, firstAccount.GetBalances().UnConfirmedAmount);
         }
 
         [Fact]
@@ -2697,8 +2667,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Wallet wallet = this.walletFixture.GenerateBlankWallet("wallet1", "test");
             Wallet wallet2 = this.walletFixture.GenerateBlankWallet("wallet2", "test");
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.Wallets.Add(wallet2);
 
@@ -2733,8 +2703,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Wallet wallet = this.walletFixture.GenerateBlankWallet("wallet1", "test");
             Wallet wallet2 = this.walletFixture.GenerateBlankWallet("wallet2", "test");
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.Wallets.Add(wallet2);
 
@@ -2757,8 +2727,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetWalletFileExtensionReturnsWalletExtension()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             string result = walletManager.GetWalletFileExtension();
 
@@ -2771,8 +2741,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Wallet wallet = this.walletFixture.GenerateBlankWallet("wallet1", "test");
             Wallet wallet2 = this.walletFixture.GenerateBlankWallet("wallet2", "test");
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.Wallets.Add(wallet2);
 
@@ -2786,8 +2756,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         [Fact]
         public void GetWalletsWithoutLoadedWalletsReturnsEmptyList()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             IOrderedEnumerable<string> result = walletManager.GetWalletsNames().OrderBy(w => w);
 
@@ -2801,40 +2771,40 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             wallet.AccountsRoot.ElementAt(0).Accounts.Add(new HdAccount
             {
                 Name = "First account",
-                ExternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(Network.Main, 1, 2, 3).ToList(),
-                InternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(Network.Main, 1, 2, 3).ToList()
+                ExternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(this.Network, 1, 2, 3).ToList(),
+                InternalAddresses = WalletTestsHelpers.CreateSpentTransactionsOfBlockHeights(this.Network, 1, 2, 3).ToList()
             });
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
 
             walletManager.LoadKeysLookupLock();
 
-            Assert.NotNull(walletManager.keysLookup);
-            Assert.Equal(6, walletManager.keysLookup.Count);
+            Assert.NotNull(walletManager.scriptToAddressLookup);
+            Assert.Equal(6, walletManager.scriptToAddressLookup.Count);
 
             ICollection<HdAddress> externalAddresses = wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).ExternalAddresses;
-            Assert.Equal(externalAddresses.ElementAt(0).Address, walletManager.keysLookup[externalAddresses.ElementAt(0).ScriptPubKey].Address);
-            Assert.Equal(externalAddresses.ElementAt(1).Address, walletManager.keysLookup[externalAddresses.ElementAt(1).ScriptPubKey].Address);
-            Assert.Equal(externalAddresses.ElementAt(2).Address, walletManager.keysLookup[externalAddresses.ElementAt(2).ScriptPubKey].Address);
+            Assert.Equal(externalAddresses.ElementAt(0).Address, walletManager.scriptToAddressLookup[externalAddresses.ElementAt(0).ScriptPubKey].Address);
+            Assert.Equal(externalAddresses.ElementAt(1).Address, walletManager.scriptToAddressLookup[externalAddresses.ElementAt(1).ScriptPubKey].Address);
+            Assert.Equal(externalAddresses.ElementAt(2).Address, walletManager.scriptToAddressLookup[externalAddresses.ElementAt(2).ScriptPubKey].Address);
 
             ICollection<HdAddress> internalAddresses = wallet.AccountsRoot.ElementAt(0).Accounts.ElementAt(0).InternalAddresses;
-            Assert.Equal(internalAddresses.ElementAt(0).Address, walletManager.keysLookup[internalAddresses.ElementAt(0).ScriptPubKey].Address);
-            Assert.Equal(internalAddresses.ElementAt(1).Address, walletManager.keysLookup[internalAddresses.ElementAt(1).ScriptPubKey].Address);
-            Assert.Equal(internalAddresses.ElementAt(2).Address, walletManager.keysLookup[internalAddresses.ElementAt(2).ScriptPubKey].Address);
+            Assert.Equal(internalAddresses.ElementAt(0).Address, walletManager.scriptToAddressLookup[internalAddresses.ElementAt(0).ScriptPubKey].Address);
+            Assert.Equal(internalAddresses.ElementAt(1).Address, walletManager.scriptToAddressLookup[internalAddresses.ElementAt(1).ScriptPubKey].Address);
+            Assert.Equal(internalAddresses.ElementAt(2).Address, walletManager.scriptToAddressLookup[internalAddresses.ElementAt(2).ScriptPubKey].Address);
         }
 
         [Fact]
         public void LoadKeysLookupWithoutWalletsInitializesEmptyDictionary()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             walletManager.LoadKeysLookupLock();
 
-            Assert.NotNull(walletManager.keysLookup);
-            Assert.Empty(walletManager.keysLookup);
+            Assert.NotNull(walletManager.scriptToAddressLookup);
+            Assert.Empty(walletManager.scriptToAddressLookup.Values);
         }
 
         [Fact]
@@ -2861,8 +2831,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Wallet wallet = this.walletFixture.GenerateBlankWallet("wallet1", "test");
             Wallet wallet2 = this.walletFixture.GenerateBlankWallet("wallet2", "test");
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.Wallets.Add(wallet2);
 
@@ -2895,11 +2865,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
             Wallet wallet2 = this.walletFixture.GenerateBlankWallet("myWallet2", "password");
 
-            var chain = new ConcurrentChain(wallet.Network.GetGenesis().Header);
-            ChainedHeader chainedBlock = WalletTestsHelpers.AppendBlock(chain.Genesis, chain).ChainedHeader;
+            var chain = new ChainIndexer(wallet.Network);
+            ChainedHeader chainedBlock = WalletTestsHelpers.AppendBlock(this.Network, chain.Genesis, chain).ChainedHeader;
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.Wallets.Add(wallet2);
             walletManager.WalletTipHash = new uint256(125125125);
@@ -2921,11 +2891,11 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
             Wallet wallet2 = this.walletFixture.GenerateBlankWallet("myWallet2", "password");
 
-            var chain = new ConcurrentChain(wallet.Network.GetGenesis().Header);
-            ChainedHeader chainedBlock = WalletTestsHelpers.AppendBlock(chain.Genesis, chain).ChainedHeader;
+            var chain = new ChainIndexer(wallet.Network);
+            ChainedHeader chainedBlock = WalletTestsHelpers.AppendBlock(this.Network, chain.Genesis, chain).ChainedHeader;
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, chain, new WalletSettings(NodeSettings.Default(this.Network)),
+                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
             walletManager.Wallets.Add(wallet);
             walletManager.Wallets.Add(wallet2);
             walletManager.WalletTipHash = new uint256(125125125);
@@ -2943,42 +2913,20 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
         }
 
         [Fact]
-        public void UpdateLastBlockSyncedHeightWithWalletAccountRootOfDifferentCoinTypeDoesNotUpdateLastSyncedInformation()
-        {
-            Wallet wallet = this.walletFixture.GenerateBlankWallet("myWallet1", "password");
-            wallet.AccountsRoot.ElementAt(0).CoinType = CoinType.Stratis;
-
-            var chain = new ConcurrentChain(wallet.Network.GetGenesis().Header);
-            ChainedHeader chainedBlock = WalletTestsHelpers.AppendBlock(chain.Genesis, chain).ChainedHeader;
-
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                CreateDataFolder(this), new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
-            walletManager.Wallets.Add(wallet);
-            walletManager.WalletTipHash = new uint256(125125125);
-
-            walletManager.UpdateLastBlockSyncedHeight(wallet, chainedBlock);
-
-            Assert.Equal(chainedBlock.GetLocator().Blocks, wallet.BlockLocator);
-            Assert.NotEqual(chainedBlock.Height, wallet.AccountsRoot.ElementAt(0).LastBlockSyncedHeight);
-            Assert.NotEqual(chainedBlock.HashBlock, wallet.AccountsRoot.ElementAt(0).LastBlockSyncedHash);
-            Assert.NotEqual(chainedBlock.HashBlock, walletManager.WalletTipHash);
-        }
-
-        [Fact]
         public void RemoveAllTransactionsInWalletReturnsRemovedTransactionsList()
         {
             // Arrange.
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // Generate a wallet with an account and a few transactions.
             Wallet wallet = WalletTestsHelpers.CreateWallet("wallet1");
             walletManager.Wallets.Add(wallet);
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = wallet.AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = wallet.AccountsRoot.Single().Accounts.First();
 
             // Add two unconfirmed transactions.
             uint256 trxId = uint256.Parse("d6043add63ec364fcb591cf209285d8e60f1cc06186d4dcbce496cdbb4303400");
@@ -3014,15 +2962,15 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             // Arrange.
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // Generate a wallet with an account and no transactions.
             Wallet wallet = WalletTestsHelpers.CreateWallet("wallet1");
             walletManager.Wallets.Add(wallet);
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = wallet.AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = wallet.AccountsRoot.Single().Accounts.First();
 
             int transactionCount = firstAccount.GetCombinedAddresses().SelectMany(a => a.Transactions).Count();
             Assert.Equal(0, transactionCount);
@@ -3041,22 +2989,22 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             // Arrange.
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // Generate a wallet with an account and a few transactions.
             Wallet wallet = WalletTestsHelpers.CreateWallet("wallet1");
             walletManager.Wallets.Add(wallet);
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = wallet.AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = wallet.AccountsRoot.Single().Accounts.First();
 
             // Add two unconfirmed transactions.
             uint256 trxId = uint256.Parse("d6043add63ec364fcb591cf209285d8e60f1cc06186d4dcbce496cdbb4303400");
             int counter = 0;
 
-            var trxUnconfirmed1 = new TransactionData {Amount = 10, Id = trxId >> counter++ };
-            var trxUnconfirmed2 = new TransactionData {Amount = 10, Id = trxId >> counter++ };
+            var trxUnconfirmed1 = new TransactionData { Amount = 10, Id = trxId >> counter++ };
+            var trxUnconfirmed2 = new TransactionData { Amount = 10, Id = trxId >> counter++ };
             var trxConfirmed1 = new TransactionData { Amount = 10, Id = trxId >> counter++, BlockHeight = 50000 };
             var trxConfirmed2 = new TransactionData { Amount = 10, Id = trxId >> counter++, BlockHeight = 50001 };
 
@@ -3069,7 +3017,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Assert.Equal(4, transactionCount);
 
             // Act.
-            HashSet<(uint256, DateTimeOffset)> result = walletManager.RemoveTransactionsByIds("wallet1", new [] {trxUnconfirmed1.Id, trxUnconfirmed2.Id, trxConfirmed1.Id, trxConfirmed2.Id });
+            HashSet<(uint256, DateTimeOffset)> result = walletManager.RemoveTransactionsByIdsLocked("wallet1", new[] { trxUnconfirmed1.Id, trxUnconfirmed2.Id, trxConfirmed1.Id, trxConfirmed2.Id });
 
             // Assert.
             List<TransactionData> remainingTrxs = firstAccount.GetCombinedAddresses().SelectMany(a => a.Transactions).ToList();
@@ -3087,15 +3035,15 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             // Arrange.
             DataFolder dataFolder = CreateDataFolder(this);
 
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.Main, new Mock<ConcurrentChain>().Object, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            var walletManager = new WalletManager(this.LoggerFactory.Object, this.Network, new Mock<ChainIndexer>().Object, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // Generate a wallet with an account and a few transactions.
             Wallet wallet = WalletTestsHelpers.CreateWallet("wallet1");
             walletManager.Wallets.Add(wallet);
             WalletTestsHelpers.AddAddressesToWallet(walletManager, 20);
 
-            HdAccount firstAccount = wallet.AccountsRoot.First().Accounts.First();
+            HdAccount firstAccount = wallet.AccountsRoot.Single().Accounts.First();
 
             // Add two unconfirmed transactions.
             uint256 trxId = uint256.Parse("d6043add63ec364fcb591cf209285d8e60f1cc06186d4dcbce496cdbb4303400");
@@ -3109,10 +3057,10 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             uint256 unconfirmedTransactionId = trxId >> counter++;
             var unconfirmedSpendingDetails1 = new SpendingDetails { TransactionId = unconfirmedTransactionId };
             var trxConfirmed2 = new TransactionData { Amount = 10, Id = trxId >> counter++, BlockHeight = 50001, SpendingDetails = unconfirmedSpendingDetails1 };
-            
+
             // Unconfirmed transaction.
             var trxUnconfirmed1 = new TransactionData { Amount = 10, Id = unconfirmedTransactionId };
-            
+
             firstAccount.ExternalAddresses.ElementAt(0).Transactions.Add(trxUnconfirmed1);
             firstAccount.ExternalAddresses.ElementAt(1).Transactions.Add(trxConfirmed1);
             firstAccount.InternalAddresses.ElementAt(1).Transactions.Add(trxConfirmed2);
@@ -3121,7 +3069,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Assert.Equal(3, transactionCount);
 
             // Act.
-            HashSet<(uint256, DateTimeOffset)> result = walletManager.RemoveTransactionsByIds("wallet1", new[]
+            HashSet<(uint256, DateTimeOffset)> result = walletManager.RemoveTransactionsByIdsLocked("wallet1", new[]
             {
                 trxConfirmed1.Id, // Shouldn't be removed.
                 unconfirmedTransactionId, // A transaction + a spending transaction should be removed.
@@ -3138,10 +3086,167 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             Assert.Null(trxConfirmed2.SpendingDetails);
         }
 
-        private (Mnemonic mnemonic, Wallet wallet) CreateWalletOnDiskAndDeleteWallet(DataFolder dataFolder, string password, string passphrase, string walletName, ConcurrentChain chain)
+        [Fact]
+        public void Start_takes_account_of_address_buffer_even_for_existing_wallets()
         {
-            var walletManager = new WalletManager(this.LoggerFactory.Object, Network.StratisMain, chain, NodeSettings.Default(), new Mock<WalletSettings>().Object,
-                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncLoopFactory>().Object, new NodeLifetime(), DateTimeProvider.Default);
+            DataFolder dataFolder = CreateDataFolder(this);
+
+            WalletManager walletManager = this.CreateWalletManager(dataFolder, this.Network);
+            walletManager.CreateWallet("test", "mywallet", passphrase: new Mnemonic(Wordlist.English, WordCount.Eighteen).ToString());
+
+            // Default of 20 addresses becuause walletaddressbuffer not set
+            HdAccount hdAccount = walletManager.Wallets.Single().AccountsRoot.Single().Accounts.Single();
+            Assert.Equal(20, hdAccount.ExternalAddresses.Count);
+            Assert.Equal(20, hdAccount.InternalAddresses.Count);
+
+            // Restart with walletaddressbuffer set
+            walletManager = this.CreateWalletManager(dataFolder, this.Network, "-walletaddressbuffer=30");
+            walletManager.Start();
+
+            // Addresses populated to fill the buffer set
+            hdAccount = walletManager.Wallets.Single().AccountsRoot.Single().Accounts.Single();
+            Assert.Equal(30, hdAccount.ExternalAddresses.Count);
+            Assert.Equal(30, hdAccount.InternalAddresses.Count);
+        }
+
+        [Fact]
+        public void Recover_via_xpubkey_can_recover_wallet_without_mnemonic()
+        {
+            DataFolder dataFolder = CreateDataFolder(this);
+
+            const string stratisAccount0ExtPubKey = "xpub661MyMwAqRbcEgnsMFfhjdrwR52TgicebTrbnttywb9zn3orkrzn6MHJrgBmKrd7MNtS6LAim44a6V2gizt3jYVPHGYq1MzAN849WEyoedJ";
+            var walletManager = this.CreateWalletManager(dataFolder, this.Network);
+            walletManager.RecoverWallet("testWallet", ExtPubKey.Parse(stratisAccount0ExtPubKey), 0, DateTime.Now.AddHours(-2));
+
+            var wallet = walletManager.LoadWallet("password", "testWallet");
+
+            wallet.IsExtPubKeyWallet.Should().BeTrue();
+            wallet.EncryptedSeed.Should().BeNull();
+            wallet.ChainCode.Should().BeNull();
+
+            wallet.AccountsRoot.SelectMany(x => x.Accounts).Single().ExtendedPubKey
+                .Should().Be(stratisAccount0ExtPubKey);
+        }
+
+        [Fact]
+        public void AddNewAccount_via_xpubkey_prevents_adding_an_account_as_an_existing_account_index()
+        {
+            DataFolder dataFolder = CreateDataFolder(this);
+
+            const string stratisAccount0ExtPubKey = "xpub661MyMwAqRbcEgnsMFfhjdrwR52TgicebTrbnttywb9zn3orkrzn6MHJrgBmKrd7MNtS6LAim44a6V2gizt3jYVPHGYq1MzAN849WEyoedJ";
+            const string stratisAccount1ExtPubKey = "xpub6DGguHV1FQFPvZ5Xu7VfeENyiySv4R2bdd6VtvwxWGVTVNnHUmphMNgTRkLe8j2JdAv332ogZcyhqSuz1yUPnN4trJ49cFQXmEhwNQHUqk1";
+            var walletManager = this.CreateWalletManager(dataFolder, KnownNetworks.StratisMain);
+            var wallet = walletManager.RecoverWallet("wallet1", ExtPubKey.Parse(stratisAccount0ExtPubKey), 0, DateTime.Now.AddHours(-2));
+
+            try
+            {
+                wallet.AddNewAccount(ExtPubKey.Parse(stratisAccount1ExtPubKey), 0, DateTime.Now.AddHours(-2));
+
+                Assert.True(false, "should have thrown exception but didn't.");
+            }
+            catch (WalletException e)
+            {
+                Assert.Equal("There is already an account in this wallet with index: " + 0, e.Message);
+            }
+        }
+
+        [Fact]
+        public void AddNewAccount_via_xpubkey_prevents_adding_the_same_xpub_key_as_different_account()
+        {
+            DataFolder dataFolder = CreateDataFolder(this);
+
+            const string stratisAccount0ExtPubKey = "xpub661MyMwAqRbcEgnsMFfhjdrwR52TgicebTrbnttywb9zn3orkrzn6MHJrgBmKrd7MNtS6LAim44a6V2gizt3jYVPHGYq1MzAN849WEyoedJ";
+            var walletManager = this.CreateWalletManager(dataFolder, KnownNetworks.StratisMain);
+            var wallet = walletManager.RecoverWallet("wallet1", ExtPubKey.Parse(stratisAccount0ExtPubKey), 0, DateTime.Now.AddHours(-2));
+
+            var addNewAccount = new Action(() => wallet.AddNewAccount(ExtPubKey.Parse(stratisAccount0ExtPubKey), 1, DateTime.Now.AddHours(-2)));
+
+            addNewAccount.Should().Throw<WalletException>()
+                .WithMessage("There is already an account in this wallet with this xpubkey: " + stratisAccount0ExtPubKey);
+        }
+
+        [Fact]
+        public void CreateDefaultWalletAndVerifyTheDefaultPassword()
+        {
+            DataFolder dataFolder = CreateDataFolder(this);
+            var walletManager = this.CreateWalletManager(dataFolder, KnownNetworks.StratisMain, "-defaultwalletname=default");
+            walletManager.Start();
+            Assert.True(walletManager.ContainsWallets);
+
+            var defaultWallet = walletManager.Wallets.First();
+
+            Assert.Equal("default", defaultWallet.Name);
+
+            // Load the default wallet.
+            var wallet = walletManager.LoadWallet("default", "default");
+
+            Assert.NotNull(wallet);
+        }
+
+        [Fact]
+        public void CreateDefaultWalletAndVerifyWrongPassword()
+        {
+            DataFolder dataFolder = CreateDataFolder(this);
+            var walletManager = this.CreateWalletManager(dataFolder, KnownNetworks.StratisMain, "-defaultwalletname=default", "-defaultwalletpassword=default2");
+            walletManager.Start();
+            Assert.True(walletManager.ContainsWallets);
+
+            var defaultWallet = walletManager.Wallets.First();
+
+            Assert.Equal("default", defaultWallet.Name);
+
+            Assert.Throws<System.Security.SecurityException>(() =>
+            {
+                // Attempt to load the default wallet with wrong password.
+                var wallet = walletManager.LoadWallet("default", "default");
+            });
+        }
+
+        /// <summary>
+        /// Test that first creates an unlocked default wallet, retrieves the extkey to verify it is actually unlocked. Lock the wallet, verify
+        /// it is not possible to get extkey. Unlock manually, and verify that returned key is same as before.
+        /// </summary>
+        [Fact]
+        public void CreateDefaultWalletAndVerifyUnlockAndLocking()
+        {
+            DataFolder dataFolder = CreateDataFolder(this);
+            var walletManager = this.CreateWalletManager(dataFolder, KnownNetworks.StratisMain, "-defaultwalletname=default", "-unlockdefaultwallet");
+            walletManager.Start();
+            Assert.True(walletManager.ContainsWallets);
+
+            var wallet = walletManager.GetWalletByName("default");
+
+            HdAccount account = walletManager.GetAccounts("default").Single();
+            var reference = new WalletAccountReference("default", account.Name);
+
+            var extKey1 = walletManager.GetExtKey(reference);
+            walletManager.LockWallet("default");
+
+            Assert.Throws<System.Security.SecurityException>(() =>
+            {
+                walletManager.GetExtKey(reference);
+            });
+
+            walletManager.UnlockWallet("default", "default", 10);
+
+            var extKey2 = walletManager.GetExtKey(reference);
+
+            Assert.Equal(extKey1.ToString(wallet.Network), extKey2.ToString(wallet.Network));
+        }
+
+        private WalletManager CreateWalletManager(DataFolder dataFolder, Network network, params string[] cmdLineArgs)
+        {
+            var nodeSettings = new NodeSettings(KnownNetworks.RegTest, ProtocolVersion.PROTOCOL_VERSION, network.Name, cmdLineArgs);
+            var walletSettings = new WalletSettings(nodeSettings);
+
+            return new WalletManager(this.LoggerFactory.Object, network, new ChainIndexer(network),
+                walletSettings, dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
+        }
+
+        private (Mnemonic mnemonic, Wallet wallet) CreateWalletOnDiskAndDeleteWallet(DataFolder dataFolder, string password, string passphrase, string walletName, ChainIndexer chainIndexer)
+        {
+            var walletManager = new WalletManager(this.LoggerFactory.Object, KnownNetworks.StratisMain, chainIndexer, new WalletSettings(NodeSettings.Default(this.Network)),
+                dataFolder, new Mock<IWalletFeePolicy>().Object, new Mock<IAsyncProvider>().Object, new NodeLifetime(), DateTimeProvider.Default, new ScriptAddressReader());
 
             // create the wallet
             Mnemonic mnemonic = walletManager.CreateWallet(password, walletName, passphrase);
@@ -3150,45 +3255,6 @@ namespace Stratis.Bitcoin.Features.Wallet.Tests
             File.Delete(dataFolder.WalletPath + $"/{walletName}.wallet.json");
 
             return (mnemonic, wallet);
-        }
-    }
-
-    public class WalletFixture : IDisposable
-    {
-        private readonly Dictionary<(string, string), Wallet> walletsGenerated;
-
-        public WalletFixture()
-        {
-            this.walletsGenerated = new Dictionary<(string, string), Wallet>();
-        }
-
-        public void Dispose()
-        {
-        }
-
-        /// <summary>
-        /// Creates a new wallet.
-        /// </summary>
-        /// <remarks>
-        /// If it's the first time this wallet is created within this class, it is added to a collection for use by other tests.
-        /// If the same parameters have already been used to create a wallet, the wallet will be retrieved from the internal collection and a copy of this wallet will be returned.
-        /// </remarks>
-        /// <param name="name">The name.</param>
-        /// <param name="password">The password.</param>
-        /// <returns></returns>
-        public Wallet GenerateBlankWallet(string name, string password)
-        {
-            if (this.walletsGenerated.TryGetValue((name, password), out Wallet existingWallet))
-            {
-                string serializedExistingWallet = JsonConvert.SerializeObject(existingWallet, Formatting.None);
-                return JsonConvert.DeserializeObject<Wallet>(serializedExistingWallet);
-            }
-
-            Wallet newWallet = WalletTestsHelpers.GenerateBlankWallet(name, password);
-            this.walletsGenerated.Add((name, password), newWallet);
-
-            string serializedNewWallet = JsonConvert.SerializeObject(newWallet, Formatting.None);
-            return JsonConvert.DeserializeObject<Wallet>(serializedNewWallet);
         }
     }
 }

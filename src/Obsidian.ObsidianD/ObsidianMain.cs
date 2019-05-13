@@ -4,6 +4,7 @@ using System.Linq;
 using NBitcoin;
 using NBitcoin.BouncyCastle.Math;
 using NBitcoin.DataEncoders;
+using Stratis.Bitcoin.Networks.Policies;
 
 namespace Obsidian.ObsidianD
 {
@@ -29,7 +30,10 @@ namespace Obsidian.ObsidianD
             this.Name = NetworkName;
 			this.Magic = magic;
             this.DefaultPort = 56660; // ODN
-			this.RPCPort = 56661; // ODN
+	        this.DefaultMaxOutboundConnections = 16;
+	        this.DefaultMaxInboundConnections = 109;
+			this.DefaultRPCPort = 56661; // ODN
+	        this.DefaultAPIPort = 37221;
 			this.MaxTipAge = 2 * 60 * 60;
             this.MinTxFee = 10000;
             this.FallbackFee = 60000;
@@ -39,38 +43,68 @@ namespace Obsidian.ObsidianD
             this.MaxTimeOffsetSeconds = 25 * 60;
             this.CoinTicker = Ticker;
 
-            this.Consensus.SubsidyHalvingInterval = 210000;
-            this.Consensus.MajorityEnforceBlockUpgrade = 750;
-            this.Consensus.MajorityRejectBlockOutdated = 950;
-            this.Consensus.MajorityWindow = 1000;
+	        var consensusFactory = new ObsidianConsensusFactory();
 
-            this.Consensus.BuriedDeployments[BuriedDeployments.BIP34] = 0; // ODN: this was set before to: 227931
-			this.Consensus.BuriedDeployments[BuriedDeployments.BIP65] = 0; // ODN: this was set before to: 388381
-			this.Consensus.BuriedDeployments[BuriedDeployments.BIP66] = 0; // ODN: this was set before to: 363725
+			// Create the genesis block.
+	        this.GenesisTime = 1503532800;  // ODN
+	        this.GenesisNonce = 36151509;  // ODN
+	        this.GenesisBits = new Target(new uint256("000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")).ToCompact(); // ODN, note the five zeros
+	        this.GenesisVersion = 1;
+	        this.GenesisReward = Money.Zero;
+	        this.Genesis = CreateObsidianGenesisBlock(consensusFactory, this.GenesisTime, this.GenesisNonce, this.GenesisBits, this.GenesisVersion, this.GenesisReward);
 
-			this.Consensus.BIP34Hash = new uint256("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8");
 
-            this.Consensus.PowLimit = new Target(new uint256("000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")); // ODN
-            this.Consensus.PowTargetTimespan = TimeSpan.FromSeconds(14 * 24 * 60 * 60); // two weeks
-            this.Consensus.PowTargetSpacing = TimeSpan.FromSeconds(10 * 60);
-            this.Consensus.PowAllowMinDifficultyBlocks = false;
-            this.Consensus.PowNoRetargeting = false;
-            this.Consensus.RuleChangeActivationThreshold = 1916; // 95% of 2016
-            this.Consensus.MinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
-            this.Consensus.LastPOWBlock = 12500;
-            this.Consensus.IsProofOfStake = true;
-            this.Consensus.ConsensusFactory = new ObsidianConsensusFactory { Consensus = this.Consensus };
-            this.Consensus.ProofOfStakeLimit = new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false));
-            this.Consensus.ProofOfStakeLimitV2 = new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false));
-            this.Consensus.CoinType = 105;
-            this.Consensus.DefaultAssumeValid = new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b");  // ODN: 32100 Block hash / height
-			this.Consensus.CoinbaseMaturity = 50;
-            this.Consensus.PremineReward = Money.Coins(98000000); // ODN
-            this.Consensus.PremineHeight = 2;
-            this.Consensus.ProofOfWorkReward = Money.Coins(4); // ODN
-            this.Consensus.ProofOfStakeReward = Money.Coins(20); // ODN
-			this.Consensus.MaxReorgLength = 500;
-            this.Consensus.MaxMoney = long.MaxValue;
+			// Taken from StratisX.
+			// TODO: Check if this is compatible with ObsidianQt
+			var consensusOptions = new ObsidianPoSConsensusOptions(
+		        maxBlockBaseSize: 1_000_000,
+		        maxStandardVersion: 2,
+		        maxStandardTxWeight: 100_000,
+		        maxBlockSigopsCost: 20_000,
+		        maxStandardTxSigopsCost: 20_000 / 5
+	        );
+
+			this.Consensus = new NBitcoin.Consensus(
+				consensusFactory: consensusFactory,
+				consensusOptions: consensusOptions,
+				coinType: 105,
+				hashGenesisBlock: this.Genesis.GetHash(),
+				subsidyHalvingInterval: 210000,
+				majorityEnforceBlockUpgrade: 750,
+				majorityRejectBlockOutdated: 950,
+				majorityWindow: 1000,
+				buriedDeployments: new BuriedDeploymentsArray
+				{
+					[BuriedDeployments.BIP34] = 0, // ODN: this was set before to: 227931
+					[BuriedDeployments.BIP65] = 0, // ODN: this was set before to: 388381
+					[BuriedDeployments.BIP66] = 0 // ODN: this was set before to: 363725
+				},
+				bip9Deployments: new NoBIP9Deployments(), // ODN: no BIP9Deployments
+				bip34Hash: new uint256("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8"), // ??
+				ruleChangeActivationThreshold: 1916, // 95% of 2016
+				minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
+				maxReorgLength: 500,
+				// defaultAssumeValid: new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b"),  // ODN: Block 32100 hash
+				defaultAssumeValid: uint256.Zero,  // ODN: verify all for now!
+				maxMoney: long.MaxValue,
+				coinbaseMaturity: 50,
+				premineHeight: 2,
+				premineReward: Money.Coins(98000000), // ODN
+				proofOfWorkReward: Money.Coins(4), // ODN
+				powTargetTimespan: TimeSpan.FromSeconds(14 * 24 * 60 * 60), // two weeks
+				powTargetSpacing: TimeSpan.FromSeconds(10 * 60),
+				powAllowMinDifficultyBlocks: false,
+				posNoRetargeting: false,
+				powNoRetargeting: false,
+				powLimit: new Target(new uint256("000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")), // ODN, note the five zeros
+				minimumChainWork: null,
+				isProofOfStake: true,
+				lastPowBlock: 12500,
+				proofOfStakeLimit: new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
+				proofOfStakeLimitV2: new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
+				proofOfStakeReward: Money.Coins(20) // ODN
+				);
+           
 
             this.Base58Prefixes = new byte[12][];
             this.Base58Prefixes[(int)Base58Type.PUBKEY_ADDRESS] = new byte[] { (75) }; // ODN
@@ -92,35 +126,30 @@ namespace Obsidian.ObsidianD
             this.Checkpoints = new Dictionary<int, CheckpointInfo>
             {
 				{ 0, new CheckpointInfo(new uint256("0x0000006dd8a92f58e952fa61c9402b74a381a69d1930fb5cc12c73273fab5f0a"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
+				// TODO: copy checkpoints from Obsidian-Qt
             };
 
-            var encoder = new Bech32Encoder(Encoders.ASCII.DecodeData("bc"));
-            this.Bech32Encoders = new Bech32Encoder[2];
-            this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = encoder;
-            this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = encoder;
+			this.Bech32Encoders = new Bech32Encoder[2];
+	        // Bech32 is currently unsupported - once supported uncomment lines below
+	        //var encoder = new Bech32Encoder("bc");
+	        //this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = encoder;
+	        //this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = encoder;
+	        this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = null;
+	        this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = null;
 
-            this.DNSSeeds = new List<DNSSeedData>
+			this.DNSSeeds = new List<DNSSeedData>
             {
 	            // The Obsidian DNS seeds are also added as fixedSeeds below - investigate whether that's a good or bad idea
 	            new DNSSeedData("obsidianblockchain1.westeurope.cloudapp.azure.com", "obsidianblockchain1.westeurope.cloudapp.azure.com"),
-	            new DNSSeedData("obsidianblockchain2.westeurope.cloudapp.azure.com", "obsidianblockchain2.westeurope.cloudapp.azure.com"),
-	            new DNSSeedData("obsidianseednode1.westeurope.cloudapp.azure.com", "obsidianseednode1.westeurope.cloudapp.azure.com")
+	            new DNSSeedData("obsidianblockchain2.westeurope.cloudapp.azure.com", "obsidianblockchain2.westeurope.cloudapp.azure.com")
 			};
 
-            string[] seedNodes = { "104.45.21.229", "23.101.75.57", "40.68.27.143" }; // IP addresses of the Obsidian DNS seed nodes
+            string[] seedNodes = { "104.45.21.229", "23.101.75.57" }; // IP addresses of the Obsidian DNS seed nodes
 			this.SeedNodes = this.ConvertToNetworkAddresses(seedNodes, this.DefaultPort).ToList();
 
-            // Create the genesis block
-            this.GenesisTime = 1503532800;  // ODN
-            this.GenesisNonce = 36151509;  // ODN
-            this.GenesisBits = this.Consensus.PowLimit.ToCompact(); // ODN
-            this.GenesisVersion = 1;
-            this.GenesisReward = Money.Zero;
-	       
-			this.Genesis = CreateObsidianGenesisBlock(this.Consensus.ConsensusFactory, this.GenesisTime, this.GenesisNonce, this.GenesisBits, this.GenesisVersion, this.GenesisReward);
-            this.Consensus.HashGenesisBlock = this.Genesis.GetHash();
-           
-	        Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x0000006dd8a92f58e952fa61c9402b74a381a69d1930fb5cc12c73273fab5f0a")); // ODN
+            this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();  // Is this needed for Obsidian?
+
+			Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x0000006dd8a92f58e952fa61c9402b74a381a69d1930fb5cc12c73273fab5f0a")); // ODN
 	        Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x062e0ef40ca83213f645710bf497cc68220d42ac2254d31bbc8fb64a4d207209")); // ODN
 		}
 
