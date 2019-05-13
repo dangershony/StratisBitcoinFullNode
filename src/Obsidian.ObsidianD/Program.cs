@@ -18,8 +18,14 @@ namespace Obsidian.ObsidianD
 {
 	public static class Program
 	{
+		static string _configuration = "Release";
+
+
 		public static void Main(string[] args)
 		{
+#if DEBUG
+			_configuration = "Debug";
+#endif
 			MainAsync(args).Wait();
 		}
 
@@ -38,6 +44,9 @@ namespace Obsidian.ObsidianD
 				{
 					MinProtocolVersion =ProtocolVersion.ALT_PROTOCOL_VERSION
 				};
+
+				Console.WriteLine($@"Configuration: {_configuration}. Network: {nodeSettings.Network.Name}.");
+				await Task.Delay(2000);
 
 				IFullNode node = new FullNodeBuilder()
 					.UseNodeSettings(nodeSettings)
