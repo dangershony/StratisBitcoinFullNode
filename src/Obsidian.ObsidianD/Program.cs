@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using NBitcoin;
 using NBitcoin.Protocol;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
@@ -20,6 +21,7 @@ namespace Obsidian.ObsidianD
 {
 	public static class Program
 	{
+		
 
 		public static void Main(string[] args)
 		{
@@ -35,6 +37,8 @@ namespace Obsidian.ObsidianD
 		/// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
 		static async Task MainAsync(string[] args)
 		{
+			PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
+
 			try
 			{
 				var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
