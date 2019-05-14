@@ -2,7 +2,7 @@
   "profiles": {
     "Obsidian.ObsidianD": {
       "commandName": "Project",
-      "commandLineArgs": "-port=56666"
+      "commandLineArgs": "-port=56666 -addnode=165.22.90.248"
     }
   }
 }

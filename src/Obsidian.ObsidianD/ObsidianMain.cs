@@ -137,6 +137,8 @@ namespace Obsidian.ObsidianD
 	        this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = null;
 	        this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = null;
 
+			// No blocks will ever be pulled from seed nodes. They are just for address propagation.
+			// Do not put gateway nodes in this list.
 			this.DNSSeeds = new List<DNSSeedData>
             {
 	            // The Obsidian DNS seeds are also added as fixedSeeds below - investigate whether that's a good or bad idea
@@ -144,11 +146,11 @@ namespace Obsidian.ObsidianD
 	            new DNSSeedData("obsidianblockchain2.westeurope.cloudapp.azure.com", "obsidianblockchain2.westeurope.cloudapp.azure.com")
 			};
 
-            string[] seedNodes =
+			// No blocks will ever be pulled from seed nodes. They are just for address propagation.
+	        // Do not put gateway nodes in this list.
+			string[] seedNodes =
             {
-	            "104.45.21.229", "23.101.75.57",	// IP addresses of the Obsidian (c++) DNS seed nodes
-	            "165.22.90.248"						// IP addresses of c# gateway nodes
-
+	            "104.45.21.229", "23.101.75.57",	// IP addresses of the Obsidian (c++) IP seed nodes
             }; 
 			this.SeedNodes = this.ConvertToNetworkAddresses(seedNodes, this.DefaultPort).ToList();
 
