@@ -20,7 +20,7 @@ namespace Obsidian.ObsidianD
 {
 	public static class Program
 	{
-		
+
 		public static void Main(string[] args)
 		{
 			MainAsync(args).Wait();
@@ -40,12 +40,9 @@ namespace Obsidian.ObsidianD
 				var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
 					protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, StratisNode", args: args)
 				{
-					MinProtocolVersion =ProtocolVersion.ALT_PROTOCOL_VERSION
+					MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
 				};
-#if DEBUG
-				nodeSettings.Logger.LogWarning($"Running {GetName()} in DEBUG configuration.");
-#endif
-				
+
 				IFullNode node = new FullNodeBuilder()
 					.UseNodeSettings(nodeSettings)
 					.UseBlockStore()
@@ -69,7 +66,11 @@ namespace Obsidian.ObsidianD
 
 		static string GetName()
 		{
-			return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version}";
+#if DEBUG
+			return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (Debug)";
+#else
+			return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (Release)";
+#endif
 		}
 	}
 }
