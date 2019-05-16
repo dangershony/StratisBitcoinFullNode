@@ -130,8 +130,8 @@ namespace Stratis.Bitcoin.Base
 
                     // We start by adding the new entry to the queue, which will possibly remove the oldest entry if the capacity is reached.
                     // If capacity has not been reached, there is nothing more to do with the queue.
-                    uint256 oldestEntry;
-                    if (this.orderedHashList.Add(hashBlock, out oldestEntry))
+                    (bool condition, uint256 oldestEntry) = this.orderedHashList.Add(hashBlock);
+                    if (condition)
                     {
                         // Then we check the dictionary whether it contains the removed entry.
                         // If not, we remove the next entry from the queue, if there is any,

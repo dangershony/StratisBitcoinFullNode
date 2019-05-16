@@ -133,7 +133,9 @@ namespace Stratis.Bitcoin.Configuration
             var loggerFactory = new ExtendedLoggerFactory();
             this.LoggerFactory = loggerFactory;
             this.LoggerFactory.AddConsoleWithFilters();
+#if !NONLOG
             this.LoggerFactory.AddNLog();
+#endif
             this.Logger = this.LoggerFactory.CreateLogger(typeof(NodeSettings).FullName);
 
             // Record arguments.
@@ -212,9 +214,10 @@ namespace Stratis.Bitcoin.Configuration
 
             // Set the data folder.
             this.DataFolder = new DataFolder(this.DataDir);
-
+#if !NONLOG
             // Attempt to load NLog configuration from the DataFolder.
             loggerFactory.LoadNLogConfiguration(this.DataFolder);
+#endif
 
             // Get the configuration file name for the network if it was not specified on the command line.
             if (this.ConfigurationFile == null)

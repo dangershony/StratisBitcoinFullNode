@@ -327,10 +327,10 @@ namespace Stratis.Bitcoin.Consensus
                 if (validationContext.Error == null)
                 {
                     bool fullValidationRequired;
-
+                    List<ChainedHeaderBlock> _;
                     lock (this.peerLock)
                     {
-                        this.chainedHeaderTree.PartialValidationSucceeded(chainedHeader, out fullValidationRequired);
+                       (_, fullValidationRequired) = this.chainedHeaderTree.PartialValidationSucceeded(chainedHeader);
                     }
 
                     if (fullValidationRequired)
@@ -484,7 +484,7 @@ namespace Stratis.Bitcoin.Consensus
 
                     lock (this.peerLock)
                     {
-                        chainedHeaderBlocksToValidate = this.chainedHeaderTree.PartialValidationSucceeded(chainedHeader, out fullValidationRequired);
+                        (chainedHeaderBlocksToValidate, fullValidationRequired) = this.chainedHeaderTree.PartialValidationSucceeded(chainedHeader);
                     }
 
                     this.logger.LogTrace("Full validation is{0} required.", fullValidationRequired ? string.Empty : " NOT");

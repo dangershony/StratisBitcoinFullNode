@@ -100,11 +100,14 @@ namespace Stratis.Bitcoin.Configuration.Logging
         /// </summary>
         static LoggingConfiguration()
         {
+
+#if !NONLOG
             // If there is no NLog.config file, we need to initialize the configuration ourselves.
             if (LogManager.Configuration == null) LogManager.Configuration = new NLog.Config.LoggingConfiguration();
 
             // Installs handler to be called when NLog's configuration file is changed on disk.
             LogManager.ConfigurationReloaded += NLogConfigurationReloaded;
+#endif
         }
 
         /// <summary>
@@ -124,6 +127,9 @@ namespace Stratis.Bitcoin.Configuration.Logging
         /// <param name="dataFolder">Data folder to determine path to log files.</param>
         private static void AddFilters(LogSettings settings = null, DataFolder dataFolder = null)
         {
+#if NONLOG
+            return;
+#endif
             if (settings == null) return;
 
             logSettings = settings;

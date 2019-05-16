@@ -48,7 +48,7 @@ namespace Stratis.Bitcoin.Utilities
                 skip = this.samples.Count - maxSamples;
 
             foreach (double item in this.samples.Skip(skip))
-                resized.Add(item, out double unused);
+                resized.Add(item);
 
             this.samples = resized;
             this.Average = this.samples.Count > 0 ? this.samples.Average() : 0;
@@ -58,7 +58,7 @@ namespace Stratis.Bitcoin.Utilities
         /// <param name="sample">New sample.</param>
         public void AddSample(double sample)
         {
-            bool oldSampleExisted = this.samples.Add(sample, out double removedSample);
+            (bool oldSampleExisted, double removedSample) = this.samples.Add(sample);
 
             if (!oldSampleExisted)
             {

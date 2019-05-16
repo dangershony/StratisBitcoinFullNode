@@ -79,7 +79,7 @@ namespace Stratis.Bitcoin.Consensus
         /// <param name="chainedHeader">The chained header.</param>
         /// <param name="fullValidationRequired"><c>true</c> in case we want to switch our consensus tip to <paramref name="chainedHeader"/>.</param>
         /// <returns>List of chained header blocks with block data that should be partially validated next. Or <c>null</c> if none should be validated.</returns>
-        List<ChainedHeaderBlock> PartialValidationSucceeded(ChainedHeader chainedHeader, out bool fullValidationRequired);
+        (List<ChainedHeaderBlock>, bool) PartialValidationSucceeded(ChainedHeader chainedHeader);
 
         /// <summary>
         /// Handles situation when block data was considered to be invalid
@@ -331,21 +331,21 @@ namespace Stratis.Bitcoin.Consensus
         }
 
         /// <inheritdoc />
-        public List<ChainedHeaderBlock> PartialValidationSucceeded(ChainedHeader chainedHeader, out bool fullValidationRequired)
+        public (List<ChainedHeaderBlock>, bool) PartialValidationSucceeded(ChainedHeader chainedHeader)
         {
-            fullValidationRequired = false;
+            bool fullValidationRequired = false;
 
             if (!chainedHeader.IsReferenceConnected)
             {
                 this.logger.LogTrace("(-)[HEADER_DISCONNECTED]:null");
-                return null;
+                return (null, fullValidationRequired);
             }
 
             // Can happen in case peer was disconnected during the validation and it was the only peer claiming that header.
             if (!this.chainedHeadersByHash.ContainsKey(chainedHeader.HashBlock))
             {
                 this.logger.LogTrace("(-)[HEADER_NOT_FOUND]:null");
-                return null;
+                return (null, fullValidationRequired);
             }
 
             // Can happen when peer was disconnected after sending the block but before the validation was completed
@@ -353,7 +353,7 @@ namespace Stratis.Bitcoin.Consensus
             if (chainedHeader.Block == null)
             {
                 this.logger.LogTrace("(-)[BLOCK_DATA_NULL]:null");
-                return null;
+                return (null, fullValidationRequired);
             }
 
             // Can happen in case of a race condition when peer 1 presented a block, we started partial validation, peer 1 disconnected,
@@ -363,7 +363,7 @@ namespace Stratis.Bitcoin.Consensus
             {
                 this.logger.LogTrace("Previous block validation state invalid: {0}", chainedHeader.Previous);
                 this.logger.LogTrace("(-)[PREV_BLOCK_NOT_VALIDATED]:null");
-                return null;
+                return (null, fullValidationRequired);
             }
 
             // Same scenario as above except for prev block was validated which triggered next partial validation to be started.
@@ -371,7 +371,7 @@ namespace Stratis.Bitcoin.Consensus
                 (chainedHeader.BlockValidationState == ValidationState.FullyValidated))
             {
                 this.logger.LogTrace("(-)[ALREADY_VALIDATED]:null");
-                return null;
+                return (null, fullValidationRequired);
             }
 
             chainedHeader.BlockValidationState = ValidationState.PartiallyValidated;
@@ -403,7 +403,7 @@ namespace Stratis.Bitcoin.Consensus
                 }
             }
 
-            return chainedHeaderBlocksToValidate;
+            return (chainedHeaderBlocksToValidate, fullValidationRequired);
         }
 
         /// <summary>Sets the tip claim for a peer.</summary>
@@ -650,7 +650,8 @@ namespace Stratis.Bitcoin.Consensus
                 return new ConnectNewHeadersResult() { Consumed = this.chainedHeadersByHash[lastHash] };
             }
 
-            List<ChainedHeader> newChainedHeaders = this.CreateNewHeaders(headers, out bool insufficientInfo);
+            
+            (List<ChainedHeader> newChainedHeaders, bool insufficientInfo) = this.CreateNewHeaders(headers);
 
             if (insufficientInfo)
             {
@@ -963,7 +964,7 @@ namespace Stratis.Bitcoin.Consensus
                 headerToBeCreated = ((PosConsensusFactory)this.network.Consensus.ConsensusFactory).CreateProvenBlockHeader(posBlock);
             }
 
-            this.CreateNewHeaders(new List<BlockHeader>() { headerToBeCreated }, out bool _);
+            this.CreateNewHeaders(new List<BlockHeader>() { headerToBeCreated });
 
             ChainedHeader chainedHeader = this.GetChainedHeader(block.GetHash());
 
@@ -988,14 +989,14 @@ namespace Stratis.Bitcoin.Consensus
         /// <exception cref="MaxReorgViolationException">Thrown in case maximum reorganization rule is violated.</exception>
         /// <exception cref="ConnectHeaderException">Thrown if it wasn't possible to connect the first new header.</exception>
         /// <exception cref="ConsensusErrorException">Thrown if header validation failed.</exception>
-        private List<ChainedHeader> CreateNewHeaders(List<BlockHeader> headers, out bool insufficientInfo)
+        private (List<ChainedHeader>, bool) CreateNewHeaders(List<BlockHeader> headers)
         {
-            insufficientInfo = false;
+            bool insufficientInfo = false;
 
             if (!this.TryFindNewHeaderIndex(headers, out int newHeaderIndex))
             {
                 this.logger.LogTrace("(-)[NO_NEW_HEADERS_FOUND]:null");
-                return null;
+                return (null, insufficientInfo);
             }
 
             ChainedHeader previousChainedHeader;
@@ -1007,8 +1008,8 @@ namespace Stratis.Bitcoin.Consensus
             }
 
             List<ChainedHeader> newChainedHeaders = null;
-
-            ChainedHeader newChainedHeader = this.CreateAndValidateNewChainedHeader(headers[newHeaderIndex], previousChainedHeader, out insufficientInfo);
+            ChainedHeader newChainedHeader;
+            (newChainedHeader, insufficientInfo) = this.CreateAndValidateNewChainedHeader(headers[newHeaderIndex], previousChainedHeader);
 
             if (newChainedHeader != null)
             {
@@ -1026,7 +1027,8 @@ namespace Stratis.Bitcoin.Consensus
 
                     for (; newHeaderIndex < headers.Count; newHeaderIndex++)
                     {
-                        newChainedHeader = this.CreateAndValidateNewChainedHeader(headers[newHeaderIndex], previousChainedHeader, out bool _);
+                        bool _;
+                        (newChainedHeader, _) = this.CreateAndValidateNewChainedHeader(headers[newHeaderIndex], previousChainedHeader);
 
                         if (newChainedHeader == null)
                             break;
@@ -1049,14 +1051,14 @@ namespace Stratis.Bitcoin.Consensus
                 }
             }
 
-            return newChainedHeaders;
+            return (newChainedHeaders, insufficientInfo);
         }
 
         /// <exception cref="ConsensusErrorException">Thrown if header validation failed.</exception>
-        private ChainedHeader CreateAndValidateNewChainedHeader(BlockHeader currentBlockHeader, ChainedHeader previousChainedHeader, out bool insufficientHeaderInformation)
+        private (ChainedHeader, bool) CreateAndValidateNewChainedHeader(BlockHeader currentBlockHeader, ChainedHeader previousChainedHeader)
         {
             uint256 newHeaderHash = currentBlockHeader.GetHash();
-            insufficientHeaderInformation = false;
+            bool insufficientHeaderInformation = false;
 
             if (this.invalidHashesStore.IsInvalid(newHeaderHash))
             {
@@ -1075,7 +1077,7 @@ namespace Stratis.Bitcoin.Consensus
                     insufficientHeaderInformation = true;
 
                     this.logger.LogTrace("(-)[INSUFFICIENT_HEADER_INFORMATION]");
-                    return null;
+                    return (null, insufficientHeaderInformation);
                 }
 
                 this.logger.LogTrace("(-)[INVALID_HEADER]");
@@ -1088,7 +1090,7 @@ namespace Stratis.Bitcoin.Consensus
             this.chainedHeadersByHash.Add(newChainedHeader.HashBlock, newChainedHeader);
             this.ChainedBlocksDataBytes += newChainedHeader.Header.HeaderSize;
 
-            return newChainedHeader;
+            return (newChainedHeader, insufficientHeaderInformation);
         }
 
         /// <summary>

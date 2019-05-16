@@ -406,6 +406,9 @@ namespace Stratis.Bitcoin.P2P.Peer
         {
             while (bytesToRead > 0)
             {
+                if (this.stream == null)
+                    throw new OperationCanceledException();
+
                 int chunkSize = await this.stream.ReadAsync(buffer, offset, bytesToRead, cancellation).ConfigureAwait(false);
                 if (chunkSize == 0)
                 {

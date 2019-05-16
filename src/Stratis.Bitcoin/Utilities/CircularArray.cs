@@ -55,10 +55,10 @@ namespace Stratis.Bitcoin.Utilities
         /// <param name="oldItem">If the function returns <c>true</c>, this is filled with the oldest item that was replaced.</param>
         /// <returns><c>true</c> if the oldest item was replaced, <c>false</c> otherwise.</returns>
         /// <remarks>If the array already reached its capacity, this method will replace the oldest item with the new item.</remarks>
-        public bool Add(T item, out T oldItem)
+        public (bool, T) Add(T item)
         {
             bool res = false;
-            oldItem = default(T);
+            T oldItem = default(T);
             if (this.Count < this.Capacity)
             {
                 this.Count++;
@@ -72,7 +72,7 @@ namespace Stratis.Bitcoin.Utilities
             this.items[this.Index] = item;
             this.Index = (this.Index + 1) % this.Capacity;
 
-            return res;
+            return (res, oldItem);
         }
 
         /// <summary>

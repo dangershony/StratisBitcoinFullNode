@@ -7,6 +7,7 @@ using Obsidian.DroidD.Node;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.Configuration.Logging;
 using Stratis.Bitcoin.Features.Apps;
 using Stratis.Bitcoin.Features.BlockStore;
 using Stratis.Bitcoin.Features.ColdStaking;
@@ -40,6 +41,8 @@ namespace Obsidian.DroidD
         static async Task MainAsync(string[] args)
         {
             PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
+
+           
 
             try
             {

@@ -38,15 +38,20 @@ namespace Stratis.Bitcoin.Utilities
                     done.Wait();
                 };
 
-                AssemblyLoadContext assemblyLoadContext = AssemblyLoadContext.GetLoadContext(typeof(FullNode).GetTypeInfo().Assembly);
-                assemblyLoadContext.Unloading += context => shutdown();
-
-                Console.CancelKeyPress += (sender, eventArgs) =>
+                try
                 {
-                    shutdown();
+                    AssemblyLoadContext assemblyLoadContext = AssemblyLoadContext.GetLoadContext(typeof(FullNode).GetTypeInfo().Assembly);
+                    assemblyLoadContext.Unloading += context => shutdown();
+
+                    Console.CancelKeyPress += (sender, eventArgs) =>
+                    {
+                        shutdown();
                     // Don't terminate the process immediately, wait for the Main thread to exit gracefully.
                     eventArgs.Cancel = true;
-                };
+                    };
+
+                }
+                catch (Exception) { }
 
                 try
                 {
