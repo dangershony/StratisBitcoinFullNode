@@ -7,13 +7,16 @@ using Android.Support.Design.Widget;
 using Android.Support.V7.App;
 using Android.Views;
 using Android.Widget;
+using Stratis.Bitcoin.Configuration.Logging.Xamarin;
+using static Stratis.Bitcoin.Configuration.Logging.Xamarin.XamarinLogger;
 
 namespace Obsidian.DroidD
 {
-    [Activity(Label = "@string/app_name", Theme = "@style/AppTheme.NoActionBar", MainLauncher = true)]
+    [Activity(Label = "@string/app_name", Theme = "@style/AppTheme.NoActionBar", MainLauncher = true, ScreenOrientation = Android.Content.PM.ScreenOrientation.Landscape)]
     public class MainActivity : AppCompatActivity
     {
-
+        TextView logView;
+        ScrollView scroller;
         protected override void OnCreate(Bundle savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
@@ -26,9 +29,25 @@ namespace Obsidian.DroidD
             FloatingActionButton fab = FindViewById<FloatingActionButton>(Resource.Id.fab);
             fab.Click += FabOnClick;
             Task.Run(() => NodeRunner.Main(new string[] { "-addnode=165.22.90.248" }));
+            XamarinLogger.EntryAdded += XamarinLogger_EntryAdded;
+            logView = (TextView)FindViewById(Resource.Id.logtext);
+            scroller = (ScrollView)FindViewById(Resource.Id.scroller);
         }
 
-      
+        private void XamarinLogger_EntryAdded(object sender, EventArgs e)
+        {
+            RunOnUiThread(() =>
+            {
+                var data = e as XamarinLoggerEventArgs;
+                if (data.LogLevel != Microsoft.Extensions.Logging.LogLevel.Information && data.LogLevel != Microsoft.Extensions.Logging.LogLevel.Warning && data.LogLevel != Microsoft.Extensions.Logging.LogLevel.Error && data.LogLevel != Microsoft.Extensions.Logging.LogLevel.Critical)
+                    return;
+                if (logView.Text.Length > 10000)
+                    logView.Text = "";
+                logView.Text += data.Text;
+                scroller.FullScroll(FocusSearchDirection.Down);
+            });
+          
+        }
 
         public override bool OnCreateOptionsMenu(IMenu menu)
         {

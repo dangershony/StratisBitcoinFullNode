@@ -11,6 +11,7 @@ using NBitcoin.Protocol;
 using NLog.Extensions.Logging;
 using Stratis.Bitcoin.Builder.Feature;
 using Stratis.Bitcoin.Configuration.Logging;
+using Stratis.Bitcoin.Configuration.Logging.Xamarin;
 using Stratis.Bitcoin.Configuration.Settings;
 using Stratis.Bitcoin.Utilities;
 
@@ -132,6 +133,7 @@ namespace Stratis.Bitcoin.Configuration
             // Create the default logger factory and logger.
             var loggerFactory = new ExtendedLoggerFactory();
             this.LoggerFactory = loggerFactory;
+            this.LoggerFactory.AddProvider(new XamarinLoggerProvider());
             this.LoggerFactory.AddConsoleWithFilters();
 #if !NONLOG
             this.LoggerFactory.AddNLog();
