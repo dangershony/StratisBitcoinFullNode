@@ -64,6 +64,8 @@
     <Reference Include="System.Numerics.Vectors" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Constants.cs" />
+    <Compile Include="DroidNodeService.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="NodeRunner.cs" />
     <Compile Include="Node\ObsidianBlockHeader.cs" />
@@ -168,6 +170,11 @@
       <Project>{094aecd5-e0d8-43a9-a0bd-39b01f51a1f2}</Project>
       <Name>Stratis.Bitcoin</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <AndroidResource Include="Resources\drawable\obsidian_logo.png">
+      <Generator>MSBuild:UpdateGeneratedFiles</Generator>
+    </AndroidResource>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Xamarin\Android\Xamarin.Android.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.

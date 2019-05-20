@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Threading.Tasks;
 using Android.App;
+using Android.Content;
 using Android.OS;
 using Android.Runtime;
 using Android.Support.Design.Widget;
@@ -8,15 +8,15 @@ using Android.Support.V7.App;
 using Android.Views;
 using Android.Widget;
 using Stratis.Bitcoin.Configuration.Logging.Xamarin;
-using static Stratis.Bitcoin.Configuration.Logging.Xamarin.XamarinLogger;
 
 namespace Obsidian.DroidD
 {
     [Activity(Label = "@string/app_name", Theme = "@style/AppTheme.NoActionBar", MainLauncher = true, ScreenOrientation = Android.Content.PM.ScreenOrientation.Landscape)]
     public class MainActivity : AppCompatActivity
     {
-        TextView logView;
-        ScrollView scroller;
+        TextView _logView;
+        ScrollView _scrollView;
+        // https://fabcirablog.weebly.com/blog/creating-a-never-ending-background-service-in-android
         protected override void OnCreate(Bundle savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
@@ -28,25 +28,35 @@ namespace Obsidian.DroidD
 
             FloatingActionButton fab = FindViewById<FloatingActionButton>(Resource.Id.fab);
             fab.Click += FabOnClick;
-            Task.Run(() => NodeRunner.Main(new string[] { "-addnode=165.22.90.248" }));
-            XamarinLogger.EntryAdded += XamarinLogger_EntryAdded;
-            logView = (TextView)FindViewById(Resource.Id.logtext);
-            scroller = (ScrollView)FindViewById(Resource.Id.scroller);
+
+            _logView = (TextView)FindViewById(Resource.Id.logtext);
+            _scrollView = (ScrollView)FindViewById(Resource.Id.scroller);
         }
 
-        private void XamarinLogger_EntryAdded(object sender, EventArgs e)
+        protected override void OnResume()
+        {
+            base.OnResume();
+            XamarinLogger.EntryAdded += XamarinLogger_EntryAdded;
+        }
+
+        protected override void OnPause()
+        {
+            base.OnPause();
+            XamarinLogger.EntryAdded -= XamarinLogger_EntryAdded;
+        }
+
+        void XamarinLogger_EntryAdded(object sender, EventArgs e)
         {
             RunOnUiThread(() =>
             {
-                var data = e as XamarinLoggerEventArgs;
+                var data = (XamarinLogger.XamarinLoggerEventArgs)e;
                 if (data.LogLevel != Microsoft.Extensions.Logging.LogLevel.Information && data.LogLevel != Microsoft.Extensions.Logging.LogLevel.Warning && data.LogLevel != Microsoft.Extensions.Logging.LogLevel.Error && data.LogLevel != Microsoft.Extensions.Logging.LogLevel.Critical)
                     return;
-                if (logView.Text.Length > 10000)
-                    logView.Text = "";
-                logView.Text += data.Text;
-                scroller.FullScroll(FocusSearchDirection.Down);
+                if (_logView.Text.Length > 50000)
+                    _logView.Text = "";
+                _logView.Text += data.Text;
+                _scrollView.FullScroll(FocusSearchDirection.Down);
             });
-          
         }
 
         public override bool OnCreateOptionsMenu(IMenu menu)
@@ -66,18 +76,29 @@ namespace Obsidian.DroidD
             return base.OnOptionsItemSelected(item);
         }
 
-        private void FabOnClick(object sender, EventArgs eventArgs)
+        void FabOnClick(object sender, EventArgs eventArgs)
         {
-            View view = (View) sender;
-            Snackbar.Make(view, "Replace with your own action", Snackbar.LengthLong)
-                .SetAction("Action", (Android.Views.View.IOnClickListener)null).Show();
+            StartDroidNodeService();
+            //View view = (View) sender;
+            //Snackbar.Make(view, "Replace with your own action", Snackbar.LengthLong)
+            //    .SetAction("Action", (Android.Views.View.IOnClickListener)null).Show();
         }
+
+        void StartDroidNodeService()
+        {
+            var startParameters = new[] { "-addnode=165.22.90.248" };
+            var intent = new Intent(this, typeof(DroidNodeService));
+            intent.PutStringArrayListExtra("startParameters", startParameters);
+            intent.SetAction(DroidNodeService.ActionStartForegroundService);
+            StartForegroundService(intent);
+        }
+
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Android.Content.PM.Permission[] grantResults)
         {
             Xamarin.Essentials.Platform.OnRequestPermissionsResult(requestCode, permissions, grantResults);
 
             base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
         }
-	}
+    }
 }
 
