@@ -16,6 +16,10 @@ namespace Obsidian.DroidD
     {
         TextView _logView;
         ScrollView _scrollView;
+        FloatingActionButton _buttonStart;
+
+        NodeServiceConnection _serviceConnection;
+
         // https://fabcirablog.weebly.com/blog/creating-a-never-ending-background-service-in-android
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -26,26 +30,55 @@ namespace Obsidian.DroidD
             Android.Support.V7.Widget.Toolbar toolbar = FindViewById<Android.Support.V7.Widget.Toolbar>(Resource.Id.toolbar);
             SetSupportActionBar(toolbar);
 
-            FloatingActionButton fab = FindViewById<FloatingActionButton>(Resource.Id.fab);
-            fab.Click += FabOnClick;
+            _buttonStart = FindViewById<FloatingActionButton>(Resource.Id.fab);
+            _buttonStart.Click += ButtonStartOnClick;
 
             _logView = (TextView)FindViewById(Resource.Id.logtext);
             _scrollView = (ScrollView)FindViewById(Resource.Id.scroller);
         }
 
+        internal void OnNodeServiceConnected()
+        {
+            _serviceConnection.Binder.NodeService.LogMessageReceived += UpdateLogViewer;
+            UpdateButton();
+
+        }
+
+        void UpdateButton()
+        {
+            if (_serviceConnection?.Binder != null)
+                _buttonStart.Visibility = _serviceConnection.Binder.NodeService.IsForeGroundServiceCreated ? ViewStates.Gone : ViewStates.Visible;
+        }
+
+        internal void OnNodeServiceDisconnecting()
+        {
+            UpdateButton();
+            _serviceConnection.Binder.NodeService.LogMessageReceived -= UpdateLogViewer;
+        }
+
+        protected override void OnStart()
+        {
+            base.OnStart();
+            if (_serviceConnection == null)
+                _serviceConnection = new NodeServiceConnection(this);
+
+            BindService(new Intent(this, typeof(NodeService)), _serviceConnection, Bind.AutoCreate);
+        }
+
         protected override void OnResume()
         {
             base.OnResume();
-            XamarinLogger.EntryAdded += XamarinLogger_EntryAdded;
+            UpdateButton();
+
         }
 
-        protected override void OnPause()
+        protected override void OnStop()
         {
-            base.OnPause();
-            XamarinLogger.EntryAdded -= XamarinLogger_EntryAdded;
+            base.OnStop();
+            UnbindService(_serviceConnection);
         }
 
-        void XamarinLogger_EntryAdded(object sender, EventArgs e)
+        void UpdateLogViewer(object sender, EventArgs e)
         {
             RunOnUiThread(() =>
             {
@@ -76,9 +109,11 @@ namespace Obsidian.DroidD
             return base.OnOptionsItemSelected(item);
         }
 
-        void FabOnClick(object sender, EventArgs eventArgs)
+        void ButtonStartOnClick(object sender, EventArgs eventArgs)
         {
             StartDroidNodeService();
+            _buttonStart.Visibility = ViewStates.Gone;
+
             //View view = (View) sender;
             //Snackbar.Make(view, "Replace with your own action", Snackbar.LengthLong)
             //    .SetAction("Action", (Android.Views.View.IOnClickListener)null).Show();
@@ -87,9 +122,9 @@ namespace Obsidian.DroidD
         void StartDroidNodeService()
         {
             var startParameters = new[] { "-addnode=165.22.90.248" };
-            var intent = new Intent(this, typeof(DroidNodeService));
+            var intent = new Intent(this, typeof(NodeService));
             intent.PutStringArrayListExtra("startParameters", startParameters);
-            intent.SetAction(DroidNodeService.ActionStartForegroundService);
+            intent.SetAction(NodeService.ActionStartForegroundService);
             StartForegroundService(intent);
         }
 

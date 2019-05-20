@@ -15,6 +15,7 @@ using Obsidian.DroidD.Node;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.Configuration.Logging.Xamarin;
 using Stratis.Bitcoin.Features.Apps;
 using Stratis.Bitcoin.Features.BlockStore;
 using Stratis.Bitcoin.Features.ColdStaking;
@@ -28,7 +29,7 @@ using Binder = Android.OS.Binder;
 namespace Obsidian.DroidD
 {
     [Service]
-    public class DroidNodeService : Service
+    public class NodeService : Service
     {
         /// <summary>
         /// Intent Action for external callers to start the foreground service.
@@ -62,16 +63,14 @@ namespace Obsidian.DroidD
         IFullNode _fullNode;
         string[] _startParameters;
         public event EventHandler FullNodeStopRequested;
-      
-        public IBinder Binder { get; private set; }
+        public event EventHandler LogMessageReceived;
+        public bool IsForeGroundServiceCreated;
 
 
         public override IBinder OnBind(Intent intent)
         {
-            Binder = new DroidNodeServiceBinder(this);
-           return Binder;
+            return new NodeServiceBinder(this);
         }
-
 
         public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
         {
@@ -85,11 +84,13 @@ namespace Obsidian.DroidD
                     CreateNotificationChannel(NodeNotificationChannelId, NotificationChannelName);
 
                     notification = CreateNotification(NodeNotificationChannelId, "Foreground service created.", new[] { CreateAction(ActionStartNode, "Start Node"), CreateAction(ActionStopForegroundService, "Stop Foreground Service") });
+                    IsForeGroundServiceCreated = true;
                     break;
 
                 case ActionStopForegroundService:
                     StopForeground(true);
                     StopSelf();
+                    IsForeGroundServiceCreated = false;
                     break;
 
                 case ActionStartNode:
@@ -108,6 +109,11 @@ namespace Obsidian.DroidD
             return StartCommandResult.Sticky;
         }
 
+        public override void OnDestroy()
+        {
+            base.OnDestroy();
+            IsForeGroundServiceCreated = false;
+        }
 
 
         void StartFullNode(string[] startParameters)
@@ -135,6 +141,7 @@ namespace Obsidian.DroidD
                 builder = builder.AddRPC();
                 _fullNode = builder.Build();
 
+                XamarinLogger.EntryAdded += (sender, e) => LogMessageReceived?.Invoke(this, e);
 
                 if (_fullNode != null)
                     Task.Run(async () => await RunAsync(_fullNode));
@@ -243,13 +250,13 @@ namespace Obsidian.DroidD
             return PendingIntent.GetActivity(this, 0, new Intent(this, typeof(MainActivity)), PendingIntentFlags.UpdateCurrent);
         }
 
-        public class DroidNodeServiceBinder : Binder
+        public class NodeServiceBinder : Binder
         {
-            DroidNodeService _droidNodeService;
+            public readonly NodeService NodeService;
 
-            public DroidNodeServiceBinder(DroidNodeService droidNodeService)
+            public NodeServiceBinder(NodeService nodeService)
             {
-                _droidNodeService = droidNodeService;
+                NodeService = nodeService;
             }
         }
     }

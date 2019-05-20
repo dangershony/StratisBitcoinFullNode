@@ -64,10 +64,9 @@
     <Reference Include="System.Numerics.Vectors" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Constants.cs" />
-    <Compile Include="DroidNodeService.cs" />
+    <Compile Include="NodeService.cs" />
     <Compile Include="MainActivity.cs" />
-    <Compile Include="NodeRunner.cs" />
+    <Compile Include="NodeServiceConnection.cs" />
     <Compile Include="Node\ObsidianBlockHeader.cs" />
     <Compile Include="Node\ObsidianConsensusFactory.cs" />
     <Compile Include="Node\ObsidianHash.cs" />
@@ -78,9 +77,6 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="NLog.config">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Include="Resources\AboutResources.txt" />
     <None Include="Properties\AndroidManifest.xml" />
     <None Include="Assets\AboutAssets.txt" />
