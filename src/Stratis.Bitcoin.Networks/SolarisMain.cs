@@ -19,7 +19,7 @@ namespace Stratis.Bitcoin.Networks
         public const int SolarisDefaultMaxTipAgeInSeconds = 2 * 60 * 60;
 
         /// <summary> The name of the root folder containing the different Solaris blockchains (SolarisMain, SolarisTest, SolarisRegTest). </summary>
-        public const string SolarisRootFolderName = "solaris";
+        public const string SolarisRootFolderName = "solaris_temp";
 
         /// <summary> The default name used for the Solaris configuration file. </summary>
         public const string SolarisDefaultConfigFilename = "solaris.conf";
@@ -34,7 +34,7 @@ namespace Stratis.Bitcoin.Networks
             messageStart[1] = 0x36;
             messageStart[2] = 0x23;
             messageStart[3] = 0x06;
-            uint magic = BitConverter.ToUInt32(messageStart, 0); //0x5223570;
+            uint magic = BitConverter.ToUInt32(messageStart, 0); //0x6233671;
 
             this.Name = "SolarisMain";
             this.NetworkType = NetworkType.Mainnet;
@@ -56,8 +56,8 @@ namespace Stratis.Bitcoin.Networks
             var consensusFactory = new PosConsensusFactory();
 
             // Create the genesis block.
-            this.GenesisTime = 1470467000;
-            this.GenesisNonce = 1831645;
+            this.GenesisTime = 1558551000;
+            this.GenesisNonce = 469044;
             this.GenesisBits = 0x1e0fffff;
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
@@ -100,11 +100,13 @@ namespace Stratis.Bitcoin.Networks
                 majorityWindow: 1000,
                 buriedDeployments: buriedDeployments,
                 bip9Deployments: bip9Deployments,
-                bip34Hash: new uint256("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8"),
+                bip34Hash: new uint256("0x28781f186b000a18391ebc2224b9fac1cea9518d02e742df85481306c268971e"),
                 ruleChangeActivationThreshold: 1916, // 95% of 2016
                 minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
                 maxReorgLength: 500,
-                defaultAssumeValid: new uint256("0x50497017e7bb256df205fcbc2caccbe5b516cb33491e1a11737a3bfe83959b9f"), // 1213518
+                //TODO Check what this is about
+                //Probably: If this block is in the chain assume that it and its ancestors are valid and potentially skip their script verification (0 to verify all).
+                defaultAssumeValid: new uint256("0x28781f186b000a18391ebc2224b9fac1cea9518d02e742df85481306c268971e"), // 0
                 maxMoney: long.MaxValue,
                 coinbaseMaturity: 50,
                 premineHeight: 2,
@@ -140,7 +142,7 @@ namespace Stratis.Bitcoin.Networks
 
             this.Checkpoints = new Dictionary<int, CheckpointInfo>
             {
-                //{ 0, new CheckpointInfo(new uint256("0x0000066e91e46e5a264d42c89e1204963b2ee6be230b443e9159020539d972af"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
+                { 0, new CheckpointInfo(new uint256("0x28781f186b000a18391ebc2224b9fac1cea9518d02e742df85481306c268971e"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
             };
 
             this.Bech32Encoders = new Bech32Encoder[2];
@@ -162,10 +164,9 @@ namespace Stratis.Bitcoin.Networks
             };
 
             this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();
-
-            //TODO Mine new genesis block
-            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x"));
-            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x"));
+            
+            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x28781f186b000a18391ebc2224b9fac1cea9518d02e742df85481306c268971e"));
+            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0xdb099ac2cd30b7bb2a256a39ea2a0411f2665b4665db5e2e92c8950867c10d1f"));
         }
 
         protected static Block CreateSolarisGenesisBlock(ConsensusFactory consensusFactory, uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
@@ -177,7 +178,7 @@ namespace Stratis.Bitcoin.Networks
             txNew.Time = nTime;
             txNew.AddInput(new TxIn
             {
-                ScriptSig = new Script(Op.GetPushOp(0), new Op()
+                ScriptSig = new Script(Op.GetPushOp(0), new Op
                 {
                     Code = (OpcodeType)0x1,
                     PushData = new[] { (byte)42 }
