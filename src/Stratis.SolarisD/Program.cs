@@ -20,6 +20,10 @@ namespace Stratis.SolarisD
 {
     public class Program
     {
+        private const string DataDirRootArgument = "datadirroot";
+        private const string Agent = "SolarisNode";
+        private const string DataDirRoot = "SolarisNode";
+
         public static async Task Main(string[] args)
         {
             try
@@ -29,11 +33,11 @@ namespace Stratis.SolarisD
 
                 var nodeSettings = new NodeSettings(
                     networksSelector: Networks.Solaris, 
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION,
-                    agent: "SolarisNode",
+                    protocolVersion: ProtocolVersion.PROTOCOL_VERSION,
+                    agent: Agent,
                     args: args)
                 {
-                    MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
+                    MinProtocolVersion = ProtocolVersion.PROTOCOL_VERSION
                 };
 
                 IFullNode node = new FullNodeBuilder()
@@ -57,7 +61,7 @@ namespace Stratis.SolarisD
             }
         }
 
-        private const string DataDirRootArgument = "datadirroot";
+        
         public static bool ContainsDataDirRoot(string[] arguments)
         {
             return
@@ -68,14 +72,14 @@ namespace Stratis.SolarisD
                 )
                 .Any(
                     argument =>
-                        argument.StartsWith($"-{DataDirRootArgument}") ||
-                        argument.StartsWith(DataDirRootArgument)
+                        argument.Equals($"-{DataDirRootArgument}") ||
+                        argument.Equals(DataDirRootArgument)
                 );
         }
 
         public static string[] AddDefaultDataDirRoot(string[] arguments)
         {
-            return arguments.Concat(new[] {$"-{DataDirRootArgument}=SolarisNode"}).ToArray();
+            return arguments.Concat(new[] {$"-{DataDirRootArgument}={DataDirRoot}"}).ToArray();
         }
     }
 }
