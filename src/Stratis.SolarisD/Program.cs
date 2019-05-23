@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using NBitcoin.Protocol;
 using Stratis.Bitcoin;
@@ -23,13 +24,16 @@ namespace Stratis.SolarisD
         {
             try
             {
+                if (!ContainsDataDirRoot(args))
+                    args = AddDefaultDataDirRoot(args);
+
                 var nodeSettings = new NodeSettings(
                     networksSelector: Networks.Solaris, 
                     protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION,
                     agent: "SolarisNode",
                     args: args)
                 {
-                    MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION,
+                    MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
                 };
 
                 IFullNode node = new FullNodeBuilder()
@@ -49,8 +53,29 @@ namespace Stratis.SolarisD
             }
             catch (Exception ex)
             {
-                Console.WriteLine("There was a problem initializing the node. Details: '{0}'", ex.ToString());
+                Console.WriteLine($"There was a problem initializing the node. Details: '{ex}'");
             }
+        }
+
+        private const string DataDirRootArgument = "datadirroot";
+        public static bool ContainsDataDirRoot(string[] arguments)
+        {
+            return
+                (
+                    from argument in arguments
+                    let split = argument.Split('=')
+                    select split[0]
+                )
+                .Any(
+                    argument =>
+                        argument.StartsWith($"-{DataDirRootArgument}") ||
+                        argument.StartsWith(DataDirRootArgument)
+                );
+        }
+
+        public static string[] AddDefaultDataDirRoot(string[] arguments)
+        {
+            return arguments.Concat(new[] {$"-{DataDirRootArgument}=SolarisNode"}).ToArray();
         }
     }
 }
