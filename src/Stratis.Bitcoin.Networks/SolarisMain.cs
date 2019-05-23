@@ -19,7 +19,7 @@ namespace Stratis.Bitcoin.Networks
         public const int SolarisDefaultMaxTipAgeInSeconds = 2 * 60 * 60;
 
         /// <summary> The name of the root folder containing the different Solaris blockchains (SolarisMain, SolarisTest, SolarisRegTest). </summary>
-        public const string SolarisRootFolderName = "solaris_temp";
+        public const string SolarisRootFolderName = "solarisplatform";
 
         /// <summary> The default name used for the Solaris configuration file. </summary>
         public const string SolarisDefaultConfigFilename = "solaris.conf";
@@ -52,7 +52,7 @@ namespace Stratis.Bitcoin.Networks
             this.DefaultConfigFilename = SolarisDefaultConfigFilename;
             this.MaxTimeOffsetSeconds = 25 * 60;
             this.CoinTicker = "XLR";
-
+            
             var consensusFactory = new PosConsensusFactory();
 
             // Create the genesis block.

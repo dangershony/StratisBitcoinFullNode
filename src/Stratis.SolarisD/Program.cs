@@ -23,9 +23,13 @@ namespace Stratis.SolarisD
         {
             try
             {
-                var nodeSettings = new NodeSettings(networksSelector: Networks.Solaris, protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, args: args)
+                var nodeSettings = new NodeSettings(
+                    networksSelector: Networks.Solaris, 
+                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION,
+                    agent: "SolarisNode",
+                    args: args)
                 {
-                    MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
+                    MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION,
                 };
 
                 IFullNode node = new FullNodeBuilder()
