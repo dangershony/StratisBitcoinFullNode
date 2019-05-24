@@ -94,32 +94,32 @@ namespace Stratis.Bitcoin.Configuration.Logging
                 KeyCategories[key] = typeof(T).Namespace + "." + typeof(T).Name;
             }
         }
-
+#if !NONLOG
         /// <summary>
         /// Initializes application logging.
         /// </summary>
         static LoggingConfiguration()
         {
 
-#if !NONLOG
+
             // If there is no NLog.config file, we need to initialize the configuration ourselves.
             if (LogManager.Configuration == null) LogManager.Configuration = new NLog.Config.LoggingConfiguration();
 
             // Installs handler to be called when NLog's configuration file is changed on disk.
             LogManager.ConfigurationReloaded += NLogConfigurationReloaded;
-#endif
-        }
 
-        /// <summary>
-        /// Event handler to be called when logging <see cref="NLog.LogManager.Configuration"/> gets reloaded.
-        /// </summary>
-        /// <param name="sender">Not used.</param>
-        /// <param name="e">Not used.</param>
-        public static void NLogConfigurationReloaded(object sender, LoggingConfigurationReloadedEventArgs e)
+    }
+
+    /// <summary>
+    /// Event handler to be called when logging <see cref="NLog.LogManager.Configuration"/> gets reloaded.
+    /// </summary>
+    /// <param name="sender">Not used.</param>
+    /// <param name="e">Not used.</param>
+    public static void NLogConfigurationReloaded(object sender, LoggingConfigurationReloadedEventArgs e)
         {
             AddFilters(logSettings, folder);
         }
-
+#endif
         /// <summary>
         /// Extends the logging rules in the "NLog.config" with node log settings rules.
         /// </summary>
@@ -145,7 +145,7 @@ namespace Stratis.Bitcoin.Configuration.Logging
 
                 if (debugFileTarget.ArchiveFileName != null)
                 {
-                    string currentArchive = debugFileTarget.ArchiveFileName.Render(new LogEventInfo {TimeStamp = DateTime.UtcNow});
+                    string currentArchive = debugFileTarget.ArchiveFileName.Render(new LogEventInfo { TimeStamp = DateTime.UtcNow });
                     debugFileTarget.ArchiveFileName = Path.Combine(folder.LogPath, currentArchive);
                 }
             }

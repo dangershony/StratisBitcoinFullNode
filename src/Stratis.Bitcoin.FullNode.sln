@@ -174,6 +174,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.CirrusDnsD", "Strat
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Obsidian.DroidD", "Obsidian.DroidD\Obsidian.DroidD.csproj", "{0DEDC29E-F933-43FF-976F-F222B095F53B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Obsidian.EternalService", "Obsidian.EternalService\Obsidian.EternalService.csproj", "{0E552202-7E1D-49D0-B496-1BC3CDA9E7BF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -454,6 +456,12 @@ Global
 		{0DEDC29E-F933-43FF-976F-F222B095F53B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0DEDC29E-F933-43FF-976F-F222B095F53B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0DEDC29E-F933-43FF-976F-F222B095F53B}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{0E552202-7E1D-49D0-B496-1BC3CDA9E7BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0E552202-7E1D-49D0-B496-1BC3CDA9E7BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E552202-7E1D-49D0-B496-1BC3CDA9E7BF}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{0E552202-7E1D-49D0-B496-1BC3CDA9E7BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0E552202-7E1D-49D0-B496-1BC3CDA9E7BF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0E552202-7E1D-49D0-B496-1BC3CDA9E7BF}.Release|Any CPU.Deploy.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

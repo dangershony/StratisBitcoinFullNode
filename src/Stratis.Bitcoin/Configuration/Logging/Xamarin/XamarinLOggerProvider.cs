@@ -28,6 +28,7 @@ namespace Stratis.Bitcoin.Configuration.Logging.Xamarin
     public class XamarinLogger : ILogger
     {
         public static event EventHandler EntryAdded;
+        public static readonly ConcurrentQueue<XamarinLoggerEventArgs> Queue = new ConcurrentQueue<XamarinLoggerEventArgs>();
 
         private readonly string name;
 
@@ -55,7 +56,13 @@ namespace Stratis.Bitcoin.Configuration.Logging.Xamarin
             var text = $"{logLevel.ToString()} - {eventId.Id} - {this.name} - {formatter(state, exception)}";
 
             var ea = new XamarinLoggerEventArgs(logLevel, this.name, text);
-            EntryAdded?.Invoke(typeof(XamarinLogger), ea);
+            Queue.Enqueue(ea);
+            while (Queue.Count > 1000)
+            {
+                Queue.TryDequeue(out var discarded);
+            }
+
+            //EntryAdded?.Invoke(typeof(XamarinLogger), ea);
         }
 
         public class XamarinLoggerEventArgs : EventArgs

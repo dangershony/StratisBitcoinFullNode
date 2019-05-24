@@ -1,34 +1,23 @@
-﻿using Android.Content;
+﻿using System;
+using Android.Content;
 using Android.OS;
 
 namespace Obsidian.DroidD
 {
     public class NodeServiceConnection : Java.Lang.Object, IServiceConnection
     {
-        readonly MainActivity _mainActivity;
-
-        public bool IsConnected { get; private set; }
-        public NodeService.NodeServiceBinder Binder { get; private set; }
-
-        public NodeServiceConnection(MainActivity mainActivity)
-        {
-            _mainActivity = mainActivity;
-        }
+        public Lazy<NodeController> NodeControllerFactory { get; private set; } = new Lazy<NodeController>();
 
         public void OnServiceConnected(ComponentName name, IBinder service)
         {
-            Binder = service as NodeService.NodeServiceBinder;
-            IsConnected = Binder != null;
-            if (IsConnected)
-                _mainActivity.OnNodeServiceConnected();
+            // We've bound to NodeService.NodeServiceBinder, cast the IBinder and get LocalService instance
+            NodeService.NodeServiceBinder binder = (NodeService.NodeServiceBinder)service;
+            NodeControllerFactory = binder.NodeControllerFactory;
         }
 
         public void OnServiceDisconnected(ComponentName name)
         {
-            _mainActivity.OnNodeServiceDisconnecting();
-            IsConnected = false;
-            Binder = null;
-           
+            
         }
     }
 }
