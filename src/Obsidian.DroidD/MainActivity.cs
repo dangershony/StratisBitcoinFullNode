@@ -11,7 +11,7 @@ using Android.Widget;
 
 namespace Obsidian.DroidD
 {
-    [Activity(Label = "@string/app_name", Theme = "@style/AppTheme.NoActionBar", MainLauncher = true, ScreenOrientation = Android.Content.PM.ScreenOrientation.Landscape, LaunchMode = Android.Content.PM.LaunchMode.SingleInstance)]
+    [Activity(Label = "@string/app_name", Theme = "@style/AppTheme.NoActionBar", MainLauncher = true, ScreenOrientation = Android.Content.PM.ScreenOrientation.Landscape)]
     public class MainActivity : AppCompatActivity
     {
         TextView _logView;
@@ -70,7 +70,8 @@ namespace Obsidian.DroidD
 
         void Update()
         {
-
+            // TODO: move the linebuffer into the service,
+            // so that we can use the default activity mode. A new instance can then also Bind to the current generation of the service. Then, the reference to the bound service will not become invalid.
             try
             {
                 this.Info("Fetching log...");

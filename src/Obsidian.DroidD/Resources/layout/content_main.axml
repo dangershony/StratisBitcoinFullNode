@@ -27,6 +27,7 @@
                 android:typeface="monospace"
                 android:textSize="7dp"
                 android:textColor="#ff000000" 
+                android:text="Press the button to refresh the log view. The node should start automatically. You can follow the status in the notification drawer."
                 />
 
         </RelativeLayout>
