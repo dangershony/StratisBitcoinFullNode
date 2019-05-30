@@ -2,7 +2,7 @@
 | :---- | :------ | :---- |
 | [![Build Status](https://dev.azure.com/StratisProject/StratisBitcoinFullNode/_apis/build/status/HostedWindowsContainer-CI)](https://dev.azure.com/StratisProject/StratisBitcoinFullNode/_build/latest?definitionId=4) | [![Build Status](https://dev.azure.com/StratisProject/StratisBitcoinFullNode/_apis/build/status/HostedmacOS-CI)](https://dev.azure.com/StratisProject/StratisBitcoinFullNode/_build/latest?definitionId=6) | [![Build Status](https://dev.azure.com/StratisProject/StratisBitcoinFullNode/_apis/build/status/HostedUbuntu1604-CI)](https://dev.azure.com/StratisProject/StratisBitcoinFullNode/_build/latest?definitionId=5)
 
-Stratis Bitcoin
+Solaris Bitcoin
 ===============
 
 https://stratisplatform.com
@@ -10,11 +10,11 @@ https://stratisplatform.com
 Bitcoin Implementation in C#
 ----------------------------
 
-Stratis is an implementation of the Bitcoin protocol in C# on the [.NET Core](https://dotnet.github.io/) platform.  
-The node can run on the Bitcoin and Stratis networks.  
-Stratis Bitcoin is based on the [NBitcoin](https://github.com/MetacoSA/NBitcoin) project.  
+Solaris is an implementation of the Bitcoin protocol in C# on the [.NET Core](https://dotnet.github.io/) platform.  
+The node can run on the Bitcoin and Solaris networks.  
+Solaris Bitcoin is based on the [NBitcoin](https://github.com/MetacoSA/NBitcoin) project.  
 
-For Proof of Stake support on the Stratis token the node is using [NStratis](https://github.com/stratisproject/NStratis) which is a POS implementation of NBitcoin.  
+For Proof of Stake support on the Solaris token the node is using [NStratis](https://github.com/stratisproject/NStratis) which is a POS implementation of NBitcoin.  
 
 [.NET Core](https://dotnet.github.io/) is an open source cross platform framework and enables the development of applications and services on Windows, macOS and Linux.  
 
@@ -54,7 +54,7 @@ Create a Blockchain in a .NET Core style programming
 What's Next
 ----------
 
-We plan to add many more features on top of the Stratis Bitcoin blockchain:
+We plan to add many more features on top of the Solaris Bitcoin blockchain:
 Sidechains, Private/Permissioned blockchain, Compiled Smart Contracts, NTumbleBit/Breeze wallet and more...
 
 Running a FullNode
