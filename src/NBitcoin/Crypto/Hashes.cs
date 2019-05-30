@@ -26,6 +26,8 @@ namespace NBitcoin.Crypto
             sha256.BlockUpdate(data, offset, count);
             var rv = new byte[32];
             sha256.DoFinal(rv, 0);
+            sha256.BlockUpdate(rv, 0, rv.Length);
+            sha256.DoFinal(rv, 0);
             return new uint256(rv);
 #else
             using(var sha = new SHA256Managed())
