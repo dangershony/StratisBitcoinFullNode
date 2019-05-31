@@ -1,5 +1,4 @@
 ﻿using NBitcoin;
-using Stratis.Bitcoin.Networks;
 
 namespace Obsidian.ObsidianD
 {

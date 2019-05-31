@@ -4,7 +4,6 @@ using System.Linq;
 using NBitcoin;
 using NBitcoin.BouncyCastle.Math;
 using NBitcoin.DataEncoders;
-using Stratis.Bitcoin.Networks.Policies;
 
 namespace Obsidian.ObsidianD
 {
@@ -64,7 +63,7 @@ namespace Obsidian.ObsidianD
 		        maxStandardTxSigopsCost: 20_000 / 5
 	        );
 
-			this.Consensus = new NBitcoin.Consensus(
+			this.Consensus = new Consensus(
 				consensusFactory: consensusFactory,
 				consensusOptions: consensusOptions,
 				coinType: 105,
@@ -75,8 +74,8 @@ namespace Obsidian.ObsidianD
 				majorityWindow: 1000,
 				buriedDeployments: new BuriedDeploymentsArray
 				{
-					[BuriedDeployments.BIP34] = 0, // ODN: this was set before to: 227931
-					[BuriedDeployments.BIP65] = 0, // ODN: this was set before to: 388381
+                    [BuriedDeployments.BIP34] = 0, // ODN: this was set before to: 227931
+                    [BuriedDeployments.BIP65] = 0, // ODN: this was set before to: 388381
 					[BuriedDeployments.BIP66] = 0 // ODN: this was set before to: 363725
 				},
 				bip9Deployments: new NoBIP9Deployments(), // ODN: no BIP9Deployments
@@ -130,12 +129,10 @@ namespace Obsidian.ObsidianD
             };
 
 			this.Bech32Encoders = new Bech32Encoder[2];
-	        // Bech32 is currently unsupported - once supported uncomment lines below
-	        //var encoder = new Bech32Encoder("bc");
-	        //this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = encoder;
-	        //this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = encoder;
-	        this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = null;
-	        this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = null;
+            // Bech32 is currently unsupported - once supported uncomment lines below
+            var encoder = new Bech32Encoder("odx");
+            this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = encoder;
+            this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = encoder;
 
 			// No blocks will ever be pulled from seed nodes. They are just for address propagation.
 			// Do not put gateway nodes in this list.
@@ -154,9 +151,9 @@ namespace Obsidian.ObsidianD
             }; 
 			this.SeedNodes = this.ConvertToNetworkAddresses(seedNodes, this.DefaultPort).ToList();
 
-            this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();  // Is this needed for Obsidian?
+            this.StandardScriptsRegistry = new ObsidianStandardScriptsRegistry();  // With this class, a copy of the StratisStandardScriptsRegistry, we need not reference Stratis.Bitcoin.Networks
 
-			Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x0000006dd8a92f58e952fa61c9402b74a381a69d1930fb5cc12c73273fab5f0a")); // ODN
+            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x0000006dd8a92f58e952fa61c9402b74a381a69d1930fb5cc12c73273fab5f0a")); // ODN
 	        Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x062e0ef40ca83213f645710bf497cc68220d42ac2254d31bbc8fb64a4d207209")); // ODN
 		}
 
