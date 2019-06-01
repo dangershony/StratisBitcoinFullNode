@@ -22,21 +22,25 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
            
             await Task.Delay(15000);
             var fullNode = (FullNode)node;
-            Task.Run(() =>
-            {
-                SetMinerSecret(fullNode);
-                var script = new ReserveScript { ReserveFullNodeScript = _minerSecret.ScriptPubKey.WitHash.GetAddress(fullNode.Network).ScriptPubKey };
-                var blockHashes = fullNode.NodeService<IPowMining>().GenerateBlocks(script, (ulong)10, uint.MaxValue);
-            });
+
+
+            //CreateWallet(fullNode);
+            //Task.Run(() =>
+            //{
+            //    SetMinerSecret(fullNode);
+            //    var script = new ReserveScript { ReserveFullNodeScript = _minerSecret.ScriptPubKey.WitHash.GetAddress(fullNode.Network).ScriptPubKey };
+            //    var blockHashes = fullNode.NodeService<IPowMining>().GenerateBlocks(script, (ulong)100, uint.MaxValue);
+            //});
 
 
           
-            Spend(fullNode);
+            //Spend(fullNode);
 
           
             ;
         }
 
+      
 
         async static void Spend(FullNode fullNode)
         {
@@ -103,11 +107,16 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
         }
         */
      
-        public static void SetMinerSecret(FullNode fullNode, string walletName = "mywallet", string walletPassword = "password", string accountName = "account 0", string miningAddress = null)
+        public static void SetMinerSecret(FullNode fullNode)
         {
 
            
-            walletName = "blackstone";
+            string walletName = "blackstone";
+            string walletPassword = "fhdsjkfhjksdlhfjkdlshfkdshfk";
+            string accountName = "account 0";
+
+            string miningAddress = null;
+
             if (_minerSecret == null)
             {
                 HdAddress address;
@@ -118,6 +127,7 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
                 else
                 {
                     address = fullNode.WalletManager().GetUnusedAddress(new WalletAccountReference(walletName, accountName));
+
                 }
 
                 _hdDddress = address;

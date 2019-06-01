@@ -47,7 +47,7 @@ namespace Obsidian.ObsidianD
         /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
         static async Task MainAsync(string[] args)
         {
-            PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
+            PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianXPoWHash;
 
             try
             {
@@ -57,9 +57,15 @@ namespace Obsidian.ObsidianD
                     MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
                 };
 
-                IFullNode node = new FullNodeBuilder()
-                    .UseNodeSettings(nodeSettings)
-                    .UseBlockStore()
+                IFullNodeBuilder nodeBuilder = new FullNodeBuilder()
+                    .UseNodeSettings(nodeSettings);
+
+                if(nodeBuilder.Network.IsTest())
+                    PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianXPoWHash;
+                else
+                    PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
+
+                IFullNode node = nodeBuilder.UseBlockStore()
                     .UsePosConsensus()
                     .UseMempool()
                     .UseColdStakingWallet()
@@ -70,7 +76,7 @@ namespace Obsidian.ObsidianD
                     .Build();
 
                 if (node.Network.IsTest())
-                    ;//Task.Run(() => ODXMiner.Run(node));
+                   Task.Run(() => ODXMiner.Run(node));
 
 
                 if (node != null)

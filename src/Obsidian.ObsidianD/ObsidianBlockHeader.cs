@@ -8,7 +8,7 @@ namespace Obsidian.ObsidianD
 	    public override uint256 GetPoWHash()
         {
             var blockHeaderBytes = this.ToBytes();
-		    return ObsidianHash.GetObsidianPoWHash(blockHeaderBytes);
+		    return ObsidianHash.GetObsidianXPoWHash(blockHeaderBytes);
 	    }
     }
 }
