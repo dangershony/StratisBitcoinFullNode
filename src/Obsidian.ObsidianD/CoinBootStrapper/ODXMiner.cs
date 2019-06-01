@@ -25,6 +25,7 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
 
 
             //CreateWallet(fullNode);
+            //CreateWalletFromMnemonic(fullNode);
             //Task.Run(() =>
             //{
             //    SetMinerSecret(fullNode);
@@ -33,14 +34,14 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
             //});
 
 
-          
+
             //Spend(fullNode);
 
-          
+
             ;
         }
 
-      
+       
 
         async static void Spend(FullNode fullNode)
         {
