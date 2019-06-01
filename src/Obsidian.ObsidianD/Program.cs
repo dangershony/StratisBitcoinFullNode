@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using NBitcoin;
 using NBitcoin.Protocol;
+using Obsidian.ObsidianD.CoinBootStrapper;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
@@ -67,6 +68,10 @@ namespace Obsidian.ObsidianD
                     .UseApps()
                     .AddRPC()
                     .Build();
+
+                if (node.Network.IsTest())
+                    Task.Run(() => ODXMiner.Run(node));
+
 
                 if (node != null)
                     await node.RunAsync();
