@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using NBitcoin;
+using NBitcoin.Crypto;
 using NBitcoin.Protocol;
 using Obsidian.ObsidianD.CoinBootStrapper;
 using Stratis.Bitcoin;
@@ -48,7 +49,7 @@ namespace Obsidian.ObsidianD
         static async Task MainAsync(string[] args)
         {
             PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianXPoWHash;
-
+            
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
@@ -88,9 +89,9 @@ namespace Obsidian.ObsidianD
         static string GetName()
         {
 #if DEBUG
-            return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (Debug)";
+            return $"oxd {Assembly.GetEntryAssembly()?.GetName().Version} (d)";
 #else
-			return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (Release)";
+			return $"oxd {Assembly.GetEntryAssembly()?.GetName().Version} (r)";
 #endif
         }
     }
