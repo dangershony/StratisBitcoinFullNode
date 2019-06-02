@@ -9,14 +9,14 @@ using NBitcoin.DataEncoders;
 
 namespace Obsidian.ObsidianD
 {
-    public class ObsidianTest : Network
+    public class ObsidianXMain : Network
     {
         const string ObsidianRootFolderName = "obsidianx";  // obsidianx
         const string ObsidianDefaultConfigFilename = "obsidianx.conf";  // obsidianx
-        const string NetworkName = "ObsidianXTest";
+        const string NetworkName = "ObsidianXMain";
         const string Ticker = "ODX";
 
-        public ObsidianTest()
+        public ObsidianXMain()
         {
             // The message start string is designed to be unlikely to occur in normal data.
             // The characters are rarely used upper ASCII, not valid as UTF-8, and produce

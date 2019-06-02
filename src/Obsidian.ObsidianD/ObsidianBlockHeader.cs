@@ -1,5 +1,4 @@
-﻿using DBreeze.Utils;
-using NBitcoin;
+﻿using NBitcoin;
 
 namespace Obsidian.ObsidianD
 {

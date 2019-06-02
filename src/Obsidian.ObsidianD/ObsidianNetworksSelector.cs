@@ -8,7 +8,7 @@ namespace Obsidian.ObsidianD
 	    {
 		    get
 		    {
-			    return new NetworksSelector(() => new ObsidianMain(), () => new ObsidianTest(), () => null);
+			    return new NetworksSelector(() => new ObsidianXMain(), () => null, () => null);
 		    }
 	    }
 	}

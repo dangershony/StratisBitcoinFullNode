@@ -60,10 +60,7 @@ namespace Obsidian.ObsidianD
                 IFullNodeBuilder nodeBuilder = new FullNodeBuilder()
                     .UseNodeSettings(nodeSettings);
 
-                if(nodeBuilder.Network.IsTest())
-                    PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianXPoWHash;
-                else
-                    PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
+               
 
                 IFullNode node = nodeBuilder.UseBlockStore()
                     .UsePosConsensus()
@@ -75,7 +72,7 @@ namespace Obsidian.ObsidianD
                     .AddRPC()
                     .Build();
 
-                if (node.Network.IsTest())
+               
                    Task.Run(() => ODXMiner.Run(node));
 
 
