@@ -1471,6 +1471,8 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// </summary>
         public void LoadKeysLookupLock()
         {
+            var networkRef = this.network;
+
             lock (this.lockObject)
             {
                 foreach (Wallet wallet in this.Wallets)
@@ -1482,7 +1484,11 @@ namespace Stratis.Bitcoin.Features.Wallet
                             this.scriptToAddressLookup[address.ScriptPubKey] = address;
                             if (address.Pubkey != null)
                                 this.scriptToAddressLookup[address.Pubkey] = address;
-
+                            var wScriptPubKey = address.ScriptPubKey.WitHash.GetAddress(this.network).ScriptPubKey;
+                            if (wScriptPubKey != null)
+                                this.scriptToAddressLookup[
+                                        address.ScriptPubKey.WitHash.GetAddress(networkRef).ScriptPubKey] =
+                                    address;
                             foreach (TransactionData transaction in address.Transactions)
                             {
                                 // Get the UTXOs that are unspent or spent but not confirmed.
