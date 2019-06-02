@@ -47,17 +47,13 @@ namespace Obsidian.ObsidianD
             var consensusFactory = new ObsidianConsensusFactory();
 
             // Create the genesis block.
-            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 6, 1, 18, 23, 23, DateTimeKind.Utc));  // ODN
-            this.GenesisNonce = 24116;  // ODX
+            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 6, 2, 15, 23, 23, DateTimeKind.Utc));  // ODN
+            this.GenesisNonce = 2891582;  // ODX
             this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")).ToCompact(); // ODN, note the five zeros
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
 
-
-       
-
             this.Genesis = CreateObsidianGenesisBlock(consensusFactory, this.GenesisTime, this.GenesisNonce, this.GenesisBits, this.GenesisVersion, this.GenesisReward);
-
 
             // Taken from StratisX.
             // TODO: Check if this is compatible with ObsidianQt
@@ -166,8 +162,8 @@ namespace Obsidian.ObsidianD
 
             this.StandardScriptsRegistry = new ObsidianStandardScriptsRegistry();  // With this class, a copy of the StratisStandardScriptsRegistry, we need not reference Stratis.Bitcoin.Networks
 
-            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x00000f1bc4444f0ca02c4c758193b094774936e4de5824dbeef1bc0b1f34d028")); // ODX
-            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x6281f4adfd1ef1ecbb36e31ebd182b4cc4db70b0306cb5c88bf50f0048e91ba8")); // ODX
+            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x00000ad8ed1fc239b47507c55246ad598b6efee0b1618aac43c9728bc3dc850a")); // ODX
+            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x83daf4f90e51f4d8b45f1076ba18250fc7b2568856bb50296adbfed005545a10")); // ODX
         }
 
 

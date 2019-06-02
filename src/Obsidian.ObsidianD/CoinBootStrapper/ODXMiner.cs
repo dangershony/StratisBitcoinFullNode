@@ -19,7 +19,7 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
         static HdAddress _hdDddress;
         public static async void Run(Stratis.Bitcoin.IFullNode node)
         {
-           
+
             await Task.Delay(15000);
             var fullNode = (FullNode)node;
 
@@ -28,9 +28,18 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
             //CreateWalletFromMnemonic(fullNode);
             Task.Run(() =>
             {
-                SetMinerSecret(fullNode);
-                var script = new ReserveScript { ReserveFullNodeScript = _minerSecret.ScriptPubKey.WitHash.GetAddress(fullNode.Network).ScriptPubKey };
-                var blockHashes = fullNode.NodeService<IPowMining>().GenerateBlocks(script, (ulong)100, uint.MaxValue);
+                try
+                {
+                    SetMinerSecret(fullNode);
+                    var script = new ReserveScript { ReserveFullNodeScript = _minerSecret.ScriptPubKey.WitHash.GetAddress(fullNode.Network).ScriptPubKey };
+                    var blockHashes = fullNode.NodeService<IPowMining>().GenerateBlocks(script, (ulong)100, uint.MaxValue);
+                }
+                catch (Exception e)
+
+                {
+                    Console.WriteLine("Cannot Mine: " + e.Message);
+                }
+
             });
 
 
@@ -41,7 +50,7 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
             ;
         }
 
-       
+
 
         async static void Spend(FullNode fullNode)
         {
@@ -56,7 +65,7 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
             string walletName = "blackstone";
             string accountName = "account 0";
             string walletPassword = "password";
-           
+
             Wallet wallet = fullNode.WalletManager().GetWalletByName(walletName);
             var adresses = wallet.GetAllAddresses().ToArray();
 
@@ -68,11 +77,11 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
             }
             Key extendedPrivateKey = wallet.GetExtendedPrivateKeyForAddress(walletPassword, adresses[0]).PrivateKey;
 
-            
+
 
             TransactionBuilder builder = new TransactionBuilder(fullNode.Network);
-            builder.AddCoins(new[] {coin});
-            builder.AddKeys(new[] {extendedPrivateKey});
+            builder.AddCoins(new[] { coin });
+            builder.AddKeys(new[] { extendedPrivateKey });
             builder.Send(destinationAddress, Money.Coins(1));
             builder.SendFees(Money.Coins(0.001m));
             builder.SetChange(sourceHdAdr.Pubkey.WitHash.GetAddress(fullNode.Network));
@@ -82,7 +91,7 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
             uint256 hash = signedTx.GetHash();
             var hashString = hash.ToString();
         }
-       
+
 
         /*
         public static void SetMinerSecret(CoreNode coreNode, string walletName = "mywallet", string walletPassword = "password", string accountName = "account 0", string miningAddress = null)
@@ -107,11 +116,11 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
             }
         }
         */
-     
+
         public static void SetMinerSecret(FullNode fullNode)
         {
 
-           
+
             string walletName = "blackstone";
             string walletPassword = "fhdsjkfhjksdlhfjkdlshfkdshfk";
             string accountName = "account 0";
@@ -168,5 +177,5 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
         }
     }
 
-   
+
 }
