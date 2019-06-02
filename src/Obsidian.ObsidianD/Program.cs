@@ -73,7 +73,7 @@ namespace Obsidian.ObsidianD
                     .Build();
 
                
-                   Task.Run(() => ODXMiner.Run(node));
+                   //Task.Run(() => ODXMiner.Run(node));
 
 
                 if (node != null)
