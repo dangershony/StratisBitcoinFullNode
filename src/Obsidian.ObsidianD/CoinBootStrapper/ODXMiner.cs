@@ -32,7 +32,7 @@ namespace Obsidian.ObsidianD.CoinBootStrapper
                 {
                     SetMinerSecret(fullNode);
                     var script = new ReserveScript { ReserveFullNodeScript = _minerSecret.ScriptPubKey.WitHash.GetAddress(fullNode.Network).ScriptPubKey };
-                    var blockHashes = fullNode.NodeService<IPowMining>().GenerateBlocks(script, (ulong)100, uint.MaxValue);
+                    var blockHashes = fullNode.NodeService<IPowMining>().GenerateBlocks(script, (ulong)50000, uint.MaxValue);
                 }
                 catch (Exception e)
 

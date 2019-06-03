@@ -34,7 +34,7 @@ namespace Obsidian.ObsidianD
             this.DefaultMaxOutboundConnections = 16;
             this.DefaultMaxInboundConnections = 109;
             this.DefaultRPCPort = 46661; // ODN uses 56661, we now use 46661 for TODX
-            this.DefaultAPIPort = 38221; // ODN uses 37221, we now use 47221 for TODX
+            this.DefaultAPIPort = 37221; // ODN uses 37221, we now use 47221 for TODX
             this.MaxTipAge = 2 * 60 * 60;
             this.MinTxFee = 10000;
             this.FallbackFee = 60000;
@@ -108,7 +108,7 @@ namespace Obsidian.ObsidianD
                 powLimit: new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")), // ODN, note the five zeros
                 minimumChainWork: null,
                 isProofOfStake: true,
-                lastPowBlock: 12500,
+                lastPowBlock: 50000,
                 proofOfStakeLimit: new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeLimitV2: new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeReward: Money.Coins(15) // ODN
