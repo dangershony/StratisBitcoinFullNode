@@ -35,7 +35,7 @@ namespace Obsidian.ObsidianD
             this.DefaultMaxInboundConnections = 109;
             this.DefaultRPCPort = 46661; // ODN uses 56661, we now use 46661 for TODX
             this.DefaultAPIPort = 37221; // ODN uses 37221, we now use 47221 for TODX
-            this.MaxTipAge = 2 * 60 * 60;
+            this.MaxTipAge = Convert.ToInt32(TimeSpan.FromDays(7).TotalSeconds);  // Set to 7 days for development to fix IBD, Standard value: 2 * 60 * 60s (120 minutes)
             this.MinTxFee = 10000;
             this.FallbackFee = 60000;
             this.MinRelayTxFee = 10000;
