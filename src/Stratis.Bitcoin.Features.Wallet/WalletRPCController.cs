@@ -162,16 +162,39 @@ namespace Stratis.Bitcoin.Features.Wallet
             if (!string.IsNullOrEmpty(account))
                 throw new RPCServerException(RPCErrorCode.RPC_METHOD_DEPRECATED, "Use of 'account' parameter has been deprecated");
 
-            if (!string.IsNullOrEmpty(addressType))
-            {
-                // Currently segwit and bech32 addresses are not supported.
-                if (!addressType.Equals("legacy", StringComparison.InvariantCultureIgnoreCase))
-                    throw new RPCServerException(RPCErrorCode.RPC_METHOD_NOT_FOUND, "Only address type 'legacy' is currently supported.");
-            }
-            HdAddress hdAddress = this.walletManager.GetUnusedAddress(this.GetWalletAccountReference());
-            string base58Address = hdAddress.Address;
+            if (string.IsNullOrEmpty(addressType))
+                addressType = "legacy";
+            else
+                addressType = addressType.ToLowerInvariant();
 
-            return new NewAddressModel(base58Address);
+            switch (addressType)
+            {
+                case "legacy":
+                {
+                    HdAddress hdAddress = this.walletManager.GetUnusedAddress(this.GetWalletAccountReference());
+                    string base58Address = hdAddress.Address;
+                    return new NewAddressModel(base58Address);
+                }
+
+                case "bech32":
+                {
+                    HdAddress hdAddress = this.walletManager.GetUnusedAddress(this.GetWalletAccountReference());
+                    BitcoinAddress address = hdAddress.ScriptPubKey.WitHash.GetAddress(this.FullNode.Network);
+                    #region notes
+                    //Key key = new Key();
+                    //PubKey pubkey = key.PubKey;
+                    //PubKey compressedPubKey = pubkey.Compress();
+                    //WitKeyId w = compressedPubKey.WitHash;
+                    //BitcoinAddress address = w.GetAddress(this.FullNode.Network);
+                    #endregion
+                    return new NewAddressModel(address.ToString());
+                }
+
+                case "p2sh-segwit":
+                    throw new RPCServerException(RPCErrorCode.RPC_METHOD_NOT_FOUND, $"Address type {addressType} is not supported. Only address type 'legacy' and 'bech32' are currently supported.");
+                default:
+                    throw new RPCServerException(RPCErrorCode.RPC_METHOD_NOT_FOUND, $"Invalid address type {addressType}. Valid address types: ( legacy | bech32 | p2sh-segwit )");
+            }
         }
 
         /// <summary>

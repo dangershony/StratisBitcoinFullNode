@@ -76,7 +76,7 @@ namespace Obsidian.ObsidianD
             this.Consensus = new Consensus(
                 consensusFactory: consensusFactory,
                 consensusOptions: consensusOptions,
-                coinType: 105,
+                coinType: 442,  // ObsidianXMain: 442 (hex: 1ba) Coin Type for BIP-0044, see https://github.com/satoshilabs/slips/blob/master/slip-0044.md
                 hashGenesisBlock: this.Genesis.GetHash(),
                 subsidyHalvingInterval: 210000,
                 majorityEnforceBlockUpgrade: 750,
