@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using NBitcoin;
 using NBitcoin.Crypto;
 using NBitcoin.Protocol;
-using Obsidian.ObsidianD.CoinBootStrapper;
+using Obsidian.Features.SegWitWallet;
+using Obsidian.Features.SegWitWallet.Tests;
+using Obsidian.ObsidianD.Tests;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
@@ -17,6 +19,7 @@ using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.MemoryPool;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.RPC;
+using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
 
 namespace Obsidian.ObsidianD
@@ -53,9 +56,9 @@ namespace Obsidian.ObsidianD
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, StratisNode", args: args)
+                    protocolVersion: ProtocolVersion.WITNESS_VERSION +1, agent: $"{GetName()}, StratisNode", args: args)
                 {
-                    MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
+                    MinProtocolVersion = ProtocolVersion.WITNESS_VERSION + 1
                 };
 
                 IFullNodeBuilder nodeBuilder = new FullNodeBuilder()
@@ -66,17 +69,28 @@ namespace Obsidian.ObsidianD
                 IFullNode node = nodeBuilder.UseBlockStore()
                     .UsePosConsensus()
                     .UseMempool()
-                    .UseColdStakingWallet()
+                    .UseSegWitWallet()
                     .AddPowPosMining()
                     .UseApi()
                     .UseApps()
                     .AddRPC()
                     .Build();
 
-               
-                   Task.Run(() => ODXMiner.Run(node));
+              
 
+#if DEBUG
+                // test hook
+                var fullNode = (FullNode)node;
+                StaticWallet.CreateWallet(fullNode.Network, fullNode);
 
+                _ = Task.Run(async () =>
+                  {
+                      await Task.Delay(15000);
+                      TestBench.Run((FullNode)node);
+                  });
+#endif
+
+              
                 if (node != null)
                     await node.RunAsync();
             }

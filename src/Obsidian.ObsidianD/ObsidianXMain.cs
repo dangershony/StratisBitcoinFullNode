@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using NBitcoin;
@@ -11,52 +10,37 @@ namespace Obsidian.ObsidianD
 {
     public class ObsidianXMain : Network
     {
-        const string ObsidianRootFolderName = "obsidianx";  // obsidianx
-        const string ObsidianDefaultConfigFilename = "obsidianx.conf";  // obsidianx
-        const string NetworkName = "ObsidianXMain";
-        const string Ticker = "ODX";
-
         public ObsidianXMain()
         {
-            // The message start string is designed to be unlikely to occur in normal data.
-            // The characters are rarely used upper ASCII, not valid as UTF-8, and produce
-            // a large 4-byte int at any alignment.
-            var messageStart = new byte[4];
-            messageStart[0] = 0x4f; // ODN
-            messageStart[1] = 0x64; // ODN
-            messageStart[2] = 0x6e; // ODN
-            messageStart[3] = 0x32; // ODN uses 0x31 here, we now use 0x32 for TODX
-            uint magic = BitConverter.ToUInt32(messageStart, 0);
+            this.Name = "ObsidianXMain";
+            this.CoinTicker = "ODX";
 
-            this.Name = NetworkName;
-            this.Magic = magic;
-            this.DefaultPort = 46660; // ODN uses 56660, we now use 46660 for TODX
+            this.RootFolderName = "obsidianx";
+            this.DefaultConfigFilename = "obsidianx.conf";
+
+            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX1"), 0);
+            this.DefaultPort = 46660;
+            this.DefaultRPCPort = 46661;
+            this.DefaultAPIPort = 37221;
             this.DefaultMaxOutboundConnections = 16;
             this.DefaultMaxInboundConnections = 109;
-            this.DefaultRPCPort = 46661; // ODN uses 56661, we now use 46661 for TODX
-            this.DefaultAPIPort = 37221; // ODN uses 37221, we now use 47221 for TODX
-            this.MaxTipAge = Convert.ToInt32(TimeSpan.FromDays(7).TotalSeconds);  // Set to 7 days for development to fix IBD, Standard value: 2 * 60 * 60s (120 minutes)
-            this.MinTxFee = 10000;
-            this.FallbackFee = 60000;
-            this.MinRelayTxFee = 10000;
-            this.RootFolderName = ObsidianRootFolderName;
-            this.DefaultConfigFilename = ObsidianDefaultConfigFilename;
             this.MaxTimeOffsetSeconds = 25 * 60;
-            this.CoinTicker = Ticker;
+
+            this.MaxTipAge = Convert.ToInt32(TimeSpan.FromDays(7).TotalSeconds);  // Set to 7 days for development to fix IBD, Standard value: 2 * 60 * 60s (120 minutes)
+            this.MinTxFee = 100;
+            this.FallbackFee = 500;
+            this.MinRelayTxFee = 100;
+
 
             var consensusFactory = new ObsidianConsensusFactory();
-
-            // Create the genesis block.
-            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 6, 2, 15, 23, 23, DateTimeKind.Utc));  // ODN
-            this.GenesisNonce = 2891582;  // ODX
-            this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")).ToCompact(); // ODN, note the five zeros
+            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 6, 5, 23, 23, 23, DateTimeKind.Utc));
+            this.GenesisNonce = 26407360;
+            this.GenesisBits = new Target(new uint256("000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
+            this.Genesis = consensusFactory.CreateObsidianGenesisBlock(this.GenesisTime, this.GenesisNonce, this.GenesisBits, this.GenesisVersion, this.GenesisReward);
 
-            this.Genesis = CreateObsidianGenesisBlock(consensusFactory, this.GenesisTime, this.GenesisNonce, this.GenesisBits, this.GenesisVersion, this.GenesisReward);
 
-            // Taken from StratisX.
-            // TODO: Check if this is compatible with ObsidianQt
             var consensusOptions = new ObsidianPoSConsensusOptions(
                 maxBlockBaseSize: 1_000_000,
                 maxStandardVersion: 2,
@@ -67,9 +51,9 @@ namespace Obsidian.ObsidianD
 
             var bip9Deployments = new ObsidianBIP9DeploymentsArray
             {
-                [ObsidianBIP9DeploymentsArray.TestDummy] = new BIP9DeploymentsParameters(28, Utils.DateTimeToUnixTime(new DateTime(2018, 1, 1)), 999999999),
-                [ObsidianBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters(0, Utils.DateTimeToUnixTime(new DateTime(2018, 1, 1)), 999999999),
-                [ObsidianBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters(1, BIP9DeploymentsParameters.AlwaysActive, 999999999)
+                [ObsidianBIP9DeploymentsArray.TestDummy] = new BIP9DeploymentsParameters(28, this.GenesisTime, 999999999),
+                [ObsidianBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters(0, this.GenesisTime, 999999999),
+                [ObsidianBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters(1, this.GenesisTime, 999999999)
             };
 
 
@@ -84,36 +68,37 @@ namespace Obsidian.ObsidianD
                 majorityWindow: 1000,
                 buriedDeployments: new BuriedDeploymentsArray
                 {
-                    [BuriedDeployments.BIP34] = 0, // ODN: this was set before to: 227931
-                    [BuriedDeployments.BIP65] = 0, // ODN: this was set before to: 388381
-                    [BuriedDeployments.BIP66] = 0 // ODN: this was set before to: 363725
+                    [BuriedDeployments.BIP34] = 0,  // Block v2, Height in Coinbase
+                    [BuriedDeployments.BIP65] = 0,  // Opcode OP_CHECKLOCKTIMEVERIFY
+                    [BuriedDeployments.BIP66] = 0   // Strict DER signatures
                 },
                 bip9Deployments: bip9Deployments,
-                bip34Hash: new uint256("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8"), // ??
+                bip34Hash: this.Genesis.GetHash(), // always active
                 ruleChangeActivationThreshold: 1916, // 95% of 2016
                 minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
                 maxReorgLength: 500,
-                // defaultAssumeValid: new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b"),  // ODN: Block 32100 hash
-                defaultAssumeValid: uint256.Zero,  // ODN: verify all for now!
+                // defaultAssumeValid: new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b"),  
+                defaultAssumeValid: uint256.Zero,  // verify all for now!
                 maxMoney: long.MaxValue,
                 coinbaseMaturity: 50,
                 premineHeight: 2,
-                premineReward: Money.Coins(110000000), // ODN
-                proofOfWorkReward: Money.Coins(10), // ODN
+                premineReward: Money.Coins(110000000), 
+                proofOfWorkReward: Money.Coins(10),
                 powTargetTimespan: TimeSpan.FromSeconds(14 * 24 * 60 * 60), // two weeks
                 powTargetSpacing: TimeSpan.FromSeconds(10 * 60),
                 powAllowMinDifficultyBlocks: false,
                 posNoRetargeting: false,
                 powNoRetargeting: false,
-                powLimit: new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")), // ODN, note the five zeros
+                powLimit: new Target(this.GenesisBits),
                 minimumChainWork: null,
                 isProofOfStake: true,
                 lastPowBlock: 50000,
                 proofOfStakeLimit: new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeLimitV2: new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
-                proofOfStakeReward: Money.Coins(15) // ODN
+                proofOfStakeReward: Money.Coins(15) 
                 );
 
+            this.StandardScriptsRegistry = new ObsidianStandardScriptsRegistry();
 
             this.Base58Prefixes = new byte[12][];
             this.Base58Prefixes[(int)Base58Type.PUBKEY_ADDRESS] = new byte[] { (75) }; // ODN
@@ -131,7 +116,7 @@ namespace Obsidian.ObsidianD
             this.Base58Prefixes[(int)Base58Type.ASSET_ID] = new byte[] { 23 };
             this.Base58Prefixes[(int)Base58Type.COLORED_ADDRESS] = new byte[] { 0x13 };
 
-            // TODO: add the other Obsidian checkpoints
+           
             this.Checkpoints = new Dictionary<int, CheckpointInfo>
             {
                 // { 0, new CheckpointInfo(new uint256("0x0000006dd8a92f58e952fa61c9402b74a381a69d1930fb5cc12c73273fab5f0a"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
@@ -160,50 +145,7 @@ namespace Obsidian.ObsidianD
             };
             this.SeedNodes = this.ConvertToNetworkAddresses(seedNodes, this.DefaultPort).ToList();
 
-            this.StandardScriptsRegistry = new ObsidianStandardScriptsRegistry();  // With this class, a copy of the StratisStandardScriptsRegistry, we need not reference Stratis.Bitcoin.Networks
-
-            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x00000ad8ed1fc239b47507c55246ad598b6efee0b1618aac43c9728bc3dc850a")); // ODX
-            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x83daf4f90e51f4d8b45f1076ba18250fc7b2568856bb50296adbfed005545a10")); // ODX
+           
         }
-
-
-        static void Find()
-        {
-
-        }
-
-
-        // new method, using ConsensusFactory
-        static Block CreateObsidianGenesisBlock(ConsensusFactory consensusFactory, uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
-        {
-            string pszTimestamp = "这是黑曜石";  // "This is Obsidian" (Chinese)
-
-            Transaction txNew = consensusFactory.CreateTransaction();
-            txNew.Version = 1;
-            txNew.Time = nTime;
-            txNew.AddInput(new TxIn()
-            {
-                ScriptSig = new Script(Op.GetPushOp(0), new Op()
-                {
-                    Code = (OpcodeType)0x1,
-                    PushData = new[] { (byte)42 }
-                }, Op.GetPushOp(Encoding.UTF8.GetBytes(pszTimestamp)))
-            });
-            txNew.AddOutput(new TxOut()
-            {
-                Value = genesisReward,
-            });
-            Block genesis = consensusFactory.CreateBlock();
-            genesis.Header.BlockTime = Utils.UnixTimeToDateTime(nTime);
-            genesis.Header.Bits = nBits;
-            genesis.Header.Nonce = nNonce;
-            genesis.Header.Version = nVersion;
-            genesis.Transactions.Add(txNew);
-            genesis.Header.HashPrevBlock = uint256.Zero;
-            genesis.UpdateMerkleRoot();
-            return genesis;
-        }
-
-
     }
 }

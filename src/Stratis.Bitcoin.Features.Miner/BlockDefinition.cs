@@ -211,7 +211,7 @@ namespace Stratis.Bitcoin.Features.Miner
             // -promiscuousmempoolflags is used.
             // TODO: replace this with a call to main to assess validity of a mempool
             // transaction (which in most cases can be a no-op).
-            this.IncludeWitness = false; //IsWitnessEnabled(pindexPrev, chainparams.GetConsensus()) && fMineWitnessTx;
+            this.IncludeWitness = true; //blackstone IsWitnessEnabled(pindexPrev, chainparams.GetConsensus()) && fMineWitnessTx;
 
             // add transactions from the mempool
             int nPackagesSelected;

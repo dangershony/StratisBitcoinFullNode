@@ -6,12 +6,13 @@ using NBitcoin.BitcoinCore;
 namespace Obsidian.ObsidianD
 {
     /// <summary>
-    /// Stratis-specific standard transaction definitions.
+    /// ObsidianX-specific standard transaction definitions.
     /// </summary>
     public class ObsidianStandardScriptsRegistry : StandardScriptsRegistry
     {
-        // See MAX_OP_RETURN_RELAY in stratisX, <script.h>
-        public const int MaxOpReturnRelay = 40;
+        // See MAX_OP_RETURN_RELAY in Bitcoin Core, <script/standard.h.>
+        // 80 bytes of data, +1 for OP_RETURN, +2 for the pushdata opcodes.
+        public const int MaxOpReturnRelay = 83;
 
         // Need a network-specific version of the template list
         private readonly List<ScriptTemplate> standardTemplates = new List<ScriptTemplate>
