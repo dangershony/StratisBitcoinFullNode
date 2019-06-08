@@ -56,7 +56,7 @@ namespace Obsidian.Features.SegWitWallet
             this.addressBookManager.Initialize();
 
             this.connectionManager.Parameters.TemplateBehaviors.Add(this.broadcasterBehavior);
-            this.walletSyncManager.SyncFromHeight(1);
+            //this.walletSyncManager.SyncFromHeight(1);
 
             return Task.CompletedTask;
         }
