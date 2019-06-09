@@ -172,7 +172,7 @@ namespace Stratis.Bitcoin.Features.Miner
             this.BlockSigOpsCost = 400;
             this.fees = 0;
             this.inBlock = new TxMempool.SetEntries();
-            this.IncludeWitness = false;
+            this.IncludeWitness = true;
         }
 
         /// <summary>

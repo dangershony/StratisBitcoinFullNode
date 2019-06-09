@@ -51,9 +51,9 @@ namespace Obsidian.ObsidianD
 
             var bip9Deployments = new ObsidianBIP9DeploymentsArray
             {
-                [ObsidianBIP9DeploymentsArray.TestDummy] = new BIP9DeploymentsParameters(28, this.GenesisTime, 999999999),
-                [ObsidianBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters(0, this.GenesisTime, 999999999),
-                [ObsidianBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters(1, this.GenesisTime, 999999999)
+                [ObsidianBIP9DeploymentsArray.TestDummy] = new BIP9DeploymentsParameters(28, BIP9DeploymentsParameters.AlwaysActive, 999999999),
+                [ObsidianBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters(0, BIP9DeploymentsParameters.AlwaysActive, 999999999),
+                [ObsidianBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters(1, BIP9DeploymentsParameters.AlwaysActive, 999999999)
             };
 
 
