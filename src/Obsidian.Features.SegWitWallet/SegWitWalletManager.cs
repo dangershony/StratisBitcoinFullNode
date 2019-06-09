@@ -539,7 +539,29 @@ namespace Obsidian.Features.SegWitWallet
 
         public void RemoveBlocks(ChainedHeader fork)
         {
-            throw new NotImplementedException();
+            Guard.NotNull(fork, nameof(fork));
+
+            lock (this.lockObject)
+            {
+                var allAddresses = this.scriptToAddressLookup.Values;
+                foreach (var address in allAddresses)
+                {
+                    // Remove all the UTXO that have been reorged.
+                    IEnumerable<TransactionData> makeUnspendable = address.Transactions.Where(w => w.BlockHeight > fork.Height).ToList();
+                    foreach (TransactionData transactionData in makeUnspendable)
+                        address.Transactions.Remove(transactionData);
+
+                    // Bring back all the UTXO that are now spendable after the reorg.
+                    IEnumerable<TransactionData> makeSpendable = address.Transactions.Where(w => (w.SpendingDetails != null) && (w.SpendingDetails.BlockHeight > fork.Height));
+                    foreach (TransactionData transactionData in makeSpendable)
+                        transactionData.SpendingDetails = null;
+                }
+
+                this.UpdateLastBlockSyncedHeight(fork);
+
+                // Reload the lookup dictionaries.
+                this.RefreshInputKeysLookupLock();
+            }
         }
 
         public void ProcessBlock(Block block, ChainedHeader chainedHeader)
@@ -819,7 +841,7 @@ namespace Obsidian.Features.SegWitWallet
 
         public ICollection<uint256> GetFirstWalletBlockLocator()
         {
-            throw new NotImplementedException();
+            return this.wallets.Values.First().BlockLocator;
         }
 
         public (string folderPath, IEnumerable<string>) GetWalletsFiles()
