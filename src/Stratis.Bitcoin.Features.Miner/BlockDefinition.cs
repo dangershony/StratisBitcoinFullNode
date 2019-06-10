@@ -1,7 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
+using NBitcoin.Crypto;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Consensus.Rules.CommonRules;
 using Stratis.Bitcoin.Features.MemoryPool;
@@ -222,6 +226,7 @@ namespace Stratis.Bitcoin.Features.Miner
             this.LastBlockSize = this.BlockSize;
             this.LastBlockWeight = this.BlockWeight;
 
+            this.BlockTemplate.CoinbaseCommitment = GenerateCoinbaseCommitment(this.block, this.Network.Consensus);
             // TODO: Implement Witness Code
             // pblocktemplate->CoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
 
@@ -236,9 +241,82 @@ namespace Stratis.Bitcoin.Features.Miner
         }
 
         /// <summary>
-        /// Network specific logic to add a transaction to the block from a given mempool entry.
+        /// pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
         /// </summary>
-        public abstract void AddToBlock(TxMempoolEntry mempoolEntry);
+        /// <returns></returns>
+        byte[] GenerateCoinbaseCommitment(Block block, IConsensus consensus, bool isWitnessEnabled = true)
+        {
+            byte[] commitment = null; ;
+            int commitmentPosition = -1;
+          
+            if (isWitnessEnabled) //if (consensusParams.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nTimeout != 0)
+            {
+                if (commitmentPosition == -1)
+                {
+                    bool mutated;
+                    byte[] blockWitnessMerkleRoot = WitnessCommitmentsRule.BlockWitnessMerkleRoot(block, out mutated).ToBytes();
+
+                    byte[] hashedWitnessRoot = null;
+                    using (var sha = SHA256.Create())
+                    {
+                        hashedWitnessRoot = sha.ComputeHash(blockWitnessMerkleRoot);
+                        hashedWitnessRoot = sha.ComputeHash(hashedWitnessRoot);
+                    }
+
+                    //Hashes.Hash256()
+                    //    CHash256().Write(blockWitnessMerkleRoot.begin(), 32)
+                    //        .Write(ret.data(), 32)
+                    //        .Finalize(blockWitnessMerkleRoot.begin());
+
+
+                    var scriptPubKeyBytes = new byte[38]; //  txout.ScriptPubKey.rscriptPubKey.resize(38);
+                    scriptPubKeyBytes[0] = (byte)OpcodeType.OP_RETURN;  // txout.scriptPubKey[0] = OP_RETURN;
+
+                    scriptPubKeyBytes[1] = 0x24;
+                    scriptPubKeyBytes[2] = 0xaa;
+                    scriptPubKeyBytes[3] = 0x21;
+                    scriptPubKeyBytes[4] = 0xa9;
+                    scriptPubKeyBytes[5] = 0xed;
+                    Buffer.BlockCopy(hashedWitnessRoot, 0, scriptPubKeyBytes, 6, 32);  //  memcpy(&out.scriptPubKey[6], blockWitnessMerkleRoot.begin(), 32);
+
+                    commitment = scriptPubKeyBytes; // std::vector < unsigned char> (out.scriptPubKey.begin(), out.scriptPubKey.end());
+                    TxOut txout = new TxOut();
+                    txout.Value = 0;
+                    txout.ScriptPubKey = new Script(scriptPubKeyBytes);
+
+                    Transaction tx = block.Transactions[0];
+                    tx.AddOutput(txout);  // vout.push_back(out);
+
+                    // https://bitcoin.stackexchange.com/questions/74162/op-return-in-a-coinbase-transaction
+                    block.Transactions[0].Inputs[0].WitScript = new WitScript(Op.GetPushOp(hashedWitnessRoot));
+
+
+                    //block.vtx[0] = MakeTransactionRef(std::move(tx));
+                }
+            }
+            UpdateUncommittedBlockStructures(block, isWitnessEnabled);
+            commitmentPosition = WitnessCommitmentsRule.GetWitnessCommitmentIndex(block);
+            if (commitmentPosition == -1)
+                throw new Exception();
+            return commitment;
+        }
+
+        void UpdateUncommittedBlockStructures(Block block, bool isWitnessEnabled)
+        {
+            int commitpos = WitnessCommitmentsRule.GetWitnessCommitmentIndex(block);
+            byte[] nonce = new byte[32];
+            if (commitpos != -1 && isWitnessEnabled && !block.Transactions[0].HasWitness) {
+                Transaction tx = block.Transactions[0];
+                tx.Inputs[0].WitScript = new WitScript(Op.GetPushOp(nonce));
+                Debug.Assert(tx.Inputs[0].WitScript.PushCount == 1);
+            }
+        }
+
+
+/// <summary>
+/// Network specific logic to add a transaction to the block from a given mempool entry.
+/// </summary>
+public abstract void AddToBlock(TxMempoolEntry mempoolEntry);
 
         /// <summary>
         /// Adds a transaction to the block and updates the <see cref="BlockSize"/> and <see cref="BlockTx"/> values.
