@@ -56,9 +56,9 @@ namespace Obsidian.ObsidianD
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.WITNESS_VERSION +1, agent: $"{GetName()}, StratisNode", args: args)
+                    protocolVersion: ProtocolVersion.ALT_PROTOCOL_VERSION, agent: $"{GetName()}, StratisNode", args: args)
                 {
-                    MinProtocolVersion = ProtocolVersion.WITNESS_VERSION + 1
+                    MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
                 };
 
                 IFullNodeBuilder nodeBuilder = new FullNodeBuilder()
