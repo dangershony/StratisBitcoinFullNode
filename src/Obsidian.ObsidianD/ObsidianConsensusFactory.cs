@@ -44,8 +44,8 @@ namespace Obsidian.ObsidianD
             genesis.UpdateMerkleRoot();
 
             if (mine == false)
-                if (genesis.GetHash() != uint256.Parse("0x000000edad4d131b50ab4d00c1e0e8be762c4652ae14366190e155cb605b8e29") ||
-                    genesis.Header.HashMerkleRoot != uint256.Parse("0xa5b707c0f364c2739a05dcf40435461bb6f2591d16430216d73adb41b501c522"))
+                if (genesis.GetHash() != uint256.Parse("0x00000aac21cdf38f4adad8ffe497c120055d313c6dbffb1172cff0078fb40d47") ||
+                    genesis.Header.HashMerkleRoot != uint256.Parse("0x80ca98cb11b36e1db2d34755bead7852a85661a4411259a26ec498b24a96b011"))
                     throw new InvalidOperationException("Invalid network");
             return genesis;
         }
@@ -54,8 +54,10 @@ namespace Obsidian.ObsidianD
         {
             Parallel.ForEach(new long[] { 0, 1, 2, 3, 4, 5, 6, 7 }, l =>
             {
+                if (Utils.UnixTimeToDateTime(genesisTime) > DateTime.UtcNow)
+                    throw new Exception("Time must not be in the future");
                 uint nonce = 0;
-                while (!CreateObsidianGenesisBlock(genesisTime, nonce, genesisBits, genesisVersion, genesisReward, null).GetHash().ToString().StartsWith("000000"))
+                while (!CreateObsidianGenesisBlock(genesisTime, nonce, genesisBits, genesisVersion, genesisReward, null).GetHash().ToString().StartsWith("00000"))
                     nonce += 8;
                 var genesisBlock = CreateObsidianGenesisBlock(genesisTime, nonce, genesisBits, genesisVersion, genesisReward, null);
                 throw new Exception($"Found: Nonce:{nonce}, Hash: {genesisBlock.GetHash()}, Hash Merkle Root: {genesisBlock.Header.HashMerkleRoot}");

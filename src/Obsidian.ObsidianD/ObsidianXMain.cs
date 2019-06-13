@@ -33,9 +33,9 @@ namespace Obsidian.ObsidianD
 
 
             var consensusFactory = new ObsidianConsensusFactory();
-            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 6, 5, 23, 23, 23, DateTimeKind.Utc));
-            this.GenesisNonce = 26407360;
-            this.GenesisBits = new Target(new uint256("000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
+            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 6, 13, 16, 06, 23, DateTimeKind.Utc));
+            this.GenesisNonce = 4677480;
+            this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
             this.Genesis = consensusFactory.CreateObsidianGenesisBlock(this.GenesisTime, this.GenesisNonce, this.GenesisBits, this.GenesisVersion, this.GenesisReward);
