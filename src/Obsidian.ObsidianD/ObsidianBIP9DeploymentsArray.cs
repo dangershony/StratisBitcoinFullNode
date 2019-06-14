@@ -9,9 +9,9 @@ namespace Obsidian.ObsidianD
     {
         // The position of each deployment in the deployments array.
         public const int TestDummy = 0;
-        public const int ColdStaking = 2;
-        public const int CSV = 3;
-        public const int Segwit = 4;
+        public const int ColdStaking = 1;
+        public const int CSV = 2;
+        public const int Segwit = 3;
 
         // The number of deployments.
         public const int NumberOfDeployments = 4;
