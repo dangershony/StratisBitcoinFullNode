@@ -23,7 +23,7 @@ namespace NBitcoin
 
         public MerkleNode GetMerkleRoot()
         {
-            return MerkleNode.GetRoot(this.Transactions.Select(t => t.GetWitHash()));
+            return MerkleNode.GetRoot(this.Transactions.Select(t => t.GetHash()));
         }
 
         [Obsolete("Should use Block.Load outside of ConsensusFactories")]

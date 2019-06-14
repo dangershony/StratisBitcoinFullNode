@@ -101,9 +101,7 @@ namespace NBitcoin
             this.signature = block.BlockSignature;
             this.coinstake = block.GetProtocolTransaction();
 
-            uint256 coinStakeHash = this.coinstake.HasWitness ? this.coinstake.GetWitHash() : this.coinstake.GetHash();
-
-            this.merkleProof = new MerkleBlock(block, new[] { coinStakeHash }).PartialMerkleTree;
+            this.merkleProof = new MerkleBlock(block, new[] { this.coinstake.GetHash() }).PartialMerkleTree;
         }
 
         /// <inheritdoc />

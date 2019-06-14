@@ -1334,9 +1334,11 @@ namespace NBitcoin
 
             using(var hs = new HashStream())
             {
+                var options = this.HasWitness ? TransactionOptions.Witness : TransactionOptions.None;
+
                 ReadWrite(new BitcoinStream(hs, true)
                 {
-                    TransactionOptions = TransactionOptions.None
+                    TransactionOptions = options
                 });
                 h = hs.GetHash();
             }
