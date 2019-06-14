@@ -1228,6 +1228,8 @@ namespace NBitcoin
             bool witSupported = (((uint)stream.TransactionOptions & (uint)TransactionOptions.Witness) != 0) &&
                                 stream.ProtocolVersion >= ProtocolVersion.WITNESS_VERSION;
 
+            witSupported = true;
+
             byte flags = 0;
             if (!stream.Serializing)
             {
