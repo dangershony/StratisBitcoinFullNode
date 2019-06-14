@@ -1228,6 +1228,8 @@ namespace NBitcoin
             bool witSupported = (((uint)stream.TransactionOptions & (uint)TransactionOptions.Witness) != 0) &&
                                 stream.ProtocolVersion >= ProtocolVersion.WITNESS_VERSION;
 
+            witSupported = true;
+
             byte flags = 0;
             if (!stream.Serializing)
             {
@@ -1334,11 +1336,9 @@ namespace NBitcoin
 
             using(var hs = new HashStream())
             {
-                var options = this.HasWitness ? TransactionOptions.Witness : TransactionOptions.None;
-
                 ReadWrite(new BitcoinStream(hs, true)
                 {
-                    TransactionOptions = options
+                    TransactionOptions = TransactionOptions.None
                 });
                 h = hs.GetHash();
             }
