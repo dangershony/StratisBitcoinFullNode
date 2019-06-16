@@ -3,8 +3,11 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using NBitcoin;
+using NBitcoin.Crypto;
 using NBitcoin.Protocol;
-using Obsidian.ObsidianD.CoinBootStrapper;
+using Obsidian.Features.SegWitWallet;
+using Obsidian.Features.SegWitWallet.Tests;
+using Obsidian.ObsidianD.Tests;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
@@ -16,6 +19,7 @@ using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.MemoryPool;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.RPC;
+using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
 
 namespace Obsidian.ObsidianD
@@ -48,7 +52,7 @@ namespace Obsidian.ObsidianD
         static async Task MainAsync(string[] args)
         {
             PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianXPoWHash;
-
+            
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
@@ -60,25 +64,33 @@ namespace Obsidian.ObsidianD
                 IFullNodeBuilder nodeBuilder = new FullNodeBuilder()
                     .UseNodeSettings(nodeSettings);
 
-                if(nodeBuilder.Network.IsTest())
-                    PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianXPoWHash;
-                else
-                    PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
+               
 
                 IFullNode node = nodeBuilder.UseBlockStore()
                     .UsePosConsensus()
                     .UseMempool()
-                    .UseColdStakingWallet()
+                    .UseSegWitWallet()
                     .AddPowPosMining()
                     .UseApi()
                     .UseApps()
                     .AddRPC()
                     .Build();
 
-                if (node.Network.IsTest())
-                   Task.Run(() => ODXMiner.Run(node));
+              
 
+#if DEBUG
+                // test hook
+                var fullNode = (FullNode)node;
+                StaticWallet.CreateWallet(fullNode.Network, fullNode);
 
+                _ = Task.Run(async () =>
+                  {
+                      await Task.Delay(15000);
+                      TestBench.Run((FullNode)node);
+                  });
+#endif
+
+              
                 if (node != null)
                     await node.RunAsync();
             }
@@ -91,9 +103,9 @@ namespace Obsidian.ObsidianD
         static string GetName()
         {
 #if DEBUG
-            return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (Debug)";
+            return $"oxd {Assembly.GetEntryAssembly()?.GetName().Version} (d)";
 #else
-			return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (Release)";
+			return $"oxd {Assembly.GetEntryAssembly()?.GetName().Version} (r)";
 #endif
         }
     }

@@ -45,7 +45,7 @@ namespace Stratis.Bitcoin.Networks
             var bip9Deployments = new BitcoinBIP9Deployments
             {
                 [BitcoinBIP9Deployments.TestDummy] = new BIP9DeploymentsParameters(28, 0, 999999999),
-                [BitcoinBIP9Deployments.CSV] = new BIP9DeploymentsParameters(0, (long)new DateTime(2018, 12, 1, 0, 0, 0, DateTimeKind.Utc), 999999999),
+                [BitcoinBIP9Deployments.CSV] = new BIP9DeploymentsParameters(0, 0, 999999999),
                 [BitcoinBIP9Deployments.Segwit] = new BIP9DeploymentsParameters(1, BIP9DeploymentsParameters.AlwaysActive, 999999999)
             };
 

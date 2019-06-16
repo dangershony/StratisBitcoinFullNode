@@ -9,11 +9,12 @@ namespace Obsidian.ObsidianD
     {
         // The position of each deployment in the deployments array.
         public const int TestDummy = 0;
-        public const int CSV = 1;
-        public const int Segwit = 2;
+        public const int ColdStaking = 1;
+        public const int CSV = 2;
+        public const int Segwit = 3;
 
         // The number of deployments.
-        public const int NumberOfDeployments = 3;
+        public const int NumberOfDeployments = 4;
 
         /// <summary>
         /// Constructs the BIP9 deployments array.
@@ -33,6 +34,9 @@ namespace Obsidian.ObsidianD
 
             switch (deployment)
             {
+                case ColdStaking:
+                    flags.ScriptFlags |= ScriptVerify.CheckColdStakeVerify;
+                    break;
                 case CSV:
                     // Start enforcing BIP68 (sequence locks), BIP112 (CHECKSEQUENCEVERIFY) and BIP113 (Median Time Past) using versionbits logic.
                     flags.ScriptFlags = ScriptVerify.CheckSequenceVerify;

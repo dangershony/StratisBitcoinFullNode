@@ -253,108 +253,108 @@ namespace NBitcoin
 #pragma warning disable 618
 	public class PosBlockHeader : BlockHeader
 #pragma warning restore 618
-	{
-		/// <summary>
-		/// Optional injectable custom PoW hash function.
-		/// </summary>
-		public static Func<byte[], uint256> CustomPoWHash;
+    {
+        /// <summary>
+        /// Optional injectable custom PoW hash function.
+        /// </summary>
+        public static Func<byte[], uint256> CustomPoWHash;
 
-		/// <inheritdoc />
-		public override int CurrentVersion => 7;
+        /// <inheritdoc />
+        public override int CurrentVersion => 7;
 
-		/// <inheritdoc />
-		public override uint256 GetHash()
-		{
-			uint256 hash = null;
-			uint256[] innerHashes = this.hashes;
+        /// <inheritdoc />
+        public override uint256 GetHash()
+        {
+            uint256 hash = null;
+            uint256[] innerHashes = this.hashes;
 
-			if (innerHashes != null)
-				hash = innerHashes[0];
+            if (innerHashes != null)
+                hash = innerHashes[0];
 
-			if (hash != null)
-				return hash;
+            if (hash != null)
+                return hash;
 
-			if (this.version > 6)
-			{
-				using (var hs = new HashStream())
-				{
-					this.ReadWriteHashingStream(new BitcoinStream(hs, true));
-					hash = hs.GetHash();
-				}
-			}
-			else
-			{
-				hash = this.GetPoWHash();
-			}
+            if (this.version > 6)
+            {
+                using (var hs = new HashStream())
+                {
+                    this.ReadWriteHashingStream(new BitcoinStream(hs, true));
+                    hash = hs.GetHash();
+                }
+            }
+            else
+            {
+                hash = this.GetPoWHash();
+            }
 
-			innerHashes = this.hashes;
-			if (innerHashes != null)
-			{
-				innerHashes[0] = hash;
-			}
+            innerHashes = this.hashes;
+            if (innerHashes != null)
+            {
+                innerHashes[0] = hash;
+            }
 
-			return hash;
-		}
+            return hash;
+        }
 
-		/// <inheritdoc />
-		public override uint256 GetPoWHash()
-		{
-			byte[] serialized;
+        /// <inheritdoc />
+        public override uint256 GetPoWHash()
+        {
+            byte[] serialized;
 
-			using (var ms = new MemoryStream())
-			{
-				this.ReadWriteHashingStream(new BitcoinStream(ms, true));
-				serialized = ms.ToArray();
-			}
-			return CustomPoWHash == null ? HashX13.Instance.Hash(serialized) : CustomPoWHash(serialized);
-		}
-	}
+            using (var ms = new MemoryStream())
+            {
+                this.ReadWriteHashingStream(new BitcoinStream(ms, true));
+                serialized = ms.ToArray();
+            }
+            return CustomPoWHash == null ? HashX13.Instance.Hash(serialized) : CustomPoWHash(serialized);
+        }
+    }
 
-	/// <summary>
-	/// A POS block that contains the additional block signature serialization.
-	/// </summary>
-	public class PosBlock : Block
-	{
-		/// <summary>
-		/// A block signature - signed by one of the coin base txout[N]'s owner.
-		/// </summary>
-		private BlockSignature blockSignature = new BlockSignature();
+    /// <summary>
+    /// A POS block that contains the additional block signature serialization.
+    /// </summary>
+    public class PosBlock : Block
+    {
+        /// <summary>
+        /// A block signature - signed by one of the coin base txout[N]'s owner.
+        /// </summary>
+        private BlockSignature blockSignature = new BlockSignature();
 
-		public PosBlock(BlockHeader blockHeader) : base(blockHeader)
-		{
-		}
+        public PosBlock(BlockHeader blockHeader) : base(blockHeader)
+        {
+        }
 
-		/// <summary>
-		/// The block signature type.
-		/// </summary>
-		public BlockSignature BlockSignature
-		{
-			get { return this.blockSignature; }
-			set { this.blockSignature = value; }
-		}
+        /// <summary>
+        /// The block signature type.
+        /// </summary>
+        public BlockSignature BlockSignature
+        {
+            get { return this.blockSignature; }
+            set { this.blockSignature = value; }
+        }
 
-		/// <summary>
-		/// The additional serialization of the block POS block.
-		/// </summary>
-		public override void ReadWrite(BitcoinStream stream)
-		{
-			base.ReadWrite(stream);
-			stream.ReadWrite(ref this.blockSignature);
+        /// <summary>
+        /// The additional serialization of the block POS block.
+        /// </summary>
+        public override void ReadWrite(BitcoinStream stream)
+        {
+            base.ReadWrite(stream);
+            stream.ReadWrite(ref this.blockSignature);
 
-			this.BlockSize = stream.Serializing ? stream.Counter.WrittenBytes : stream.Counter.ReadBytes;
-		}
+            this.BlockSize = stream.Serializing ? stream.Counter.WrittenBytes : stream.Counter.ReadBytes;
+        }
 
-		/// <summary>
-		/// Gets the block's coinstake transaction or returns the coinbase transaction if there is no coinstake.
-		/// </summary>
-		/// <returns>Coinstake transaction or coinbase transaction.</returns>
-		/// <remarks>
-		/// <para>In PoS blocks, coinstake transaction is the second transaction in the block.</para>
-		/// <para>In PoW there isn't a coinstake transaction, return coinbase instead to be able to compute stake modifier for the next eventual PoS block.</para>
-		/// </remarks>
-		public Transaction GetProtocolTransaction()
-		{
-			return (this.Transactions.Count > 1 && this.Transactions[1].IsCoinStake) ? this.Transactions[1] : this.Transactions[0];
-		}
-	}
+        /// <summary>
+        /// Gets the block's coinstake transaction or returns the coinbase transaction if there is no coinstake.
+        /// </summary>
+        /// <returns>Coinstake transaction or coinbase transaction.</returns>
+        /// <remarks>
+        /// <para>In PoS blocks, coinstake transaction is the second transaction in the block.</para>
+        /// <para>In PoW there isn't a coinstake transaction, return coinbase instead to be able to compute stake modifier for the next eventual PoS block.</para>
+        /// </remarks>
+        public Transaction GetProtocolTransaction()
+        {
+            return (this.Transactions.Count > 1 && this.Transactions[1].IsCoinStake) ? this.Transactions[1] : this.Transactions[0];
+        }
+    }
 }

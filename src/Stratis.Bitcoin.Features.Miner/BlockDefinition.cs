@@ -1,7 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
+using NBitcoin.Crypto;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Consensus.Rules.CommonRules;
 using Stratis.Bitcoin.Features.MemoryPool;
@@ -172,7 +176,7 @@ namespace Stratis.Bitcoin.Features.Miner
             this.BlockSigOpsCost = 400;
             this.fees = 0;
             this.inBlock = new TxMempool.SetEntries();
-            this.IncludeWitness = false;
+            this.IncludeWitness = true;
         }
 
         /// <summary>
@@ -211,7 +215,7 @@ namespace Stratis.Bitcoin.Features.Miner
             // -promiscuousmempoolflags is used.
             // TODO: replace this with a call to main to assess validity of a mempool
             // transaction (which in most cases can be a no-op).
-            this.IncludeWitness = false; //IsWitnessEnabled(pindexPrev, chainparams.GetConsensus()) && fMineWitnessTx;
+            this.IncludeWitness = true; //blackstone IsWitnessEnabled(pindexPrev, chainparams.GetConsensus()) && fMineWitnessTx;
 
             // add transactions from the mempool
             int nPackagesSelected;
@@ -222,18 +226,102 @@ namespace Stratis.Bitcoin.Features.Miner
             this.LastBlockSize = this.BlockSize;
             this.LastBlockWeight = this.BlockWeight;
 
-            // TODO: Implement Witness Code
-            // pblocktemplate->CoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
-
             var coinviewRule = this.ConsensusManager.ConsensusRules.GetRule<CoinViewRule>();
             this.coinbase.Outputs[0].Value = this.fees + coinviewRule.GetProofOfWorkReward(this.height);
             this.BlockTemplate.TotalFee = this.fees;
+            this.UpdateHeaders();
+            // pblocktemplate->CoinbaseCommitment = AddCoinbaseCommitmentToBlock(*pblock, pindexPrev, chainparams.GetConsensus());
+            // blackstone: try to implement that
+            AddCoinbaseCommitmentToBlock(this.block, this.IncludeWitness);
 
             int nSerializeSize = this.block.GetSerializedSize();
             this.logger.LogDebug("Serialized size is {0} bytes, block weight is {1}, number of txs is {2}, tx fees are {3}, number of sigops is {4}.", nSerializeSize, this.block.GetBlockWeight(this.Network.Consensus), this.BlockTx, this.fees, this.BlockSigOpsCost);
-
-            this.UpdateHeaders();
         }
+
+
+        /*
+         * BIP 141 defines a new structure called a "witness" that is committed to blocks separately from the transaction merkle tree.
+         * This structure contains data required to check transaction validity but not required to determine transaction effects. In 
+         * particular, scripts and signatures are moved into this new structure.
+         *
+         * Witness commitment
+         *
+         * The witness is committed in a tree that is nested into the block's existing merkle root via the coinbase transaction for the 
+         * purpose of making this BIP soft fork compatible. A future hard fork can place this tree in its own branch.
+         *
+         * Specification
+         *
+         * A new data structure, witness, is defined. Each transaction will have 2 IDs.
+         * Definition of txid remains unchanged: the double SHA256 of the traditional serialization format:
+         * [nVersion][txins][txouts][nLockTime]
+         *
+         * A new wtxid is defined: the double SHA256 of the new serialization with witness data:
+         * [nVersion][marker][flag][txins][txouts][witness][nLockTime] (Format of nVersion, txins, txouts, and nLockTime are same as traditional serialization.)
+         *
+         * The marker MUST be a 1-byte zero value: 0x00.
+         * The flag MUST be a 1-byte non-zero value. Currently, 0x01 MUST be used.
+         * The witness is a serialization of all witness data of the transaction.
+         * [...] see https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
+         *
+         * Commitment structure
+         * A new block rule is added which requires a commitment to the wtxid.
+         * The wtxid of coinbase transaction is assumed to be 0x0000....0000.
+         * A witness root hash is calculated with all those wtxid as leaves, in a way similar to the hashMerkleRoot in the block header.
+         * The commitment is recorded in a scriptPubKey of the coinbase transaction. It must be at least 38 bytes, with the first 6-byte of 0x6a24aa21a9ed, that is:
+         *
+         */
+
+        /// <summary>
+        /// Adds the coinbase commitment to a new block, according to
+        /// https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
+        /// </summary>
+        /// <param name="block">The new block.</param>
+        /// <param name="isWitnessEnabled">Must be true, if the block contains SegWit transactions
+        /// and if SegWit is activated (consensusParams.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nTimeout != 0)</param>
+        static void AddCoinbaseCommitmentToBlock(Block block, bool isWitnessEnabled = true)
+        {
+            if (!isWitnessEnabled)
+                return;
+
+            // The wtxid of coinbase transaction is assumed to be 0x0000....0000.
+            var wtxidCoinbase = new byte[32];
+            block.Transactions[0].Inputs[0].WitScript = new WitScript(Op.GetPushOp(wtxidCoinbase));
+            Debug.Assert(block.Transactions[0].Inputs[0].WitScript.PushCount == 1);
+
+            // A witness root hash is calculated with all those wtxid as leaves, in a way similar to the hashMerkleRoot in the block header.
+            byte[] witnessRootHash = WitnessCommitmentsRule.BlockWitnessMerkleRoot(block, out var _).ToBytes();
+
+            // // Coinbase's input's witness must consist of a single 32-byte array for the witness reserved value.
+            byte[] witnessReservedValue = new byte[32];
+
+            byte[] dataToHash = new byte[64]; // witness root hash|witness reserved value
+            Buffer.BlockCopy(witnessRootHash, 0, dataToHash, 0, 32);
+            Buffer.BlockCopy(witnessReservedValue, 0, dataToHash, 32, 32);
+
+            // 32-byte - Commitment hash: Double-SHA256(witness root hash|witness reserved value)
+            byte[] commitmentHash = Hashes.Hash256(dataToHash).ToBytes();
+
+            // The commitment is recorded in a scriptPubKey of the coinbase transaction.
+            var coinbaseScriptPubKeyFiledBytes = new byte[38];   // It must be at least 38 bytes, with the first 6-byte of 0x6a24aa21a9ed.
+            coinbaseScriptPubKeyFiledBytes[0] = 0x6a;            // OP_RETURN (0x6a)
+            coinbaseScriptPubKeyFiledBytes[1] = 0x24;            // Push the following 36 bytes (0x24)
+            coinbaseScriptPubKeyFiledBytes[2] = 0xaa;            // Commitment header (0xaa21a9ed)
+            coinbaseScriptPubKeyFiledBytes[3] = 0x21;
+            coinbaseScriptPubKeyFiledBytes[4] = 0xa9;
+            coinbaseScriptPubKeyFiledBytes[5] = 0xed;
+            Buffer.BlockCopy(commitmentHash, 0, coinbaseScriptPubKeyFiledBytes, 6, 32);
+
+            // Write the coinbase commitment to a ScriptPubKey structure.
+            var txOut = new TxOut();
+            txOut.Value = Money.Zero; // the default value would be -1
+            txOut.ScriptPubKey = new Script(coinbaseScriptPubKeyFiledBytes);
+            // If there are more than one scriptPubKey matching the pattern, the one with highest output index is assumed to be the commitment.
+            block.Transactions[0].Outputs.Add(txOut);
+
+        }
+
+
+
 
         /// <summary>
         /// Network specific logic to add a transaction to the block from a given mempool entry.

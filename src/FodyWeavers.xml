@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Weavers>
 <!-- 
+<!--
   <Tracer adapterAssembly="FodyNlogAdapter"
       logManager="FodyNlogAdapter.Adapters.LogManagerAdapter"      
       logger="FodyNlogAdapter.Adapters.LoggerAdapter"
@@ -18,4 +19,5 @@
       <NoTrace namespace="*.IntegrationTests+*" />
   </Tracer>  
   -->
+   -->
 </Weavers>

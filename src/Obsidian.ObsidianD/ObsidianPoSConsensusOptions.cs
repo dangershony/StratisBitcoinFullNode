@@ -1,4 +1,6 @@
-﻿using NBitcoin;
+using System;
+using System.Diagnostics;
+using NBitcoin;
 using Stratis.Bitcoin.Utilities;
 
 namespace Obsidian.ObsidianD
@@ -6,12 +8,6 @@ namespace Obsidian.ObsidianD
 	/// <inheritdoc />
 	public class ObsidianPoSConsensusOptions : PosConsensusOptions
 	{
-		/// <summary>Coinstake minimal confirmations softfork activation height for mainnet.</summary>
-		const int ObsidianCoinstakeMinConfirmationActivationHeightMainnet = int.MaxValue;
-
-		/// <summary>Coinstake minimal confirmations softfork activation height for testnet.</summary>
-		const int ObsidianCoinstakeMinConfirmationActivationHeightTestnet = 436000;  // TODO: Create testnet for Obsidian
-
 		public ObsidianPoSConsensusOptions(uint maxBlockBaseSize,
 			int maxStandardVersion,
 			int maxStandardTxWeight,
@@ -23,11 +19,14 @@ namespace Obsidian.ObsidianD
 
 		/// <inheritdoc />
 		public override int GetStakeMinConfirmations(int height, Network network)
-		{
-			if (network.IsTest())
-				return height < ObsidianCoinstakeMinConfirmationActivationHeightTestnet ? 10 : 20;
+        {
+            if (network.IsTest() || network.IsRegTest())
+                throw new NotImplementedException();
 
-			return height < ObsidianCoinstakeMinConfirmationActivationHeightMainnet ? 50 : 500;
-		}
+            Debug.Assert(network.Consensus.MaxReorgLength == 500);
+
+            // StakeMinConfirmations must equal MaxReorgLength so that nobody can stake in isolation and then force a reorg
+            return (int)network.Consensus.MaxReorgLength; 
+        }
 	}
 }
