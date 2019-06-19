@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27130.2027
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.28803.452
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "global", "global", "{5B331FD3-D493-46A9-928B-B786FC6F3103}"
 	ProjectSection(SolutionItems) = preProject
@@ -170,7 +170,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.Benchmark", "Strati
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.CirrusDnsD", "Stratis.CirrusDnsD\Stratis.CirrusDnsD.csproj", "{62CE1282-A077-4454-A718-7A5BA5756BE9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stratis.SolarisD", "Stratis.SolarisD\Stratis.SolarisD.csproj", "{3A0BE585-280A-4308-BB05-2EF1E8D10991}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.SolarisD", "Stratis.SolarisD\Stratis.SolarisD.csproj", "{3A0BE585-280A-4308-BB05-2EF1E8D10991}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stratis.SnowD", "Stratis.SnowD\Stratis.SnowD.csproj", "{8A0BE785-61E5-418E-AEEF-726E5486554D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -446,6 +448,10 @@ Global
 		{3A0BE585-280A-4308-BB05-2EF1E8D10991}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3A0BE585-280A-4308-BB05-2EF1E8D10991}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3A0BE585-280A-4308-BB05-2EF1E8D10991}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8A0BE785-61E5-418E-AEEF-726E5486554D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A0BE785-61E5-418E-AEEF-726E5486554D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A0BE785-61E5-418E-AEEF-726E5486554D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A0BE785-61E5-418E-AEEF-726E5486554D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
