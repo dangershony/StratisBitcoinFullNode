@@ -99,7 +99,7 @@ namespace Obsidian.ObsidianD
                 proofOfStakeReward: Money.Coins(15) 
                 );
 
-            this.Consensus.PosEmptyCoinbase = true;
+            this.Consensus.PosEmptyCoinbase = false;
             this.StandardScriptsRegistry = new ObsidianStandardScriptsRegistry();
 
             this.Base58Prefixes = new byte[12][];
