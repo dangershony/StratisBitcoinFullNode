@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.Crypto;
+using Stratis.Bitcoin.Base.Deployments;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Consensus.Rules.CommonRules;
 using Stratis.Bitcoin.Features.MemoryPool;
@@ -43,6 +44,8 @@ namespace Stratis.Bitcoin.Features.Miner
 
         /// <summary>The current network.</summary>
         protected readonly Network Network;
+
+        private readonly NodeDeployments nodeDeployments;
 
         /// <summary>Assembler options specific to the assembler e.g. <see cref="BlockDefinitionOptions.BlockMaxSize"/>.</summary>
         protected BlockDefinitionOptions Options;
@@ -120,7 +123,8 @@ namespace Stratis.Bitcoin.Features.Miner
             ITxMempool mempool,
             MempoolSchedulerLock mempoolLock,
             MinerSettings minerSettings,
-            Network network)
+            Network network,
+            NodeDeployments nodeDeployments)
         {
             this.ConsensusManager = consensusManager;
             this.DateTimeProvider = dateTimeProvider;
@@ -128,6 +132,7 @@ namespace Stratis.Bitcoin.Features.Miner
             this.Mempool = mempool;
             this.MempoolLock = mempoolLock;
             this.Network = network;
+            this.nodeDeployments = nodeDeployments;
 
             this.Options = minerSettings.BlockDefinitionOptions;
             this.BlockMinFeeRate = this.Options.BlockMinFeeRate;
@@ -146,6 +151,19 @@ namespace Stratis.Bitcoin.Features.Miner
             this.height = this.ChainTip.Height + 1;
             var headerVersionRule = this.ConsensusManager.ConsensusRules.GetRule<HeaderVersionRule>();
             this.block.Header.Version = headerVersionRule.ComputeBlockVersion(this.ChainTip);
+        }
+
+        protected virtual bool IsWitnessEnabled(ChainedHeader chainedHeader)
+        {
+            DeploymentFlags flags = this.nodeDeployments.GetFlags(chainedHeader);
+
+            return flags.ScriptFlags.HasFlag(ScriptVerify.Witness);
+        }
+
+        protected Script GenerateCoinbaseCommitment(ChainedHeader chainedHeader)
+        {
+            // TODO: 
+            return null;
         }
 
         /// <summary>
@@ -197,25 +215,18 @@ namespace Stratis.Bitcoin.Features.Miner
             this.CreateCoinbase();
             this.ComputeBlockVersion();
 
-            // TODO: MineBlocksOnDemand
-            // -regtest only: allow overriding block.nVersion with
-            // -blockversion=N to test forking scenarios
-            //if (this.network. chainparams.MineBlocksOnDemand())
-            //    pblock->nVersion = GetArg("-blockversion", pblock->nVersion);
-
             this.MedianTimePast = Utils.DateTimeToUnixTime(this.ChainTip.GetMedianTimePast());
             this.LockTimeCutoff = MempoolValidator.StandardLocktimeVerifyFlags.HasFlag(Transaction.LockTimeFlags.MedianTimePast)
                 ? this.MedianTimePast
                 : this.block.Header.Time;
 
-            // TODO: Implement Witness Code
             // Decide whether to include witness transactions
             // This is only needed in case the witness softfork activation is reverted
             // (which would require a very deep reorganization) or when
             // -promiscuousmempoolflags is used.
             // TODO: replace this with a call to main to assess validity of a mempool
             // transaction (which in most cases can be a no-op).
-            this.IncludeWitness = true; //blackstone IsWitnessEnabled(pindexPrev, chainparams.GetConsensus()) && fMineWitnessTx;
+            this.IncludeWitness = false; //IsWitnessEnabled(pindexPrev, chainparams.GetConsensus()) && fMineWitnessTx;
 
             // add transactions from the mempool
             int nPackagesSelected;
@@ -233,6 +244,11 @@ namespace Stratis.Bitcoin.Features.Miner
             // pblocktemplate->CoinbaseCommitment = AddCoinbaseCommitmentToBlock(*pblock, pindexPrev, chainparams.GetConsensus());
             // blackstone: try to implement that
             AddCoinbaseCommitmentToBlock(this.block, this.IncludeWitness);
+
+            if (this.IncludeWitness)
+            {
+                AddOrUpdateCoinbaseCommitmentToBlock(this.Network, this.block);
+            }
 
             int nSerializeSize = this.block.GetSerializedSize();
             this.logger.LogDebug("Serialized size is {0} bytes, block weight is {1}, number of txs is {2}, tx fees are {3}, number of sigops is {4}.", nSerializeSize, this.block.GetBlockWeight(this.Network.Consensus), this.BlockTx, this.fees, this.BlockSigOpsCost);
@@ -322,6 +338,17 @@ namespace Stratis.Bitcoin.Features.Miner
 
 
 
+
+        /// <summary>
+        /// Adds the coinbase commitment to the coinbase transaction according to  https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki.
+        /// </summary>
+        /// <param name="block">The new block that is being mined.</param>
+        /// <seealso cref="https://github.com/bitcoin/bitcoin/blob/master/src/validation.cpp"/>
+        public static void AddOrUpdateCoinbaseCommitmentToBlock(Network network, Block block)
+        {
+            WitnessCommitmentsRule.ClearWitnessCommitment(network, block);
+            WitnessCommitmentsRule.CreateWitnessCommitment(network, block);
+        }
 
         /// <summary>
         /// Network specific logic to add a transaction to the block from a given mempool entry.

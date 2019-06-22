@@ -49,6 +49,11 @@ namespace Stratis.Features.FederatedPeg
         /// </summary>
         private const int TransfersToDisplay = 10;
 
+        /// <summary>
+        /// The maximum number of pending transactions to display in the console logging.
+        /// </summary>
+        private const int PendingToDisplay = 25;
+
         public const string FederationGatewayFeatureNamespace = "federationgateway";
 
         private readonly IConnectionManager connectionManager;
@@ -186,7 +191,6 @@ namespace Stratis.Features.FederatedPeg
             catch (Exception e)
             {
                 this.logger.LogError(e.ToString());
-                throw;
             }
         }
 
@@ -218,14 +222,27 @@ namespace Stratis.Features.FederatedPeg
                 benchLog.AppendLine();
             }
 
-            List<WithdrawalModel> pendingWithdrawals = this.withdrawalHistoryProvider.GetPending();
+            try
+            {
+                List<WithdrawalModel> pendingWithdrawals = this.withdrawalHistoryProvider.GetPending();
 
-            if (pendingWithdrawals.Count > 0)
+                if (pendingWithdrawals.Count > 0)
+                {
+                    benchLog.AppendLine("--- Pending Withdrawals ---");
+                    foreach (WithdrawalModel withdrawal in pendingWithdrawals.Take(PendingToDisplay))
+                        benchLog.AppendLine(withdrawal.ToString());
+
+                    if (pendingWithdrawals.Count > PendingToDisplay)
+                        benchLog.AppendLine($"And {pendingWithdrawals.Count - PendingToDisplay} more...");
+
+                    benchLog.AppendLine();
+                }
+            }
+            catch (Exception exception)
             {
                 benchLog.AppendLine("--- Pending Withdrawals ---");
-                foreach (WithdrawalModel withdrawal in pendingWithdrawals)
-                    benchLog.AppendLine(withdrawal.ToString());
-                benchLog.AppendLine();
+                benchLog.AppendLine("Failed to retrieve data");
+                this.logger.LogDebug("Exception occurred while getting pending withdrawals: '{0}'.", exception.ToString());
             }
 
             List<WithdrawalModel> completedWithdrawals = this.withdrawalHistoryProvider.GetHistory(TransfersToDisplay);
@@ -333,7 +350,7 @@ namespace Stratis.Features.FederatedPeg
                 features.AddFeature<PoAFeature>().DependOn<FederatedPegFeature>().FeatureServices(services =>
                     {
                         services.AddSingleton<PoABlockHeaderValidator>();
-                        services.AddSingleton<IPoAMiner, PoAMiner>();
+                        services.AddSingleton<IPoAMiner, CollateralPoAMiner>();
                         services.AddSingleton<ISlotsManager, SlotsManager>();
                         services.AddSingleton<BlockDefinition, FederatedPegBlockDefinition>();
                         services.AddSingleton<ICoinbaseSplitter, PremineCoinbaseSplitter>();

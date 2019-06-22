@@ -582,6 +582,10 @@ namespace Stratis.Bitcoin.Features.Miner.Staking
                     }
 
                     block.Transactions.Insert(1, coinstakeContext.CoinstakeTx);
+
+                    // The coinstake was added to the block so we need to regenerate the witness commitment.
+                    BlockDefinition.AddOrUpdateCoinbaseCommitmentToBlock(this.network, block);
+
                     block.UpdateMerkleRoot();
 
                     // Append a signature to our block.

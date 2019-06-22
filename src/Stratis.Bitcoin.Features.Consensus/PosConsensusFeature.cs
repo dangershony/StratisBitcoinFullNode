@@ -102,11 +102,10 @@ namespace Stratis.Bitcoin.Features.Consensus
 
             connectionParameters.TemplateBehaviors.Add(new ProvenHeadersReservedSlotsBehavior(this.connectionManager, this.loggerFactory));
 
+            // Add witness discovery as a requirement if witness is activated.
             DeploymentFlags flags = this.nodeDeployments.GetFlags(this.consensusManager.Tip);
             if (flags.ScriptFlags.HasFlag(ScriptVerify.Witness))
                 this.connectionManager.AddDiscoveredNodesRequirement(NetworkPeerServices.NODE_WITNESS);
-
-           
 
             return Task.CompletedTask;
         }
