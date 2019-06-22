@@ -184,6 +184,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Features.SegWitWal
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ObsidianX", "ObsidianX", "{4208F272-5766-46B4-8648-B5B5666166C5}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VisualCrypt.VisualCryptLight", "VisualCrypt.VisualCryptLight\VisualCrypt.VisualCryptLight.csproj", "{34BBF5AD-2FF1-4E58-A8DC-9424B427C28C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -476,6 +478,10 @@ Global
 		{47E84B90-1577-4131-91CF-6C90B5CD39BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{47E84B90-1577-4131-91CF-6C90B5CD39BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{47E84B90-1577-4131-91CF-6C90B5CD39BB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{34BBF5AD-2FF1-4E58-A8DC-9424B427C28C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{34BBF5AD-2FF1-4E58-A8DC-9424B427C28C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{34BBF5AD-2FF1-4E58-A8DC-9424B427C28C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{34BBF5AD-2FF1-4E58-A8DC-9424B427C28C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -540,6 +546,7 @@ Global
 		{546292A0-4D16-4319-9EF0-3B4F7D829BFB} = {4208F272-5766-46B4-8648-B5B5666166C5}
 		{0DEDC29E-F933-43FF-976F-F222B095F53B} = {E4693985-DDF7-4CF3-887B-0291135F9499}
 		{47E84B90-1577-4131-91CF-6C90B5CD39BB} = {4208F272-5766-46B4-8648-B5B5666166C5}
+		{34BBF5AD-2FF1-4E58-A8DC-9424B427C28C} = {4208F272-5766-46B4-8648-B5B5666166C5}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6C780ABA-5872-4B83-AD3F-A5BD423AD907}
