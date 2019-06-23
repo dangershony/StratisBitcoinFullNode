@@ -274,8 +274,9 @@ namespace Obsidian.Features.SegWitWallet
             // Check the password.
             try
             {
-                if (password != "q")
-                    throw new Exception("Password must be 'q'");
+                const string expectedPassword = "pw_check_in_login.component_is_not_supported";
+                if (password != expectedPassword)
+                    throw new Exception($"Error: Expected '{expectedPassword}'. The user should not enter the unlocking password to load a .{WalletFileExtension} wallet.");
             }
             catch (Exception ex)
             {
