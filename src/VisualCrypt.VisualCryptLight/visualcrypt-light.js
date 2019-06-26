@@ -192,6 +192,45 @@ const vcl = (function (window) {
             throw message;
         }
     }
+
+    let hexTable = null;
+
+    function hexStringToBytes(hexString) {
+        ensureHexTable();
+
+        const hex = hexString.trim().replace("0x", "").toLowerCase();
+        if (hex.length % 2 !== 0)
+            throw "Invalid lenght of hexString";
+
+        let bytes = new Uint8Array(hex.length / 2);
+
+        for (let j = 0; j < hex.length; j = j + 2) {
+            bytes[j / 2] = hexTable.indexOf(hex.substr(j, 2));
+        }
+        return bytes;
+    }
+
+    function bytesToHexString(uint8Array) {
+        ensureHexTable();
+        let hex = "";
+        for (let i = 0; i < uint8Array.length; i++) {
+            hex += hexTable[uint8Array[i]];
+        }
+    }
+
+    function ensureHexTable() {
+        if (hexTable === null) {
+
+            hexTable = new Array(256);
+
+            for (let i = 0; i <= 255; i++) {
+                if (i < 16)
+                    table[i] = "0" + i.toString(16);
+                else
+                    table[i] = i.toString(16);
+            }
+        }
+    }
     return {
         generateKeyPair: function () {
             return generateKeyPair();
@@ -204,7 +243,14 @@ const vcl = (function (window) {
         },
         decrypt: function (cipherV2Bytes, serverPublicKey, clientPrivateKey) {
             return decrypt(cipherV2Bytes, serverPublicKey, clientPrivateKey);
+        },
+        hexStringToBytes: function (hexString) {
+            return hexStringToBytes(hexString);
+        },
+        bytesToHexString: function (uint8Array) {
+            return bytesToHexString(uint8Array);
         }
+
     };
 })(window);
 

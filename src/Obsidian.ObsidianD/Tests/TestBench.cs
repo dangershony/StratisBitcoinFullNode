@@ -17,7 +17,7 @@ namespace Obsidian.ObsidianD.Tests
         {
 
 
-            //CreateNDWallet(fullNode);
+           //CreateNDWallet(fullNode);
             //CreateWalletAndPrintWords(fullNode);
 
 

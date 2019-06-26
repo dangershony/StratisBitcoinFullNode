@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using NBitcoin;
 using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
@@ -9,8 +10,8 @@ namespace Obsidian.Features.SegWitWallet
 {
     public class KeyAddress
     {
-        [JsonProperty(PropertyName = "privatekey")]
-        public byte[] PrivateKey { get; set; }
+        [JsonProperty(PropertyName = "encryptedPrivateKey")]
+        public byte[] EncryptedPrivateKey { get; set; }
 
         [JsonProperty(PropertyName = "compressedpublickey")]
         public byte[] CompressedPublicKey { get; set; }
@@ -33,10 +34,10 @@ namespace Obsidian.Features.SegWitWallet
         [JsonProperty(PropertyName = "transactions")]
         public ICollection<TransactionData> Transactions { get; set; } = new List<TransactionData>();
 
-        public static KeyAddress CreateWithPrivateKey(byte[] privateKey, int coinType, int uniqueIndex, byte witnessVersion = 0, string bech32Prefix = "odx")
+        public static KeyAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, int coinType, int uniqueIndex, byte witnessVersion, string bech32Prefix)
         {
             var adr = new KeyAddress();
-            adr.PrivateKey = privateKey;
+            adr.EncryptedPrivateKey = keyEncryption(keyEncryptionPassphrase, privateKey);
 
             adr.CoinType = coinType;
             adr.UniqueIndex = uniqueIndex;
@@ -51,7 +52,6 @@ namespace Obsidian.Features.SegWitWallet
             adr.PaymentScriptBytes = adr.GetPaymentScriptBytes();
 
             return adr;
-
         }
     }
 }

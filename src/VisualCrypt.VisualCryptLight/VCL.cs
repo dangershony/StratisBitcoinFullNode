@@ -13,7 +13,7 @@ namespace VisualCrypt.VisualCryptLight
 	{
 		static IVisualCrypt2Service _visualCrypt2Service;
 
-		static IVisualCrypt2Service Instance()
+		public static IVisualCrypt2Service Instance()
 		{
 			if (_visualCrypt2Service == null)
 			{
@@ -63,7 +63,28 @@ namespace VisualCrypt.VisualCryptLight
 		}
 
 
-		static KeyMaterial64 ToKeyMaterial64(byte[] hashedSharedSecretBytes)
+        public static byte[] EncryptWithPassphrase(string passphrase, byte[] bytesToEncryt)
+        {
+            var context = GetContext();
+            NormalizedPassword normalizedPassword = Instance().NormalizePassword(passphrase).Result;
+            KeyMaterial64 passwordDerivedkeyMaterial64 = Instance().HashPassword(normalizedPassword).Result;
+            CipherV2 cipherV2 = Instance().BinaryEncrypt(new Clearbytes(bytesToEncryt), passwordDerivedkeyMaterial64,
+                new RoundsExponent(RoundsExponent.DontMakeRounds), context).Result;
+            var cipherV2Bytes = Instance().BinaryEncodeVisualCrypt(cipherV2, context).Result;
+            return cipherV2Bytes;
+        }
+
+        public static byte[] DecryptWithPassphrase(string passphrase, byte[] bytesToDecrypt)
+        {
+            var context = GetContext();
+            NormalizedPassword normalizedPassword = Instance().NormalizePassword(passphrase).Result;
+            KeyMaterial64 passwordDerivedkeyMaterial64 = Instance().HashPassword(normalizedPassword).Result;
+            CipherV2 cipherV2 = Instance().BinaryDecodeVisualCrypt(bytesToDecrypt, context).Result;
+            return Instance().BinaryDecrypt(cipherV2, passwordDerivedkeyMaterial64, context).Result.GetBytes();
+        }
+
+
+        static KeyMaterial64 ToKeyMaterial64(byte[] hashedSharedSecretBytes)
 		{
 			byte[] dest = new byte[64];
 			Buffer.BlockCopy(hashedSharedSecretBytes, 0, dest, 0, 32);
@@ -78,5 +99,7 @@ namespace VisualCrypt.VisualCryptLight
 			};
 			return new LongRunningOperation(action, () => { Debug.WriteLine("Done!"); }).Context;
 		}
-	}
+
+       
+    }
 }

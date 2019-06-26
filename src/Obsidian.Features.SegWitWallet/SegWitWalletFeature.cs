@@ -23,14 +23,14 @@ namespace Obsidian.Features.SegWitWallet
     public class SegWitWalletFeature : BaseWalletFeature
     {
         readonly IWalletSyncManager walletSyncManager;
-        readonly IWalletManager walletManager;
+        readonly SegWitWalletManager walletManager;
         readonly IConnectionManager connectionManager;
         readonly IAddressBookManager addressBookManager;
         readonly BroadcasterBehavior broadcasterBehavior;
 
         public SegWitWalletFeature(
             IWalletSyncManager walletSyncManager,
-            IWalletManager walletManager,
+            SegWitWalletManager walletManager,
             IAddressBookManager addressBookManager,
             IConnectionManager connectionManager,
             BroadcasterBehavior broadcasterBehavior,
@@ -56,7 +56,7 @@ namespace Obsidian.Features.SegWitWallet
             this.addressBookManager.Initialize();
 
             this.connectionManager.Parameters.TemplateBehaviors.Add(this.broadcasterBehavior);
-            //this.walletSyncManager.SyncFromHeight(1);
+            this.walletSyncManager.SyncFromHeight(1);
 
             return Task.CompletedTask;
         }

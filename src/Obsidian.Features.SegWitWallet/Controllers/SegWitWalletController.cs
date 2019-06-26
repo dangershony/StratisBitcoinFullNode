@@ -5,19 +5,20 @@ using System.Linq;
 using System.Net;
 using System.Security;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Connection;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
-using Stratis.Bitcoin.Features.Wallet.Controllers;
 using Stratis.Bitcoin.Features.Wallet.Helpers;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Utilities;
 using Stratis.Bitcoin.Utilities.JsonErrors;
 using Stratis.Bitcoin.Utilities.ModelStateErrors;
+using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.SegWitWallet.Controllers
 {
@@ -27,34 +28,22 @@ namespace Obsidian.Features.SegWitWallet.Controllers
     [Route("api/[controller]")]
     public class SegWitWalletController : Controller
     {
-        public const int MaxHistoryItemsPerAccount = 500;
+        const int MaxHistoryItemsPerAccount = 500;
 
-        private readonly SegWitWalletManager walletManager;
-
-        private readonly SegWitWalletTransactionHandler walletTransactionHandler;
-
-        private readonly IWalletSyncManager walletSyncManager;
-
-        private readonly CoinType coinType;
-
-        /// <summary>Specification of the network the node runs on - regtest/testnet/mainnet.</summary>
-        private readonly Network network;
-
-        private readonly IConnectionManager connectionManager;
-
-        private readonly ChainIndexer chainIndexer;
-
-        /// <summary>Instance logger.</summary>
-        private readonly ILogger logger;
-
-        private readonly IBroadcasterManager broadcasterManager;
-
-        /// <summary>Provider of date time functionality.</summary>
-        private readonly IDateTimeProvider dateTimeProvider;
+        readonly SegWitWalletManager segWitWalletManager;
+        readonly SegWitWalletTransactionHandler walletTransactionHandler;
+        readonly IWalletSyncManager walletSyncManager;
+        readonly CoinType coinType;
+        readonly Network network;
+        readonly IConnectionManager connectionManager;
+        readonly ChainIndexer chainIndexer;
+        readonly ILogger logger;
+        readonly IBroadcasterManager broadcasterManager;
+        readonly IDateTimeProvider dateTimeProvider;
 
         public SegWitWalletController(
             ILoggerFactory loggerFactory,
-            IWalletManager walletManager,
+            SegWitWalletManager segWitWalletManager,
             IWalletTransactionHandler walletTransactionHandler,
             IWalletSyncManager walletSyncManager,
             IConnectionManager connectionManager,
@@ -63,7 +52,7 @@ namespace Obsidian.Features.SegWitWallet.Controllers
             IBroadcasterManager broadcasterManager,
             IDateTimeProvider dateTimeProvider)
         {
-            this.walletManager = (SegWitWalletManager)walletManager;
+            this.segWitWalletManager = segWitWalletManager;
             this.walletTransactionHandler = (SegWitWalletTransactionHandler)walletTransactionHandler;
             this.walletSyncManager = walletSyncManager;
             this.connectionManager = connectionManager;
@@ -76,100 +65,38 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         }
 
         /// <summary>
-        /// Generates a mnemonic to use for an HD wallet.
-        /// </summary>
-        /// <param name="language">The language for the words in the mnemonic. The options are: English, French, Spanish, Japanese, ChineseSimplified and ChineseTraditional. Defaults to English.</param>
-        /// <param name="wordCount">The number of words in the mnemonic. The options are: 12,15,18,21 or 24. Defaults to 12.</param>
-        /// <returns>A JSON object containing the generated mnemonic.</returns>
-        [Route("mnemonic")]
-        [HttpGet]
-        public IActionResult GenerateMnemonic([FromQuery] string language = "English", int wordCount = 12)
-        {
-            try
-            {
-                Wordlist wordList;
-                switch (language.ToLowerInvariant())
-                {
-                    case "english":
-                        wordList = Wordlist.English;
-                        break;
-
-                    case "french":
-                        wordList = Wordlist.French;
-                        break;
-
-                    case "spanish":
-                        wordList = Wordlist.Spanish;
-                        break;
-
-                    case "japanese":
-                        wordList = Wordlist.Japanese;
-                        break;
-
-                    case "chinesetraditional":
-                        wordList = Wordlist.ChineseTraditional;
-                        break;
-
-                    case "chinesesimplified":
-                        wordList = Wordlist.ChineseSimplified;
-                        break;
-
-                    default:
-                        throw new FormatException($"Invalid language '{language}'. Choices are: English, French, Spanish, Japanese, ChineseSimplified and ChineseTraditional.");
-                }
-
-                var count = (WordCount)wordCount;
-
-                // generate the mnemonic
-                var mnemonic = new Mnemonic(wordList, count);
-                return this.Json(mnemonic.ToString());
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
-        }
-
-        /// <summary>
         /// Creates a new wallet on this full node.
         /// </summary>
         /// <param name="request">An object containing the necessary parameters to create a wallet.</param>
         /// <returns>A JSON object containing the mnemonic created for the new wallet.</returns>
         [Route("create")]
         [HttpPost]
-        public IActionResult Create([FromBody]WalletCreationRequest request)
+        public async Task<IActionResult> CreateAsync([FromBody]WalletCreationRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
+                try
+                {
+                    Mnemonic requestMnemonic = string.IsNullOrEmpty(request.Mnemonic) ? null : new Mnemonic(request.Mnemonic);
+                    throw new NotImplementedException();
+                    //Mnemonic mnemonic = this.segWitWalletManager.CreateWallet(request.Password, request.Name, request.Passphrase, mnemonic: requestMnemonic);
 
-            try
-            {
-                Mnemonic requestMnemonic = string.IsNullOrEmpty(request.Mnemonic) ? null : new Mnemonic(request.Mnemonic);
+                    //// start syncing the wallet from the creation date
+                    //this.walletSyncManager.SyncFromDate(this.dateTimeProvider.GetUtcNow());
 
-                Mnemonic mnemonic = this.walletManager.CreateWallet(request.Password, request.Name, request.Passphrase, mnemonic: requestMnemonic);
-
-                // start syncing the wallet from the creation date
-                this.walletSyncManager.SyncFromDate(this.dateTimeProvider.GetUtcNow());
-
-                return this.Json(mnemonic.ToString());
-            }
-            catch (WalletException e)
-            {
-                // indicates that this wallet already exists
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.Conflict, e.Message, e.ToString());
-            }
-            catch (NotSupportedException e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, "There was a problem creating a wallet.", e.ToString());
-            }
+                    //return this.Json(mnemonic.ToString());
+                }
+                catch (WalletException e)
+                {
+                    this.logger.LogError("Exception occurred: {0}", e.ToString());
+                    return BuildErrorResponse(HttpStatusCode.Conflict, e.Message); // indicates that this wallet already exists
+                }
+                catch (NotSupportedException e)
+                {
+                    this.logger.LogError("Exception occurred: {0}", e.ToString());
+                    return BuildErrorResponse(HttpStatusCode.BadGateway, "There was a problem creating a wallet: " + e.Message);
+                }
+            });
         }
 
         /// <summary>
@@ -179,26 +106,13 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing the generated signature.</returns>
         [Route("signmessage")]
         [HttpPost]
-        public IActionResult SignMessage([FromBody]SignMessageRequest request)
+        public async Task<IActionResult> SignMessageAsync([FromBody]SignMessageRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                string signature = this.walletManager.SignMessage(request.Password, request.WalletName, request.ExternalAddress, request.Message);
+                string signature = this.segWitWalletManager.SignMessage(request.Password, request.WalletName, request.ExternalAddress, request.Message);
                 return this.Json(signature);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -208,65 +122,49 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing the result of the verification.</returns>
         [Route("verifymessage")]
         [HttpPost]
-        public IActionResult VerifyMessage([FromBody]VerifyRequest request)
+        public async Task<IActionResult> VerifyMessageAsync([FromBody]VerifyRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                bool result = this.walletManager.VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
+                bool result =
+                    this.segWitWalletManager.VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
                 return this.Json(result.ToString());
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
         /// Loads a previously created wallet.
         /// </summary>
         /// <param name="request">An object containing the necessary parameters to load an existing wallet</param>
+        /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
         [Route("load")]
         [HttpPost]
-        public IActionResult Load([FromBody]WalletLoadRequest request)
+        public async Task<IActionResult> LoadAsync([FromBody]WalletLoadRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                this.walletManager.LoadWallet(request.Password, request.Name);
-                return this.Ok();
-            }
-            catch (FileNotFoundException e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.NotFound, "This wallet was not found at the specified location.", e.ToString());
-            }
-            catch (SecurityException e)
-            {
-                // indicates that the password is wrong
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.Forbidden, "Wrong password, please try again.", e.ToString());
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                try
+                {
+                    this.segWitWalletManager.LoadWallet(request.Password, request.Name);
+                    return this.Ok();
+                }
+                catch (FileNotFoundException e)
+                {
+                    this.logger.LogError("Exception occurred: {0}", e.ToString());
+                    return BuildErrorResponse(HttpStatusCode.NotFound, "This wallet was not found at the specified location.");
+                }
+                catch (SecurityException e)
+                {
+                    // indicates that the password is wrong
+                    this.logger.LogError("Exception occurred: {0}", e.ToString());
+                    return BuildErrorResponse(HttpStatusCode.Forbidden, "Wrong password, please try again.");
+                }
+                catch (Exception e)
+                {
+                    this.logger.LogError("Exception occurred: {0}", e.ToString());
+                    return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
+                }
+            });
         }
 
         /// <summary>
@@ -276,92 +174,34 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A value of Ok if the wallet was successfully recovered.</returns>
         [Route("recover")]
         [HttpPost]
-        public IActionResult Recover([FromBody]WalletRecoveryRequest request)
+        public async Task<IActionResult> RecoverAsync([FromBody]WalletRecoveryRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
+                try
+                {
+                    Wallet wallet = this.segWitWalletManager.RecoverWallet(request.Password, request.Name, request.Mnemonic, request.CreationDate, passphrase: request.Passphrase);
 
-            try
-            {
-                Wallet wallet = this.walletManager.RecoverWallet(request.Password, request.Name, request.Mnemonic, request.CreationDate, passphrase: request.Passphrase);
+                    this.SyncFromBestHeightForRecoveredWallets(request.CreationDate);
 
-                this.SyncFromBestHeightForRecoveredWallets(request.CreationDate);
-
-                return this.Ok();
-            }
-            catch (WalletException e)
-            {
-                // indicates that this wallet already exists
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.Conflict, e.Message, e.ToString());
-            }
-            catch (FileNotFoundException e)
-            {
-                // indicates that this wallet does not exist
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.NotFound, "Wallet not found.", e.ToString());
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
-        }
-
-        /// <summary>
-        /// Recovers a wallet using its extended public key. Note that the recovered wallet will not have a private key and is
-        /// only suitable for returning the wallet history using further API calls.
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to recover a wallet using its extended public key.</param>
-        /// <returns>A value of Ok if the wallet was successfully recovered.</returns>
-        [Route("recover-via-extpubkey")]
-        [HttpPost]
-        public IActionResult RecoverViaExtPubKey([FromBody]WalletExtPubRecoveryRequest request)
-        {
-            Guard.NotNull(request, nameof(request));
-
-            if (!this.ModelState.IsValid)
-            {
-                this.logger.LogTrace("(-)[MODEL_STATE_INVALID]");
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                string accountExtPubKey =
-                    this.network.IsBitcoin()
-                        ? request.ExtPubKey
-                        : LegacyExtPubKeyConverter.ConvertIfInLegacyStratisFormat(request.ExtPubKey, this.network);
-
-                this.walletManager.RecoverWallet(request.Name, ExtPubKey.Parse(accountExtPubKey), request.AccountIndex,
-                    request.CreationDate);
-
-                this.SyncFromBestHeightForRecoveredWallets(request.CreationDate);
-
-                return this.Ok();
-            }
-            catch (WalletException e)
-            {
-                // Wallet already exists.
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.Conflict, e.Message, e.ToString());
-            }
-            catch (FileNotFoundException e)
-            {
-                // Wallet does not exist.
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.NotFound, "Wallet not found.", e.ToString());
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                    return this.Ok();
+                }
+                catch (WalletException e)
+                {
+                    this.logger.LogError("Exception occurred: {0}", e.ToString());
+                    return BuildErrorResponse(HttpStatusCode.Conflict, "Wallet already exists: " + e.Message);
+                }
+                catch (FileNotFoundException e)
+                {
+                    this.logger.LogError("Exception occurred: {0}", e.ToString());
+                    return BuildErrorResponse(HttpStatusCode.NotFound, "Wallet not found.");
+                }
+                catch (Exception e)
+                {
+                    this.logger.LogError("Exception occurred: {0}", e.ToString());
+                    return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
+                }
+            });
         }
 
         /// <summary>
@@ -373,23 +213,16 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing the wallet information.</returns>
         [Route("general-info")]
         [HttpGet]
-        public IActionResult GetGeneralInfo([FromQuery] WalletName request)
+        public async Task<IActionResult> GetGeneralInfoAsync([FromQuery] WalletName request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
 
-            try
-            {
-                KeyWallet wallet = this.walletManager.GetSegWitWallet(request.Name);
+                KeyWallet wallet = this.segWitWalletManager.GetSegWitWallet(request.Name);
 
                 var model = new WalletGeneralInfoModel
                 {
-                    Network = this.walletManager.GetNetwork(),
+                    Network = this.segWitWalletManager.GetNetwork(),
                     CreationTime = wallet.CreationTime,
                     LastBlockSyncedHeight = wallet.LastBlockSyncedHeight,
                     ConnectedNodes = this.connectionManager.ConnectedPeers.Count(),
@@ -398,20 +231,14 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     IsDecrypted = true
                 };
 
-                // Get the wallet's file path.
-                (string folder, IEnumerable<string> fileNameCollection) = this.walletManager.GetWalletsFiles();
-                string searchFile = Path.ChangeExtension(request.Name, this.walletManager.GetWalletFileExtension());
+                (string folder, IEnumerable<string> fileNameCollection) = this.segWitWalletManager.GetWalletsFiles();
+                string searchFile = Path.ChangeExtension(request.Name, this.segWitWalletManager.GetWalletFileExtension());
                 string fileName = fileNameCollection.FirstOrDefault(i => i.Equals(searchFile));
                 if (folder != null && fileName != null)
                     model.WalletFilePath = Path.Combine(folder, fileName);
 
-                return this.Json(model);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError(e, "Exception occurred: {0}", e.StackTrace);
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                return Json(model);
+            });
         }
 
         /// <summary>
@@ -422,21 +249,14 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing the wallet history.</returns>
         [Route("history")]
         [HttpGet]
-        public IActionResult GetHistory([FromQuery] WalletHistoryRequest request)
+        public async Task<IActionResult> GetHistoryAsync([FromQuery] WalletHistoryRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            if (!this.ModelState.IsValid)
-            {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
+            return await ExecuteAsync(request, async () =>
             {
                 var model = new WalletHistoryModel();
 
                 // Get a list of all the transactions found in an account (or in a wallet if no account is specified), with the addresses associated with them.
-                IEnumerable<AccountHistory> accountsHistory = this.walletManager.GetHistory(request.WalletName, request.AccountName);
+                IEnumerable<AccountHistory> accountsHistory = this.segWitWalletManager.GetHistory(request.WalletName, request.AccountName);
 
                 foreach (AccountHistory accountHistory in accountsHistory)
                 {
@@ -597,12 +417,7 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                 }
 
                 return this.Json(model);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -612,21 +427,13 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing the wallet balance.</returns>
         [Route("balance")]
         [HttpGet]
-        public IActionResult GetBalance([FromQuery] WalletBalanceRequest request)
+        public async Task<IActionResult> GetBalanceAsync([FromQuery] WalletBalanceRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
-            {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
+            return await ExecuteAsync(request, async () =>
             {
                 var model = new WalletBalanceModel();
 
-                IEnumerable<AccountBalance> balances = this.walletManager.GetBalances(request.WalletName, request.AccountName);
+                IEnumerable<AccountBalance> balances = this.segWitWalletManager.GetBalances(request.WalletName, request.AccountName);
 
                 foreach (AccountBalance balance in balances)
                 {
@@ -643,12 +450,7 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                 }
 
                 return this.Json(model);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -661,19 +463,11 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing the balance, fee, and an address for the balance.</returns>
         [Route("received-by-address")]
         [HttpGet]
-        public IActionResult GetReceivedByAddress([FromQuery] ReceivedByAddressRequest request)
+        public async Task<IActionResult> GetReceivedByAddressAsync([FromQuery] ReceivedByAddressRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // Checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                AddressBalance balanceResult = this.walletManager.GetAddressBalance(request.Address);
+                AddressBalance balanceResult = this.segWitWalletManager.GetAddressBalance(request.Address);
                 return this.Json(new AddressBalanceModel
                 {
                     CoinType = this.coinType,
@@ -681,12 +475,7 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     AmountConfirmed = balanceResult.AmountConfirmed,
                     AmountUnconfirmed = balanceResult.AmountUnconfirmed
                 });
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -698,30 +487,17 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// along with the fee required to spend it.</returns>
         [Route("maxbalance")]
         [HttpGet]
-        public IActionResult GetMaximumSpendableBalance([FromQuery] WalletMaximumBalanceRequest request)
+        public async Task<IActionResult> GetMaximumSpendableBalanceAsync([FromQuery] WalletMaximumBalanceRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // Checks the request is valid.
-            if (!this.ModelState.IsValid)
-            {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
+            return await ExecuteAsync(request, async () =>
             {
                 (Money maximumSpendableAmount, Money Fee) transactionResult = this.walletTransactionHandler.GetMaximumSpendableAmount(new WalletAccountReference(request.WalletName, request.AccountName), FeeParser.Parse(request.FeeType), request.AllowUnconfirmed);
-                return this.Json(new MaxSpendableAmountModel
+                return Json(new MaxSpendableAmountModel
                 {
                     MaxSpendableAmount = transactionResult.maximumSpendableAmount,
                     Fee = transactionResult.Fee
                 });
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -733,39 +509,26 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing the spendable transactions for an account.</returns>
         [Route("spendable-transactions")]
         [HttpGet]
-        public IActionResult GetSpendableTransactions([FromQuery] SpendableTransactionsRequest request)
+        public async Task<IActionResult> GetSpendableTransactionsAsync([FromQuery] SpendableTransactionsRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // Checks the request is valid.
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
+                var spendableTransactions = this.segWitWalletManager.GetSpendableTransactionsInAccount(request.WalletName, request.MinConfirmations);
 
-            try
-            {
-                IEnumerable<UnspentOutputReference> spendableTransactions = this.walletManager.GetSpendableTransactionsInAccount(new WalletAccountReference(request.WalletName, request.AccountName), request.MinConfirmations);
-
-                return this.Json(new SpendableTransactionsModel
+                return Json(new SpendableTransactionsModel
                 {
                     SpendableTransactions = spendableTransactions.Select(st => new SpendableTransactionModel
                     {
                         Id = st.Transaction.Id,
                         Amount = st.Transaction.Amount,
-                        Address = st.Address.Address,
+                        Address = st.Address.Bech32,
                         Index = st.Transaction.Index,
                         IsChange = st.Address.IsChangeAddress(),
                         CreationTime = st.Transaction.CreationTime,
                         Confirmations = st.Confirmations
                     }).ToList()
                 });
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -778,17 +541,9 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>The estimated fee for the transaction.</returns>
         [Route("estimate-txfee")]
         [HttpPost]
-        public IActionResult GetTransactionFeeEstimate([FromBody]TxFeeEstimateRequest request)
+        public async Task<IActionResult> GetTransactionFeeEstimateAsync([FromBody]TxFeeEstimateRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
-            {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
+            return await ExecuteAsync(request, async () =>
             {
                 var recipients = new List<Recipient>();
                 foreach (RecipientModel recipientModel in request.Recipients)
@@ -811,13 +566,8 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     Sign = false
                 };
 
-                return this.Json(this.walletTransactionHandler.EstimateFee(context));
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                return Json(this.walletTransactionHandler.EstimateFee(context));
+            });
         }
 
         /// <summary>
@@ -828,18 +578,17 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// the transaction, and the transaction fee.</returns>
         [Route("build-transaction")]
         [HttpPost]
-        public IActionResult BuildTransaction([FromBody] BuildTransactionRequest request)
+        public async Task<IActionResult> BuildTransactionAsync([FromBody] BuildTransactionRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
+                byte[] clientPublicKeyBytes = Convert.FromBase64String(request.ClientPublicKey);
+                byte[] cipherV2Bytes = Convert.FromBase64String(request.Password);
 
-            try
-            {
+                var passwordBytes = VCL.Decrypt(cipherV2Bytes, clientPublicKeyBytes, VCL.ECKeyPair.PrivateKey);
+                var password = Encoding.UTF8.GetString(passwordBytes);
+                request.Password = password;
+
                 var recipients = new List<Recipient>();
                 foreach (RecipientModel recipientModel in request.Recipients)
                 {
@@ -879,12 +628,7 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                 };
 
                 return this.Json(model);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -895,24 +639,16 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing information about the sent transaction.</returns>
         [Route("send-transaction")]
         [HttpPost]
-        public IActionResult SendTransaction([FromBody] SendTransactionRequest request)
+        public async Task<IActionResult> SendTransactionAsync([FromBody] SendTransactionRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
+                if (!this.connectionManager.ConnectedPeers.Any())
+                {
+                    this.logger.LogTrace("(-)[NO_CONNECTED_PEERS]");
+                    return ErrorHelpers.BuildErrorResponse(HttpStatusCode.Forbidden, "Can't send transaction: sending transaction requires at least one connection!", string.Empty);
+                }
 
-            if (!this.connectionManager.ConnectedPeers.Any())
-            {
-                this.logger.LogTrace("(-)[NO_CONNECTED_PEERS]");
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.Forbidden, "Can't send transaction: sending transaction requires at least one connection!", string.Empty);
-            }
-
-            try
-            {
                 Transaction transaction = this.network.CreateTransaction(request.Hex);
 
                 var model = new WalletSendTransactionModel
@@ -943,12 +679,7 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                 }
 
                 return this.Json(model);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -958,67 +689,18 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// the names of the files found within the folder.</returns>
         [Route("files")]
         [HttpGet]
-        public IActionResult ListWalletsFiles()
+        public async Task<IActionResult> ListWalletsFilesAsync()
         {
-            try
+            return await ExecuteAsync("", async () =>
             {
-                (string folderPath, IEnumerable<string> filesNames) result = this.walletManager.GetWalletsFiles();
+                (string folderPath, IEnumerable<string> filesNames) result = this.segWitWalletManager.GetWalletsFiles();
                 var model = new WalletFileModel
                 {
                     WalletsPath = result.folderPath,
                     WalletsFiles = result.filesNames
                 };
-
                 return this.Json(model);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
-        }
-
-        /// <summary>
-        /// Creates a new account for a wallet.
-        /// Accounts are given the name "account i", where i is an incremental index which starts at 0.
-        /// According to BIP44. an account at index i can only be created when the account at index (i - 1)
-        /// contains at least one transaction. For example, if three accounts named "account 0", "account 1",
-        /// and "account 2" already exist and contain at least one transaction, then the
-        /// the function will create "account 3". However, if "account 2", for example, instead contains no
-        /// transactions, then this API call returns "account 2".
-        /// Accounts are created deterministically, which means that on any device, the accounts and addresses
-        /// for a given seed (or mnemonic) are always the same.
-        /// </summary>
-        /// <param name="request">An object containing the necessary parameters to create a new account in a wallet.</param>
-        /// <returns>A JSON object containing the name of the new account or an existing account
-        /// containing no transactions.</returns>
-        [Route("account")]
-        [HttpPost]
-        public IActionResult CreateNewAccount([FromBody]GetUnusedAccountModel request)
-        {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
-            {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                HdAccount result = this.walletManager.GetUnusedAccount(request.WalletName, request.Password);
-                return this.Json(result.Name);
-            }
-            catch (CannotAddAccountToXpubKeyWalletException e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.Forbidden, e.Message, string.Empty);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -1028,26 +710,13 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing a list of accounts for the specified wallet.</returns>
         [Route("accounts")]
         [HttpGet]
-        public IActionResult ListAccounts([FromQuery]ListAccountsModel request)
+        public async Task<IActionResult> ListAccountsAsync([FromQuery]ListAccountsModel request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                IEnumerable<HdAccount> result = this.walletManager.GetAccounts(request.WalletName);
+                IEnumerable<HdAccount> result = this.segWitWalletManager.GetAccounts(request.WalletName);
                 return this.Json(result.Select(a => a.Name));
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+            });
         }
 
         /// <summary>
@@ -1059,26 +728,18 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing the last created and unused address (in Base58 format).</returns>
         [Route("unusedaddress")]
         [HttpGet]
-        public IActionResult GetUnusedAddress([FromQuery]GetUnusedAddressModel request)
+        public async Task<IActionResult> GetUnusedAddressAsync([FromQuery]GetUnusedAddressModel request)
         {
-            Guard.NotNull(request, nameof(request));
+            return await ExecuteAsync(request, async () =>
+            {
+                var address = "";
+                var result = this.segWitWalletManager.GetUnusedAddress(request.WalletName);
 
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
-            {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
+                if (result != null)
+                    address = result.Bech32;
 
-            try
-            {
-                HdAddress result = this.walletManager.GetUnusedAddress(new WalletAccountReference(request.WalletName, request.AccountName));
-                return this.Json(result.Address);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                return this.Json(address);
+            });
         }
 
         /// <summary>
@@ -1091,27 +752,14 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// </summary>
         [Route("unusedaddresses")]
         [HttpGet]
-        public IActionResult GetUnusedAddresses([FromQuery]GetUnusedAddressesModel request)
+        public async Task<IActionResult> GetUnusedAddresses([FromQuery]GetUnusedAddressesModel request)
         {
-            Guard.NotNull(request, nameof(request));
-            int count = int.Parse(request.Count);
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                IEnumerable<HdAddress> result = this.walletManager.GetUnusedAddresses(new WalletAccountReference(request.WalletName, request.AccountName), count);
-                return this.Json(result.Select(x => x.Address).ToArray());
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                int count = int.Parse(request.Count);
+                var addresses = this.segWitWalletManager.GetUnusedAddresses(request.WalletName, count).Select(x => x.Bech32).ToArray();
+                return Json(addresses);
+            });
         }
 
         /// <summary>
@@ -1122,19 +770,11 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// </summary>
         [Route("addresses")]
         [HttpGet]
-        public IActionResult GetAllAddresses([FromQuery]GetAllAddressesModel request)
+        public async Task<IActionResult> GetAllAddressesAsync([FromQuery]GetAllAddressesModel request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // Checks the request is valid.
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                KeyWallet wallet = this.walletManager.GetSegWitWallet(request.WalletName);
+                KeyWallet wallet = this.segWitWalletManager.GetSegWitWallet(request.WalletName);
                 if (wallet == null)
                     throw new WalletException($"No wallet with the name '{request.WalletName}' could be found.");
 
@@ -1148,13 +788,8 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     })
                 };
 
-                return this.Json(model);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                return Json(model);
+            });
         }
 
         /// <summary>
@@ -1174,34 +809,27 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A JSON object containing all removed transactions identified by their
         /// transaction ID and creation time.</returns>
         /// </summary>
+        /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
         [Route("remove-transactions")]
         [HttpDelete]
-        public IActionResult RemoveTransactions([FromQuery]RemoveTransactionsModel request)
+        public async Task<IActionResult> RemoveTransactionsAsync([FromQuery]RemoveTransactionsModel request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // Checks the request is valid.
-            if (!this.ModelState.IsValid)
-            {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
+            return await ExecuteAsync(request, async () =>
             {
                 HashSet<(uint256 transactionId, DateTimeOffset creationTime)> result;
 
                 if (request.DeleteAll)
                 {
-                    result = this.walletManager.RemoveAllTransactions(request.WalletName);
+                    result = this.segWitWalletManager.RemoveAllTransactions(request.WalletName);
                 }
                 else if (request.FromDate != default(DateTime))
                 {
-                    result = this.walletManager.RemoveTransactionsFromDate(request.WalletName, request.FromDate);
+                    result = this.segWitWalletManager.RemoveTransactionsFromDate(request.WalletName, request.FromDate);
                 }
                 else if (request.TransactionsIds != null)
                 {
                     IEnumerable<uint256> ids = request.TransactionsIds.Select(uint256.Parse);
-                    result = this.walletManager.RemoveTransactionsByIds(request.WalletName, ids);
+                    result = this.segWitWalletManager.RemoveTransactionsByIds(request.WalletName, ids);
                 }
                 else
                 {
@@ -1216,9 +844,9 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     ChainedHeader chainedHeader = this.chainIndexer.GetHeader(this.chainIndexer.GetHeightAtTime(earliestDate.DateTime));
 
                     // Update the wallet and save it to the file system.
-                    Wallet wallet = this.walletManager.GetWallet(request.WalletName);
+                    Wallet wallet = this.segWitWalletManager.GetWallet(request.WalletName);
                     wallet.SetLastBlockDetails(chainedHeader);
-                    this.walletManager.SaveWallet(wallet);
+                    this.segWitWalletManager.SaveWallet(wallet);
 
                     // Start the syncing process from the block before the earliest transaction was seen.
                     this.walletSyncManager.SyncFromHeight(chainedHeader.Height - 1);
@@ -1230,43 +858,8 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     CreationTime = r.creationTime
                 });
 
-                return this.Json(model);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
-        }
-
-        /// <summary>
-        /// Gets the extended public key of a specified wallet account.
-        /// <param name="request">An object containing the necessary parameters to retrieve
-        /// the extended public key for a wallet account.</param>
-        /// <returns>A JSON object containing the extended public key for a wallet account.</returns>
-        /// </summary>
-        [Route("extpubkey")]
-        [HttpGet]
-        public IActionResult GetExtPubKey([FromQuery]GetExtPubKeyModel request)
-        {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
-            {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                string result = this.walletManager.GetExtPubKey(new WalletAccountReference(request.WalletName, request.AccountName));
-                return this.Json(result);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                return Json(model);
+            });
         }
 
         /// <summary>
@@ -1279,22 +872,20 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A value of Ok if the resync was successful.</returns>
         [HttpPost]
         [Route("sync")]
-        public IActionResult Sync([FromBody] HashModel model)
+        public async Task<IActionResult> SyncAsync([FromBody] HashModel request)
         {
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
+                ChainedHeader block = this.chainIndexer.GetHeader(uint256.Parse(request.Hash));
 
-            ChainedHeader block = this.chainIndexer.GetHeader(uint256.Parse(model.Hash));
+                if (block == null)
+                {
+                    return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", string.Empty);
+                }
 
-            if (block == null)
-            {
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, $"Block with hash {model.Hash} was not found on the blockchain.", string.Empty);
-            }
-
-            this.walletSyncManager.SyncFromHeight(block.Height);
-            return this.Ok();
+                this.walletSyncManager.SyncFromHeight(block.Height);
+                return this.Ok();
+            });
         }
 
         /// <summary>
@@ -1307,46 +898,38 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         /// <returns>A value of Ok if the resync was successful.</returns>
         [HttpPost]
         [Route("sync-from-date")]
-        public IActionResult SyncFromDate([FromBody] WalletSyncFromDateRequest request)
+        public async Task<IActionResult> SyncFromDate([FromBody] WalletSyncFromDateRequest request)
         {
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
+                this.walletSyncManager.SyncFromDate(request.Date);
 
-            this.walletSyncManager.SyncFromDate(request.Date);
-
-            return this.Ok();
+                return this.Ok();
+            });
         }
 
-        /// <summary>Creates requested amount of UTXOs each of equal value.</summary>
+        /// <summary>
+        /// Creates requested amount of UTXOs each of equal value.
+        /// </summary>
+        /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
         [HttpPost]
         [Route("splitcoins")]
-        public IActionResult SplitCoins([FromBody] SplitCoinsRequest request)
+        public async Task<IActionResult> SplitCoinsAsync([FromBody] SplitCoinsRequest request)
         {
-            Guard.NotNull(request, nameof(request));
-
-            // checks the request is valid
-            if (!this.ModelState.IsValid)
+            return await ExecuteAsync(request, async () =>
             {
-                return ModelStateErrors.BuildErrorResponse(this.ModelState);
-            }
-
-            try
-            {
-                var walletReference = new WalletAccountReference(request.WalletName, request.AccountName);
-                HdAddress address = this.walletManager.GetUnusedAddress(walletReference);
+                KeyAddress address = this.segWitWalletManager.GetUnusedAddress(request.WalletName);
 
                 Money totalAmount = request.TotalAmountToSplit;
                 Money singleUtxoAmount = totalAmount / request.UtxosCount;
 
                 var recipients = new List<Recipient>(request.UtxosCount);
                 for (int i = 0; i < request.UtxosCount; i++)
-                    recipients.Add(new Recipient { ScriptPubKey = address.ScriptPubKey, Amount = singleUtxoAmount });
+                    recipients.Add(new Recipient { ScriptPubKey = address.GetPaymentScript(), Amount = singleUtxoAmount });
 
                 var context = new TransactionBuildContext(this.network)
                 {
-                    AccountReference = walletReference,
+                    AccountReference = new WalletAccountReference { WalletName = request.WalletName, AccountName = request.AccountName },
                     MinConfirmations = 1,
                     Shuffle = true,
                     WalletPassword = request.WalletPassword,
@@ -1356,16 +939,28 @@ namespace Obsidian.Features.SegWitWallet.Controllers
 
                 Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
 
-                return this.SendTransaction(new SendTransactionRequest(transactionResult.ToHex()));
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError("Exception occurred: {0}", e.ToString());
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
+                return await SendTransactionAsync(new SendTransactionRequest(transactionResult.ToHex()));
+            });
         }
 
-        private void SyncFromBestHeightForRecoveredWallets(DateTime walletCreationDate)
+        /// <summary>
+        /// Provides the server's public key to the client.
+        /// </summary>
+        /// <returns>Server public key.</returns>
+        [HttpGet]
+        [Route("getpublickey")]
+        public async Task<IActionResult> GetPublicKeyAsync()
+        {
+            return await ExecuteAsync("", async () =>
+            {
+                // client needs server private key first
+                var model = new VCLModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString() };
+                return Json(model);
+            });
+        }
+
+
+        void SyncFromBestHeightForRecoveredWallets(DateTime walletCreationDate)
         {
             // After recovery the wallet needs to be synced.
             // We only sync if the syncing process needs to go back.
@@ -1376,6 +971,49 @@ namespace Obsidian.Features.SegWitWallet.Controllers
             {
                 this.walletSyncManager.SyncFromHeight(blockHeightToSyncFrom);
             }
+        }
+
+        async Task<IActionResult> ExecuteAsync<T>(T request, Func<Task<IActionResult>> func) where T : class
+        {
+            try
+            {
+                Guard.NotNull(request, nameof(request));
+
+                if (!this.ModelState.IsValid)
+                {
+                    return ModelStateErrors.BuildErrorResponse(this.ModelState);
+                }
+
+                await SegWitWalletManager.WalletSemaphore.WaitAsync();
+                return await func();
+            }
+            catch (Exception e)
+            {
+                this.logger.LogError(e, "Exception occurred: {0}", e.StackTrace);
+                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
+            }
+            finally
+            {
+                SegWitWalletManager.WalletSemaphore.Release();
+            }
+        }
+
+        ErrorResult BuildErrorResponse(HttpStatusCode statusCode, string message, string description = "")
+        {
+            var errorResponse = new ErrorResponse
+            {
+                Errors = new List<ErrorModel>
+                {
+                    new ErrorModel
+                    {
+                        Status = (int) statusCode,
+                        Message = message,
+                        Description = description
+                    }
+                }
+            };
+
+            return new ErrorResult((int)statusCode, errorResponse);
         }
     }
 }
