@@ -67,6 +67,7 @@ namespace Obsidian.ObsidianD
                     .UsePosConsensus()
                     .UseMempool()
                     .UseSegWitWallet()
+                    .UseSegWitWalletApi()
                     .AddPowPosMining()
                     .UseApiSlim()
                     .UseApps()

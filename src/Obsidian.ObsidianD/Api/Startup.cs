@@ -34,7 +34,8 @@ namespace Obsidian.ObsidianD.Api
                             var allowedDomains = new[] { "http://localhost", "http://localhost:4200" };
 
                             builder
-                                .WithOrigins(allowedDomains);
+                                .WithOrigins(allowedDomains)
+                                .AllowAnyHeader();
                             //.AllowAnyMethod()
                             //.AllowAnyHeader()
                             //.AllowCredentials();

@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Obsidian.Features.SegWitWallet.Web\Obsidian.Features.SegWitWallet.Web.csproj" />
     <ProjectReference Include="..\Obsidian.Features.SegWitWallet\Obsidian.Features.SegWitWallet.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.Apps\Stratis.Bitcoin.Features.Apps.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.BlockStore\Stratis.Bitcoin.Features.BlockStore.csproj" />

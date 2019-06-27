@@ -7,8 +7,8 @@ using System.Security;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using NBitcoin;
+using Newtonsoft.Json;
 using Stratis.Bitcoin.Connection;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
@@ -16,16 +16,10 @@ using Stratis.Bitcoin.Features.Wallet.Helpers;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Utilities;
-using Stratis.Bitcoin.Utilities.JsonErrors;
-using Stratis.Bitcoin.Utilities.ModelStateErrors;
 using VisualCrypt.VisualCryptLight;
 
-namespace Obsidian.Features.SegWitWallet.Controllers
+namespace Obsidian.Features.SegWitWallet
 {
-    /// <summary>
-    /// Controller providing operations on a wallet.
-    /// </summary>
-    [Route("api/[controller]")]
     public class SegWitWalletController : Controller
     {
         const int MaxHistoryItemsPerAccount = 500;
@@ -37,12 +31,10 @@ namespace Obsidian.Features.SegWitWallet.Controllers
         readonly Network network;
         readonly IConnectionManager connectionManager;
         readonly ChainIndexer chainIndexer;
-        readonly ILogger logger;
         readonly IBroadcasterManager broadcasterManager;
         readonly IDateTimeProvider dateTimeProvider;
 
         public SegWitWalletController(
-            ILoggerFactory loggerFactory,
             SegWitWalletManager segWitWalletManager,
             IWalletTransactionHandler walletTransactionHandler,
             IWalletSyncManager walletSyncManager,
@@ -59,25 +51,19 @@ namespace Obsidian.Features.SegWitWallet.Controllers
             this.network = network;
             this.coinType = (CoinType)network.Consensus.CoinType;
             this.chainIndexer = chainIndexer;
-            this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
             this.broadcasterManager = broadcasterManager;
             this.dateTimeProvider = dateTimeProvider;
         }
 
-        /// <summary>
-        /// Creates a new wallet on this full node.
-        /// </summary>
-        /// <param name="request">An object containing the necessary parameters to create a wallet.</param>
-        /// <returns>A JSON object containing the mnemonic created for the new wallet.</returns>
-        [Route("create")]
-        [HttpPost]
-        public async Task<IActionResult> CreateAsync([FromBody]WalletCreationRequest request)
+
+        public async Task<string> CreateAsync(WalletCreationRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
                 try
                 {
                     Mnemonic requestMnemonic = string.IsNullOrEmpty(request.Mnemonic) ? null : new Mnemonic(request.Mnemonic);
+                    return default(string);
                     throw new NotImplementedException();
                     //Mnemonic mnemonic = this.segWitWalletManager.CreateWallet(request.Password, request.Name, request.Passphrase, mnemonic: requestMnemonic);
 
@@ -88,95 +74,61 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                 }
                 catch (WalletException e)
                 {
-                    this.logger.LogError("Exception occurred: {0}", e.ToString());
-                    return BuildErrorResponse(HttpStatusCode.Conflict, e.Message); // indicates that this wallet already exists
+                    throw new SegWitWalletException(HttpStatusCode.Conflict, "The wallet already exists.", e);
+
                 }
                 catch (NotSupportedException e)
                 {
-                    this.logger.LogError("Exception occurred: {0}", e.ToString());
-                    return BuildErrorResponse(HttpStatusCode.BadGateway, "There was a problem creating a wallet: " + e.Message);
+                    throw new SegWitWalletException(HttpStatusCode.BadGateway, "Could not create the wallet: " + e.Message, e);
                 }
             });
         }
 
-        /// <summary>
-        /// Signs a message and returns the signature.
-        /// </summary>
-        /// <param name="request">The object containing the parameters used to sign a message.</param>
-        /// <returns>A JSON object containing the generated signature.</returns>
-        [Route("signmessage")]
-        [HttpPost]
-        public async Task<IActionResult> SignMessageAsync([FromBody]SignMessageRequest request)
+
+        public async Task<string> SignMessageAsync(SignMessageRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
-                string signature = this.segWitWalletManager.SignMessage(request.Password, request.WalletName, request.ExternalAddress, request.Message);
-                return this.Json(signature);
+                return this.segWitWalletManager.SignMessage(request.Password, request.WalletName,
+                    request.ExternalAddress, request.Message);
             });
         }
 
-        /// <summary>
-        /// Verifies the signature of a message.
-        /// </summary>
-        /// <param name="request">The object containing the parameters verify a signature.</param>
-        /// <returns>A JSON object containing the result of the verification.</returns>
-        [Route("verifymessage")]
-        [HttpPost]
-        public async Task<IActionResult> VerifyMessageAsync([FromBody]VerifyRequest request)
+
+        public async Task<bool> VerifyMessageAsync(VerifyRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
-                bool result =
-                    this.segWitWalletManager.VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
-                return this.Json(result.ToString());
+                return this.segWitWalletManager.VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
             });
         }
 
-        /// <summary>
-        /// Loads a previously created wallet.
-        /// </summary>
-        /// <param name="request">An object containing the necessary parameters to load an existing wallet</param>
-        /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
-        [Route("load")]
-        [HttpPost]
-        public async Task<IActionResult> LoadAsync([FromBody]WalletLoadRequest request)
+
+        public async Task LoadAsync(WalletLoadRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            await ExecuteAsync(request, async () =>
             {
                 try
                 {
                     this.segWitWalletManager.LoadWallet(request.Password, request.Name);
-                    return this.Ok();
+                    //return this.Ok();
                 }
                 catch (FileNotFoundException e)
                 {
-                    this.logger.LogError("Exception occurred: {0}", e.ToString());
-                    return BuildErrorResponse(HttpStatusCode.NotFound, "This wallet was not found at the specified location.");
+                    throw new SegWitWalletException(HttpStatusCode.NotFound,
+                        "This wallet was not found at the specified location.", e);
                 }
                 catch (SecurityException e)
                 {
-                    // indicates that the password is wrong
-                    this.logger.LogError("Exception occurred: {0}", e.ToString());
-                    return BuildErrorResponse(HttpStatusCode.Forbidden, "Wrong password, please try again.");
-                }
-                catch (Exception e)
-                {
-                    this.logger.LogError("Exception occurred: {0}", e.ToString());
-                    return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
+                    throw new SegWitWalletException(HttpStatusCode.Forbidden, "Wrong password, please try again.", e);
                 }
             });
         }
 
-        /// <summary>
-        /// Recovers an existing wallet.
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to recover a wallet.</param>
-        /// <returns>A value of Ok if the wallet was successfully recovered.</returns>
-        [Route("recover")]
-        [HttpPost]
-        public async Task<IActionResult> RecoverAsync([FromBody]WalletRecoveryRequest request)
+
+        public async Task RecoverAsync(WalletRecoveryRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            await ExecuteAsync(request, async () =>
             {
                 try
                 {
@@ -184,40 +136,23 @@ namespace Obsidian.Features.SegWitWallet.Controllers
 
                     this.SyncFromBestHeightForRecoveredWallets(request.CreationDate);
 
-                    return this.Ok();
                 }
                 catch (WalletException e)
                 {
-                    this.logger.LogError("Exception occurred: {0}", e.ToString());
-                    return BuildErrorResponse(HttpStatusCode.Conflict, "Wallet already exists: " + e.Message);
+                    throw new SegWitWalletException(HttpStatusCode.Conflict, "Wallet already exists: " + e.Message, e);
                 }
                 catch (FileNotFoundException e)
                 {
-                    this.logger.LogError("Exception occurred: {0}", e.ToString());
-                    return BuildErrorResponse(HttpStatusCode.NotFound, "Wallet not found.");
-                }
-                catch (Exception e)
-                {
-                    this.logger.LogError("Exception occurred: {0}", e.ToString());
-                    return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
+                    throw new SegWitWalletException(HttpStatusCode.NotFound, "Wallet not found.", e);
                 }
             });
         }
 
-        /// <summary>
-        /// Gets some general information about a wallet. This includes the network the wallet is for,
-        /// the creation date and time for the wallet, the height of the blocks the wallet currently holds,
-        /// and the number of connected nodes. 
-        /// </summary>
-        /// <param name="request">The name of the wallet to get the information for.</param>
-        /// <returns>A JSON object containing the wallet information.</returns>
-        [Route("general-info")]
-        [HttpGet]
-        public async Task<IActionResult> GetGeneralInfoAsync([FromQuery] WalletName request)
+
+        public async Task<WalletGeneralInfoModel> GetGeneralInfoAsync(WalletName request)
         {
             return await ExecuteAsync(request, async () =>
             {
-
                 KeyWallet wallet = this.segWitWalletManager.GetSegWitWallet(request.Name);
 
                 var model = new WalletGeneralInfoModel
@@ -236,20 +171,12 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                 string fileName = fileNameCollection.FirstOrDefault(i => i.Equals(searchFile));
                 if (folder != null && fileName != null)
                     model.WalletFilePath = Path.Combine(folder, fileName);
-
-                return Json(model);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Gets the history of a wallet. This includes the transactions held by the entire wallet
-        /// or a single account if one is specified. 
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve a wallet's history.</param>
-        /// <returns>A JSON object containing the wallet history.</returns>
-        [Route("history")]
-        [HttpGet]
-        public async Task<IActionResult> GetHistoryAsync([FromQuery] WalletHistoryRequest request)
+
+        public async Task<WalletHistoryModel> GetHistoryAsync(WalletHistoryRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -416,18 +343,12 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     });
                 }
 
-                return this.Json(model);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Gets the balance of a wallet in STRAT (or sidechain coin). Both the confirmed and unconfirmed balance are returned.
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve a wallet's balance.</param>
-        /// <returns>A JSON object containing the wallet balance.</returns>
-        [Route("balance")]
-        [HttpGet]
-        public async Task<IActionResult> GetBalanceAsync([FromQuery] WalletBalanceRequest request)
+
+        public async Task<IActionResult> GetBalanceAsync(WalletBalanceRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -449,21 +370,14 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     });
                 }
 
-                return this.Json(model);
+                var jsonString = JsonConvert.SerializeObject(model);
+                var jsonResult = this.Json(model);
+                return jsonResult;
             });
         }
 
-        /// <summary>
-        /// Gets the balance at a specific wallet address in STRAT (or sidechain coin).
-        /// Both the confirmed and unconfirmed balance are returned.
-        /// This method gets the UTXOs at the address which the wallet can spend.
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve the balance
-        /// at a specific wallet address.</param>
-        /// <returns>A JSON object containing the balance, fee, and an address for the balance.</returns>
-        [Route("received-by-address")]
-        [HttpGet]
-        public async Task<IActionResult> GetReceivedByAddressAsync([FromQuery] ReceivedByAddressRequest request)
+
+        public async Task<IActionResult> GetReceivedByAddressAsync(ReceivedByAddressRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -478,44 +392,28 @@ namespace Obsidian.Features.SegWitWallet.Controllers
             });
         }
 
-        /// <summary>
-        /// Gets the maximum spendable balance for an account along with the fee required to spend it.
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve the
-        /// maximum spendable balance on an account.</param>
-        /// <returns>A JSON object containing the maximum spendable balance for an account
-        /// along with the fee required to spend it.</returns>
-        [Route("maxbalance")]
-        [HttpGet]
-        public async Task<IActionResult> GetMaximumSpendableBalanceAsync([FromQuery] WalletMaximumBalanceRequest request)
+
+        public async Task<MaxSpendableAmountModel> GetMaximumSpendableBalanceAsync(WalletMaximumBalanceRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
                 (Money maximumSpendableAmount, Money Fee) transactionResult = this.walletTransactionHandler.GetMaximumSpendableAmount(new WalletAccountReference(request.WalletName, request.AccountName), FeeParser.Parse(request.FeeType), request.AllowUnconfirmed);
-                return Json(new MaxSpendableAmountModel
+                return new MaxSpendableAmountModel
                 {
                     MaxSpendableAmount = transactionResult.maximumSpendableAmount,
                     Fee = transactionResult.Fee
-                });
+                };
             });
         }
 
-        /// <summary>
-        /// Gets the spendable transactions for an account with the option to specify how many confirmations
-        /// a transaction needs to be included.
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve the spendable 
-        /// transactions for an account.</param>
-        /// <returns>A JSON object containing the spendable transactions for an account.</returns>
-        [Route("spendable-transactions")]
-        [HttpGet]
-        public async Task<IActionResult> GetSpendableTransactionsAsync([FromQuery] SpendableTransactionsRequest request)
+
+        public async Task<SpendableTransactionsModel> GetSpendableTransactionsAsync(SpendableTransactionsRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
                 var spendableTransactions = this.segWitWalletManager.GetSpendableTransactionsInAccount(request.WalletName, request.MinConfirmations);
 
-                return Json(new SpendableTransactionsModel
+                return new SpendableTransactionsModel
                 {
                     SpendableTransactions = spendableTransactions.Select(st => new SpendableTransactionModel
                     {
@@ -527,21 +425,12 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                         CreationTime = st.Transaction.CreationTime,
                         Confirmations = st.Confirmations
                     }).ToList()
-                });
+                };
             });
         }
 
-        /// <summary>
-        /// Gets a fee estimate for a specific transaction.
-        /// Fee can be estimated by creating a <see cref="TransactionBuildContext"/> with no password
-        /// and then building the transaction and retrieving the fee from the context.
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to estimate the fee 
-        /// for a specific transaction.</param>
-        /// <returns>The estimated fee for the transaction.</returns>
-        [Route("estimate-txfee")]
-        [HttpPost]
-        public async Task<IActionResult> GetTransactionFeeEstimateAsync([FromBody]TxFeeEstimateRequest request)
+
+        public async Task<Money> GetTransactionFeeEstimateAsync(TxFeeEstimateRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -565,20 +454,13 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
                     Sign = false
                 };
-
-                return Json(this.walletTransactionHandler.EstimateFee(context));
+                Money model = this.walletTransactionHandler.EstimateFee(context);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Builds a transaction and returns the hex to use when executing the transaction.
-        /// </summary>
-        /// <param name="request">An object containing the parameters used to build a transaction.</param>
-        /// <returns>A JSON object including the transaction ID, the hex used to execute
-        /// the transaction, and the transaction fee.</returns>
-        [Route("build-transaction")]
-        [HttpPost]
-        public async Task<IActionResult> BuildTransactionAsync([FromBody] BuildTransactionRequest request)
+
+        public async Task<WalletBuildTransactionModel> BuildTransactionAsync(BuildTransactionRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -627,26 +509,18 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     TransactionId = transactionResult.GetHash()
                 };
 
-                return this.Json(model);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Sends a transaction that has already been built.
-        /// Use the /api/Wallet/build-transaction call to create transactions.
-        /// </summary>
-        /// <param name="request">An object containing the necessary parameters used to a send transaction request.</param>
-        /// <returns>A JSON object containing information about the sent transaction.</returns>
-        [Route("send-transaction")]
-        [HttpPost]
-        public async Task<IActionResult> SendTransactionAsync([FromBody] SendTransactionRequest request)
+
+        public async Task<WalletSendTransactionModel> SendTransactionAsync(SendTransactionRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
                 if (!this.connectionManager.ConnectedPeers.Any())
                 {
-                    this.logger.LogTrace("(-)[NO_CONNECTED_PEERS]");
-                    return ErrorHelpers.BuildErrorResponse(HttpStatusCode.Forbidden, "Can't send transaction: sending transaction requires at least one connection!", string.Empty);
+                    throw new SegWitWalletException(HttpStatusCode.Forbidden, "Can't send transaction: sending transaction requires at least one connection!", new Exception());
                 }
 
                 Transaction transaction = this.network.CreateTransaction(request.Hex);
@@ -674,22 +548,15 @@ namespace Obsidian.Features.SegWitWallet.Controllers
 
                 if (transactionBroadCastEntry.State == State.CantBroadcast)
                 {
-                    this.logger.LogError("Exception occurred: {0}", transactionBroadCastEntry.ErrorMessage);
-                    return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, transactionBroadCastEntry.ErrorMessage, "Transaction Exception");
+                    throw new SegWitWalletException(HttpStatusCode.BadRequest, transactionBroadCastEntry.ErrorMessage, new Exception("Transaction Exception"));
                 }
 
-                return this.Json(model);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Lists all the files found in the default wallet folder.
-        /// </summary>
-        /// <returns>A JSON object containing the wallet folder path and
-        /// the names of the files found within the folder.</returns>
-        [Route("files")]
-        [HttpGet]
-        public async Task<IActionResult> ListWalletsFilesAsync()
+
+        public async Task<WalletFileModel> ListWalletsFilesAsync()
         {
             return await ExecuteAsync("", async () =>
             {
@@ -699,36 +566,23 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     WalletsPath = result.folderPath,
                     WalletsFiles = result.filesNames
                 };
-                return this.Json(model);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Gets a list of accounts for the specified wallet.
-        /// </summary>
-        /// <param name="request">An object containing the necessary parameters to list the accounts for a wallet.</param>
-        /// <returns>A JSON object containing a list of accounts for the specified wallet.</returns>
-        [Route("accounts")]
-        [HttpGet]
-        public async Task<IActionResult> ListAccountsAsync([FromQuery]ListAccountsModel request)
+
+        public async Task<IEnumerable<string>> ListAccountsAsync(ListAccountsModel request)
         {
             return await ExecuteAsync(request, async () =>
             {
                 IEnumerable<HdAccount> result = this.segWitWalletManager.GetAccounts(request.WalletName);
-                return this.Json(result.Select(a => a.Name));
+                IEnumerable<string> model = result.Select(a => a.Name);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Gets an unused address (in the Base58 format) for a wallet account. This address will not have been assigned
-        /// to any known UTXO (neither to pay funds into the wallet or to pay change back to the wallet).
-        /// </summary>
-        /// <param name="request">An object containing the necessary parameters to retrieve an
-        /// unused address for a wallet account.</param>
-        /// <returns>A JSON object containing the last created and unused address (in Base58 format).</returns>
-        [Route("unusedaddress")]
-        [HttpGet]
-        public async Task<IActionResult> GetUnusedAddressAsync([FromQuery]GetUnusedAddressModel request)
+
+        public async Task<string> GetUnusedAddressAsync(GetUnusedAddressModel request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -738,39 +592,23 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                 if (result != null)
                     address = result.Bech32;
 
-                return this.Json(address);
+                return address;
             });
         }
 
-        /// <summary>
-        /// Gets a specified number of unused addresses (in the Base58 format) for a wallet account. These addresses
-        /// will not have been assigned to any known UTXO (neither to pay funds into the wallet or to pay change back
-        /// to the wallet).
-        /// <param name="request">An object containing the necessary parameters to retrieve
-        /// unused addresses for a wallet account.</param>
-        /// <returns>A JSON object containing the required amount of unused addresses (in Base58 format).</returns>
-        /// </summary>
-        [Route("unusedaddresses")]
-        [HttpGet]
-        public async Task<IActionResult> GetUnusedAddresses([FromQuery]GetUnusedAddressesModel request)
+
+        public async Task<string[]> GetUnusedAddresses(GetUnusedAddressesModel request)
         {
             return await ExecuteAsync(request, async () =>
             {
                 int count = int.Parse(request.Count);
-                var addresses = this.segWitWalletManager.GetUnusedAddresses(request.WalletName, count).Select(x => x.Bech32).ToArray();
-                return Json(addresses);
+                string[] addresses = this.segWitWalletManager.GetUnusedAddresses(request.WalletName, count).Select(x => x.Bech32).ToArray();
+                return addresses;
             });
         }
 
-        /// <summary>
-        /// Gets all addresses for a wallet account.
-        /// <param name="request">An object containing the necessary parameters to retrieve
-        /// all addresses for a wallet account.</param>
-        /// <returns>A JSON object containing all addresses for a wallet account (in Base58 format).</returns>
-        /// </summary>
-        [Route("addresses")]
-        [HttpGet]
-        public async Task<IActionResult> GetAllAddressesAsync([FromQuery]GetAllAddressesModel request)
+
+        public async Task<AddressesModel> GetAllAddressesAsync(GetAllAddressesModel request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -788,31 +626,12 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     })
                 };
 
-                return Json(model);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Removes transactions from the wallet.
-        /// You might want to remove transactions from a wallet if some unconfirmed transactions disappear
-        /// from the blockchain or the transaction fields within the wallet are updated and a refresh is required to
-        /// populate the new fields. 
-        /// In one situation, you might notice several unconfirmed transaction in the wallet, which you now know were
-        /// never confirmed. You can use this API to correct this by specifying a date and time before the first
-        /// unconfirmed transaction thereby removing all transactions after this point. You can also request a resync as
-        /// part of the call, which calculates the block height for the earliest removal. The wallet sync manager then
-        /// proceeds to resync from there reinstating the confirmed transactions in the wallet. You can also cherry pick
-        /// transactions to remove by specifying their transaction ID. 
-        /// 
-        /// <param name="request">An object containing the necessary parameters to remove transactions
-        /// from a wallet. The includes several options for specifying the transactions to remove.</param>
-        /// <returns>A JSON object containing all removed transactions identified by their
-        /// transaction ID and creation time.</returns>
-        /// </summary>
-        /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
-        [Route("remove-transactions")]
-        [HttpDelete]
-        public async Task<IActionResult> RemoveTransactionsAsync([FromQuery]RemoveTransactionsModel request)
+
+        public async Task<IEnumerable<RemovedTransactionModel>> RemoveTransactionsAsync(RemoveTransactionsModel request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -858,63 +677,36 @@ namespace Obsidian.Features.SegWitWallet.Controllers
                     CreationTime = r.creationTime
                 });
 
-                return Json(model);
+                return model;
             });
         }
 
-        /// <summary>
-        /// Requests the node resyncs from a block specified by its block hash.
-        /// Internally, the specified block is taken as the new wallet tip
-        /// and all blocks after it are resynced.
-        /// </summary>
-        /// <param name="request">An object containing the necessary parameters
-        /// to request a resync.</param>
-        /// <returns>A value of Ok if the resync was successful.</returns>
-        [HttpPost]
-        [Route("sync")]
-        public async Task<IActionResult> SyncAsync([FromBody] HashModel request)
+
+        public async Task SyncAsync(HashModel request)
         {
-            return await ExecuteAsync(request, async () =>
+            await ExecuteAsync(request, async () =>
             {
                 ChainedHeader block = this.chainIndexer.GetHeader(uint256.Parse(request.Hash));
 
                 if (block == null)
                 {
-                    return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", string.Empty);
+                    throw new SegWitWalletException(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", new Exception());
                 }
 
                 this.walletSyncManager.SyncFromHeight(block.Height);
-                return this.Ok();
             });
         }
 
-        /// <summary>
-        /// Request the node resyncs starting from a given date and time.
-        /// Internally, the first block created on or after the supplied date and time
-        /// is taken as the new wallet tip and all blocks after it are resynced.
-        /// </summary>
-        /// <param name="request">An object containing the necessary parameters
-        /// to request a resync.</param>
-        /// <returns>A value of Ok if the resync was successful.</returns>
-        [HttpPost]
-        [Route("sync-from-date")]
-        public async Task<IActionResult> SyncFromDate([FromBody] WalletSyncFromDateRequest request)
+
+        public async Task SyncFromDate(WalletSyncFromDateRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            await ExecuteAsync(request, async () =>
             {
                 this.walletSyncManager.SyncFromDate(request.Date);
-
-                return this.Ok();
             });
         }
 
-        /// <summary>
-        /// Creates requested amount of UTXOs each of equal value.
-        /// </summary>
-        /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
-        [HttpPost]
-        [Route("splitcoins")]
-        public async Task<IActionResult> SplitCoinsAsync([FromBody] SplitCoinsRequest request)
+        public async Task<WalletSendTransactionModel> SplitCoinsAsync(SplitCoinsRequest request)
         {
             return await ExecuteAsync(request, async () =>
             {
@@ -939,26 +731,10 @@ namespace Obsidian.Features.SegWitWallet.Controllers
 
                 Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
 
-                return await SendTransactionAsync(new SendTransactionRequest(transactionResult.ToHex()));
+                WalletSendTransactionModel model = await SendTransactionAsync(new SendTransactionRequest(transactionResult.ToHex()));
+                return model;
             });
         }
-
-        /// <summary>
-        /// Provides the server's public key to the client.
-        /// </summary>
-        /// <returns>Server public key.</returns>
-        [HttpGet]
-        [Route("getpublickey")]
-        public async Task<IActionResult> GetPublicKeyAsync()
-        {
-            return await ExecuteAsync("", async () =>
-            {
-                // client needs server private key first
-                var model = new VCLModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString() };
-                return Json(model);
-            });
-        }
-
 
         void SyncFromBestHeightForRecoveredWallets(DateTime walletCreationDate)
         {
@@ -973,24 +749,13 @@ namespace Obsidian.Features.SegWitWallet.Controllers
             }
         }
 
-        async Task<IActionResult> ExecuteAsync<T>(T request, Func<Task<IActionResult>> func) where T : class
+        async Task<TResult> ExecuteAsync<T, TResult>(T request, Func<Task<TResult>> func) where T : class
         {
             try
             {
-                Guard.NotNull(request, nameof(request));
-
-                if (!this.ModelState.IsValid)
-                {
-                    return ModelStateErrors.BuildErrorResponse(this.ModelState);
-                }
 
                 await SegWitWalletManager.WalletSemaphore.WaitAsync();
                 return await func();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError(e, "Exception occurred: {0}", e.StackTrace);
-                return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
             }
             finally
             {
@@ -998,22 +763,20 @@ namespace Obsidian.Features.SegWitWallet.Controllers
             }
         }
 
-        ErrorResult BuildErrorResponse(HttpStatusCode statusCode, string message, string description = "")
+        async Task ExecuteAsync<T>(T request, Func<Task> func) where T : class
         {
-            var errorResponse = new ErrorResponse
+            try
             {
-                Errors = new List<ErrorModel>
-                {
-                    new ErrorModel
-                    {
-                        Status = (int) statusCode,
-                        Message = message,
-                        Description = description
-                    }
-                }
-            };
 
-            return new ErrorResult((int)statusCode, errorResponse);
+                await SegWitWalletManager.WalletSemaphore.WaitAsync();
+                await func();
+            }
+            finally
+            {
+                SegWitWalletManager.WalletSemaphore.Release();
+            }
         }
+
+      
     }
 }
