@@ -11,11 +11,11 @@
   <ItemGroup>
     <PackageReference Include="Flurl" Version="2.8.2" />
     <PackageReference Include="Flurl.Http" Version="2.4.2" />
+    <PackageReference Include="Microsoft.AspNetCore.App" Version="2.2.5" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Obsidian.Features.SegWitWallet\Obsidian.Features.SegWitWallet.csproj" />
-    <ProjectReference Include="..\Stratis.Bitcoin.Features.Api\Stratis.Bitcoin.Features.Api.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.Apps\Stratis.Bitcoin.Features.Apps.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.BlockStore\Stratis.Bitcoin.Features.BlockStore.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.ColdStaking\Stratis.Bitcoin.Features.ColdStaking.csproj" />

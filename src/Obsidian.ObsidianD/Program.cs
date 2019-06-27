@@ -3,23 +3,20 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using NBitcoin;
-using NBitcoin.Crypto;
 using NBitcoin.Protocol;
 using Obsidian.Features.SegWitWallet;
 using Obsidian.Features.SegWitWallet.Tests;
-using Obsidian.ObsidianD.Tests;
+using Obsidian.ObsidianD.Api;
+using Obsidian.ObsidianD.Temp;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
-using Stratis.Bitcoin.Features.Api;
 using Stratis.Bitcoin.Features.Apps;
 using Stratis.Bitcoin.Features.BlockStore;
-using Stratis.Bitcoin.Features.ColdStaking;
 using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.MemoryPool;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.RPC;
-using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
 
 namespace Obsidian.ObsidianD
@@ -34,7 +31,7 @@ namespace Obsidian.ObsidianD
             {
                 var argList = args.ToList();
                 argList.RemoveAt(0);
-                Cli.CliMain(argList.ToArray());
+                CliTool.CliMain(argList.ToArray());
             }
             else
             {
@@ -71,7 +68,7 @@ namespace Obsidian.ObsidianD
                     .UseMempool()
                     .UseSegWitWallet()
                     .AddPowPosMining()
-                    .UseApi()
+                    .UseApiSlim()
                     .UseApps()
                     .AddRPC()
                     .Build();

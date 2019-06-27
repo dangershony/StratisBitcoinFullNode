@@ -6,7 +6,7 @@ using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 
-namespace Obsidian.ObsidianD.Tests
+namespace Obsidian.ObsidianD.Temp
 {
     public static class TestBench
     {

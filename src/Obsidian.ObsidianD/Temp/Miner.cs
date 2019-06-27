@@ -5,7 +5,7 @@ using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
 
-namespace Obsidian.ObsidianD.Tests
+namespace Obsidian.ObsidianD.Temp
 {
     public static class Miner
     {

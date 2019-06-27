@@ -1205,10 +1205,10 @@ namespace Obsidian.Features.SegWitWallet
                 if (block != null)
                 {
                     // Inputs are in a block no need to track them anymore.
-                        foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
-                        {
-                            this.inputLookup.Remove(input);
-                        }
+                    foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
+                    {
+                        this.inputLookup.Remove(input);
+                    }
                 }
             }
 
