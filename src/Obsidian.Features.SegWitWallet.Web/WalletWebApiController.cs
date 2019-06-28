@@ -58,7 +58,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         {
             return await ExecuteRequestAsync(request, this.segWitWalletController.SignMessageAsync);
 
-           
+
         }
 
         /// <summary>
@@ -226,10 +226,10 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <returns>A JSON object containing the wallet folder path and
         /// the names of the files found within the folder.</returns>
         [Route("files")]
-        [HttpGet]
-        public async Task<IActionResult> ListWalletsFilesAsync()
+        [HttpPost]
+        public async Task<IActionResult> ListWalletsFilesAsync([FromBody] RequestObject request)
         {
-            return await ExecuteRequestAsyncFun(new RequestObject(), this.segWitWalletController.ListWalletsFilesAsync);
+            return await ExecuteRequestAsyncFun(request, this.segWitWalletController.ListWalletsFilesAsync);
         }
 
         /// <summary>
@@ -353,19 +353,15 @@ namespace Obsidian.Features.SegWitWallet.Web
         }
 
         /// <summary>
-        /// Provides the server's public key to the client.
+        /// Sends the server's public key to the client.
         /// </summary>
         /// <returns>Server public key.</returns>
         [HttpGet]
         [Route("getpublickey")]
         public async Task<IActionResult> GetPublicKeyAsync()
         {
-            return await ExecuteRequestAsyncFun(new RequestObject(), async () =>
-            {
-                // client needs server private key first
-                var model = new VCLModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString() };
-                return Json(model);
-            });
+            var model = new VCLModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString() };
+            return Json(model);
         }
 
 
@@ -375,13 +371,11 @@ namespace Obsidian.Features.SegWitWallet.Web
             try
             {
                 Guard.NotNull(request, nameof(request));
-                Guard.NotNull(request.VCLModel, nameof(request));
-                Guard.NotNull(request.VCLModel.CurrentPublicKey, nameof(request));
+                Guard.NotNull(request.CipherV2Bytes, nameof(request));
+                Guard.NotNull(request.CurrentPublicKey, nameof(request));
 
                 string requestJson = Decrpyt(request);
                 T requestPayload = JsonConvert.DeserializeObject<T>(requestJson);
-
-                await SegWitWalletManager.WalletSemaphore.WaitAsync();
 
                 var coreResult = coreControllerAction(requestPayload);
 
@@ -403,34 +397,25 @@ namespace Obsidian.Features.SegWitWallet.Web
                 this.logger.LogError(e.ToString());
                 return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
             }
-            finally
-            {
-                SegWitWalletManager.WalletSemaphore.Release();
-            }
         }
 
-        async Task<IActionResult> ExecuteRequestAsyncFun<TResult>(RequestObject request, Func<Task<TResult>> coreControllerAction) 
+        async Task<IActionResult> ExecuteRequestAsyncFun<TResult>(RequestObject request, Func<Task<TResult>> coreControllerAction)
         {
             try
             {
                 Guard.NotNull(request, nameof(request));
-                Guard.NotNull(request.VCLModel, nameof(request));
-                Guard.NotNull(request.VCLModel.CurrentPublicKey, nameof(request));
+                Guard.NotNull(request.CurrentPublicKey, nameof(request.CurrentPublicKey));
 
-                throw new NotImplementedException();
-                //string requestJson = ""; // Check only, no payload, but authenticate Decrpyt(request);
-                //T requestPayload = JsonConvert.DeserializeObject<T>(requestJson);
+                TResult coreResult = await coreControllerAction();
 
-                //await SegWitWalletManager.WalletSemaphore.WaitAsync();
+                string jsonString = JsonConvert.SerializeObject(coreResult);
 
-                //var coreResult = coreControllerAction(requestPayload);
-
-                //string jsonString = JsonConvert.SerializeObject(coreResult);
-
-                //string cipher = "Encrypt()";
-                //var model = new VCLModel
-                //    { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(), CipherV2Bytes = cipher };
-                //return Json(model);
+                byte[] cipherBytes = VCL.Encrypt(jsonString.ToUTF8Bytes(), Convert.FromBase64String(request.CurrentPublicKey), VCL.ECKeyPair.PrivateKey);
+                var model = new VCLModel {
+                    CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(),
+                    CipherV2Bytes = cipherBytes.ToHexString()
+                };
+                return Json(model);
 
             }
             catch (SegWitWalletException se)
@@ -443,24 +428,18 @@ namespace Obsidian.Features.SegWitWallet.Web
                 this.logger.LogError(e.ToString());
                 return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
             }
-            finally
-            {
-                SegWitWalletManager.WalletSemaphore.Release();
-            }
+           
         }
 
-        async Task<IActionResult> ExecuteRequestAsyncVoid<T>(RequestObject<T> request, Func<T,Task> coreControllerAction) where T : class
+        async Task<IActionResult> ExecuteRequestAsyncVoid<T>(RequestObject<T> request, Func<T, Task> coreControllerAction) where T : class
         {
             try
             {
-                Guard.NotNull(request, nameof(request));
-                Guard.NotNull(request.VCLModel, nameof(request));
-                Guard.NotNull(request.VCLModel.CurrentPublicKey, nameof(request));
+                Guard.NotNull(request.CipherV2Bytes, nameof(request));
+
 
                 string requestJson = Decrpyt(request);
                 T requestPayload = JsonConvert.DeserializeObject<T>(requestJson);
-
-                await SegWitWalletManager.WalletSemaphore.WaitAsync();
 
                 var _ = coreControllerAction(requestPayload);
                 return Ok();
@@ -475,10 +454,7 @@ namespace Obsidian.Features.SegWitWallet.Web
                 this.logger.LogError(e.ToString());
                 return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
             }
-            finally
-            {
-                SegWitWalletManager.WalletSemaphore.Release();
-            }
+           
         }
 
         string Decrpyt<T>(RequestObject<T> request) where T : class
