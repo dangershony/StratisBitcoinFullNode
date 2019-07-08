@@ -29,19 +29,20 @@ namespace Obsidian.Features.SegWitWallet
 
         protected readonly StandardTransactionPolicy TransactionPolicy;
 
-        private readonly SegWitWalletManager segWitWalletManager;
+        readonly IWalletManager walletManager;
+        SegWitWalletManager segWitWalletManager;
 
         private readonly IWalletFeePolicy walletFeePolicy;
 
         public SegWitWalletTransactionHandler(
             ILoggerFactory loggerFactory,
-            SegWitWalletManager walletManager,
+            IWalletManager walletManager,
             IWalletFeePolicy walletFeePolicy,
             Network network,
             StandardTransactionPolicy transactionPolicy)
         {
             this.network = network;
-            this.segWitWalletManager = walletManager;
+            this.walletManager = walletManager;
             this.walletFeePolicy = walletFeePolicy;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
             
@@ -209,10 +210,9 @@ namespace Obsidian.Features.SegWitWallet
             if (!context.Sign)
                 return;
 
-            KeyWallet wallet = this.segWitWalletManager.GetSegWitWallet(context.AccountReference.WalletName);
 
             // TODO: only decrypt the keys needed
-            var keys = wallet.Addresses
+            var keys = this.segWitWalletManager.Wallet.Addresses
                 .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.EncryptedPrivateKey))
                 .Select(privateKeyBytes => new Key(privateKeyBytes))
                 .ToArray();
@@ -247,7 +247,7 @@ namespace Obsidian.Features.SegWitWallet
             // Get an address to send the change to.
             if (useUsedAddress)
             {
-                KeyAddress changeAddressForFeeEstimateOnly = this.segWitWalletManager.GetSegWitWallet(context.AccountReference.WalletName).Addresses
+                KeyAddress changeAddressForFeeEstimateOnly = this.segWitWalletManager.Wallet.Addresses
                     .First(a => a.IsChangeAddress());
                 context.ChangeAddress = changeAddressForFeeEstimateOnly.ToFakeHdAddress();
             }

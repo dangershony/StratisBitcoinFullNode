@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
@@ -62,6 +63,7 @@ namespace Obsidian.ObsidianD.Api
 
                 })
                 .UseUrls(apiUri.ToString())
+                .UseStartup<Startup>()
                 .ConfigureServices(collection =>
                 {
                     if (services == null)
@@ -80,18 +82,24 @@ namespace Obsidian.ObsidianD.Api
                             continue;
                         }
 
-                        object obj = fullNode.Services.ServiceProvider.GetService(service.ServiceType);
-                        if (obj != null && service.Lifetime == ServiceLifetime.Singleton && service.ImplementationInstance == null)
+                        try
                         {
-                            collection.AddSingleton(service.ServiceType, obj);
+                            object obj = fullNode.Services.ServiceProvider.GetService(service.ServiceType);
+                            if (obj != null && service.Lifetime == ServiceLifetime.Singleton && service.ImplementationInstance == null)
+                            {
+                                collection.AddSingleton(service.ServiceType, obj);
+                            }
+                            else
+                            {
+                                collection.Add(service);
+                            }
                         }
-                        else
+                        catch (Exception e)
                         {
-                            collection.Add(service);
+                            Debug.WriteLine(e);
                         }
                     }
-                })
-                .UseStartup<Startup>();
+                });
 
             IWebHost host = webHostBuilder.Build();
 
@@ -101,7 +109,7 @@ namespace Obsidian.ObsidianD.Api
         /// <summary>
         /// Prints command-line help.
         /// </summary>
-        /// <param name="network">The network to extract values from.</param>
+        /// <param Command="network">The network to extract values from.</param>
         public static void PrintHelp(Network network)
         {
             ApiSettings.PrintHelp(network);
@@ -110,8 +118,8 @@ namespace Obsidian.ObsidianD.Api
         /// <summary>
         /// Get the default configuration.
         /// </summary>
-        /// <param name="builder">The string builder to add the settings to.</param>
-        /// <param name="network">The network to base the defaults off.</param>
+        /// <param Command="builder">The string builder to add the settings to.</param>
+        /// <param Command="network">The network to base the defaults off.</param>
         public static void BuildDefaultConfigurationFile(StringBuilder builder, Network network)
         {
             ApiSettings.BuildDefaultConfigurationFile(builder, network);

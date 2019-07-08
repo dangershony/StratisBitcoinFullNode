@@ -1,4 +1,5 @@
 ﻿using System;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using NBitcoin.Policy;
 using Obsidian.Features.SegWitWallet.Web;

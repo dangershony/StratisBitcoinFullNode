@@ -44,7 +44,7 @@ namespace Obsidian.ObsidianD
         /// e.g. -gateway=1 -whitelist=104.45.21.229 addnode=104.45.21.229 -port=56666
         /// Use arg -maxblkmem=2 on a low memory VPS.
         /// </remarks>
-        /// <param name="args">args</param>
+        /// <param Command="args">args</param>
         /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
         static async Task MainAsync(string[] args)
         {

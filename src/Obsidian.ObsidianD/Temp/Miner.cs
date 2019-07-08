@@ -16,8 +16,8 @@ namespace Obsidian.ObsidianD.Temp
         /// https://bitcoin.stackexchange.com/questions/59231/how-to-sign-a-segwit-transaction-via-nbitcoin
         /// https://github.com/libbitcoin/libbitcoin-system/wiki/P2WPKH-Transactions
         ///  </summary>
-        /// <param name="fullNode"></param>
-        /// <param name="targetAddress"></param>
+        /// <param Command="fullNode"></param>
+        /// <param Command="targetAddress"></param>
         public static void Start(FullNode fullNode, Script targetAddress)
         {
             Task.Run(() =>

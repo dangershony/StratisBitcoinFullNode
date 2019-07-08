@@ -1,18 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net;
-using System.Security;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using NBitcoin;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+using Stratis.Bitcoin.Controllers.Models;
+using Stratis.Bitcoin.Features.Miner.Models;
 using Stratis.Bitcoin.Features.Wallet;
-using Stratis.Bitcoin.Features.Wallet.Broadcasting;
-using Stratis.Bitcoin.Features.Wallet.Helpers;
 using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Utilities;
 using Stratis.Bitcoin.Utilities.JsonErrors;
@@ -35,10 +31,166 @@ namespace Obsidian.Features.SegWitWallet.Web
             this.logger = loggerFactory.CreateLogger(typeof(WalletWebApiController).FullName);
         }
 
+       
+        [Route("endpoint")]
+        [HttpPost]
+        public async Task<VCLModel> HandleAsync([FromBody]RequestObject request)
+        {
+            try
+            {
+                if (IsRequestForPublicKey(request))
+                    return CreatePublicKey();
+
+                DecryptedRequest decryptedRequest = DecryptRequest(request);
+
+                switch (decryptedRequest.Command)
+                {
+                    case "getWalletFiles":
+                        {
+                            WalletFileModel walletFileModel = await this.segWitWalletController.ListWalletsFilesAsync();
+                            return CreateOk(walletFileModel, request);
+                        }
+                    case "loadWallet":
+                        {
+                            WalletLoadRequest walletLoadRequest = JsonConvert.DeserializeObject<WalletLoadRequest>(decryptedRequest.Payload);
+                            await this.segWitWalletController.LoadAsync(walletLoadRequest);
+                            return CreateOk(request);
+                        }
+                    case "generalInfo":
+                        {
+                            WalletInfo walletInfo = JsonConvert.DeserializeObject<WalletInfo>(decryptedRequest.Payload);
+                            WalletGeneralInfoModel walletGeneralInfoModel = await this.segWitWalletController.GetGeneralInfoAsync(new WalletName { Name = walletInfo.WalletName });
+                            return CreateOk(walletGeneralInfoModel, request);
+                        }
+                    case "nodeStatus":
+                        {
+                            StatusModel nodeStatus = this.segWitWalletController.GetNodeStatus();
+                            return CreateOk(nodeStatus, request);
+                        }
+
+                    case "balance":
+                        {
+                            WalletBalanceRequest walletBalanceRequest = JsonConvert.DeserializeObject<WalletBalanceRequest>(decryptedRequest.Payload);
+                            WalletBalance walletBalanceModel = await this.segWitWalletController.GetBalanceAsync(walletBalanceRequest);
+                            return CreateOk(walletBalanceModel, request);
+                        }
+
+                    case "history":
+                        {
+                            WalletHistoryRequest walletHistoryRequest = JsonConvert.DeserializeObject<WalletHistoryRequest>(decryptedRequest.Payload);
+                            WalletHistoryModel walletHistoryModel = await this.segWitWalletController.GetHistoryAsync(walletHistoryRequest);
+                            return CreateOk(walletHistoryModel, request);
+                        }
+
+                    case "stakingInfo":
+                    {
+                        GetStakingInfoModel stakingInfo=  this.segWitWalletController.GetStakingInfo();
+                        return CreateOk(stakingInfo, request);
+                    }
+                    default:
+                        throw new NotSupportedException($"The command {decryptedRequest.Command} is not supported.");
+                }
+
+            }
+            catch (Exception e)
+            {
+                return CreateError(e, request);
+            }
+        }
+
+        VCLModel CreateOk(RequestObject request)
+        {
+            var responseObject = new ResponseObject<object> { Status = 200, StatusText = "OK" };
+            var responseJson = Serialize(responseObject);
+            var responseJsonBytes = responseJson.ToUTF8Bytes();
+            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
+            VCLModel vclModel = new VCLModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(), CipherV2Bytes = cipherV2Bytes.ToHexString() };
+            return vclModel;
+        }
+
+        VCLModel CreateOk<T>(T data, RequestObject request)
+        {
+            var responseObject = new ResponseObject<T> { ResponsePayload = data, Status = 200, StatusText = "OK" };
+            var responseJson = Serialize(responseObject);
+            var responseJsonBytes = responseJson.ToUTF8Bytes();
+            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
+            VCLModel vclModel = new VCLModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(), CipherV2Bytes = cipherV2Bytes.ToHexString() };
+            return vclModel;
+        }
+
+        VCLModel CreateError(Exception e, RequestObject request)
+        {
+            var responseObject = new ResponseObject<object>();
+            if (e is SegWitWalletException se)
+            {
+                responseObject.Status = (int)se.HttpStatusCode;
+                responseObject.StatusText = se.Message;
+            }
+            else
+            {
+                responseObject.Status = 500;
+                responseObject.StatusText = $"Error: {e.Message}";
+            }
+            var responseJson = Serialize(responseObject);
+            var responseJsonBytes = responseJson.ToUTF8Bytes();
+            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
+            VCLModel vclModel = new VCLModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(), CipherV2Bytes = cipherV2Bytes.ToHexString() };
+            return vclModel;
+        }
+
+        VCLModel CreatePublicKey()
+        {
+            return new VCLModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString() };
+        }
+        DecryptedRequest DecryptRequest(RequestObject request)
+        {
+            byte[] decrypted = VCL.Decrypt(request.CipherV2Bytes.FromBase64(), request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
+            if (decrypted == null)
+                throw new SegWitWalletException((HttpStatusCode) 427, "Public key changed - please reload", null);
+            string json = decrypted.FromUTF8Bytes();
+            DecryptedRequest decryptedRequest = JsonConvert.DeserializeObject<DecryptedRequest>(json);
+
+            // ensure the right wallet file is connected!
+            this.segWitWalletController.GetManager(decryptedRequest.Target);
+            return decryptedRequest;
+        }
+
+        DecryptedRequest<T> DecryptRequest<T>(RequestObject request)
+        {
+            byte[] decrypted = VCL.Decrypt(request.CipherV2Bytes.FromBase64(), request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
+            if (decrypted == null)
+                throw new SegWitWalletException((HttpStatusCode)427, "Public key changed - please reload", null);
+            string json = decrypted.FromUTF8Bytes();
+            var decryptedRequest = JsonConvert.DeserializeObject<DecryptedRequest<T>>(json);
+            JsonConvert.DeserializeObject<T>(decryptedRequest.Payload);
+            return decryptedRequest;
+        }
+
+        bool IsRequestForPublicKey(RequestObject request)
+        {
+            if (string.IsNullOrEmpty(request.CurrentPublicKey) || string.IsNullOrEmpty(request.CipherV2Bytes))
+                return true;
+            return false;
+        }
+
+        string Serialize<T>(ResponseObject<T> responseObject)
+        {
+            DefaultContractResolver contractResolver = new DefaultContractResolver
+            {
+                NamingStrategy = new CamelCaseNamingStrategy()
+            };
+            string json = JsonConvert.SerializeObject(responseObject, new JsonSerializerSettings
+            {
+                ContractResolver = contractResolver,
+                Formatting = Formatting.Indented
+            });
+            return json;
+        }
+
         /// <summary>
         /// Creates a new wallet on this full node.
         /// </summary>
-        /// <param name="request">An object containing the necessary parameters to create a wallet.</param>
+        /// <param Command="request">An object containing the necessary parameters to create a wallet.</param>
         /// <returns>A JSON object containing the mnemonic created for the new wallet.</returns>
         [Route("create")]
         [HttpPost]
@@ -50,7 +202,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <summary>
         /// Signs a message and returns the signature.
         /// </summary>
-        /// <param name="request">The object containing the parameters used to sign a message.</param>
+        /// <param Command="request">The object containing the parameters used to sign a message.</param>
         /// <returns>A JSON object containing the generated signature.</returns>
         [Route("signmessage")]
         [HttpPost]
@@ -64,7 +216,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <summary>
         /// Verifies the signature of a message.
         /// </summary>
-        /// <param name="request">The object containing the parameters verify a signature.</param>
+        /// <param Command="request">The object containing the parameters verify a signature.</param>
         /// <returns>A JSON object containing the result of the verification.</returns>
         [Route("verifymessage")]
         [HttpPost]
@@ -76,7 +228,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <summary>
         /// Loads a previously created wallet.
         /// </summary>
-        /// <param name="request">An object containing the necessary parameters to load an existing wallet</param>
+        /// <param Command="request">An object containing the necessary parameters to load an existing wallet</param>
         /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
         [Route("load")]
         [HttpPost]
@@ -88,7 +240,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <summary>
         /// Recovers an existing wallet.
         /// </summary>
-        /// <param name="request">An object containing the parameters used to recover a wallet.</param>
+        /// <param Command="request">An object containing the parameters used to recover a wallet.</param>
         /// <returns>A value of Ok if the wallet was successfully recovered.</returns>
         [Route("recover")]
         [HttpPost]
@@ -102,7 +254,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// the creation date and time for the wallet, the height of the blocks the wallet currently holds,
         /// and the number of connected nodes. 
         /// </summary>
-        /// <param name="request">The name of the wallet to get the information for.</param>
+        /// <param Command="request">The Command of the wallet to get the information for.</param>
         /// <returns>A JSON object containing the wallet information.</returns>
         [Route("general-info")]
         [HttpGet]
@@ -115,7 +267,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Gets the history of a wallet. This includes the transactions held by the entire wallet
         /// or a single account if one is specified. 
         /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve a wallet's history.</param>
+        /// <param Command="request">An object containing the parameters used to retrieve a wallet's history.</param>
         /// <returns>A JSON object containing the wallet history.</returns>
         [Route("history")]
         [HttpGet]
@@ -127,7 +279,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <summary>
         /// Gets the balance of a wallet in STRAT (or sidechain coin). Both the confirmed and unconfirmed balance are returned.
         /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve a wallet's balance.</param>
+        /// <param Command="request">An object containing the parameters used to retrieve a wallet's balance.</param>
         /// <returns>A JSON object containing the wallet balance.</returns>
         [Route("balance")]
         [HttpGet]
@@ -141,7 +293,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Both the confirmed and unconfirmed balance are returned.
         /// This method gets the UTXOs at the address which the wallet can spend.
         /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve the balance
+        /// <param Command="request">An object containing the parameters used to retrieve the balance
         /// at a specific wallet address.</param>
         /// <returns>A JSON object containing the balance, fee, and an address for the balance.</returns>
         [Route("received-by-address")]
@@ -154,7 +306,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <summary>
         /// Gets the maximum spendable balance for an account along with the fee required to spend it.
         /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve the
+        /// <param Command="request">An object containing the parameters used to retrieve the
         /// maximum spendable balance on an account.</param>
         /// <returns>A JSON object containing the maximum spendable balance for an account
         /// along with the fee required to spend it.</returns>
@@ -169,7 +321,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Gets the spendable transactions for an account with the option to specify how many confirmations
         /// a transaction needs to be included.
         /// </summary>
-        /// <param name="request">An object containing the parameters used to retrieve the spendable 
+        /// <param Command="request">An object containing the parameters used to retrieve the spendable 
         /// transactions for an account.</param>
         /// <returns>A JSON object containing the spendable transactions for an account.</returns>
         [Route("spendable-transactions")]
@@ -184,7 +336,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Fee can be estimated by creating a <see cref="TransactionBuildContext"/> with no password
         /// and then building the transaction and retrieving the fee from the context.
         /// </summary>
-        /// <param name="request">An object containing the parameters used to estimate the fee 
+        /// <param Command="request">An object containing the parameters used to estimate the fee 
         /// for a specific transaction.</param>
         /// <returns>The estimated fee for the transaction.</returns>
         [Route("estimate-txfee")]
@@ -197,7 +349,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <summary>
         /// Builds a transaction and returns the hex to use when executing the transaction.
         /// </summary>
-        /// <param name="request">An object containing the parameters used to build a transaction.</param>
+        /// <param Command="request">An object containing the parameters used to build a transaction.</param>
         /// <returns>A JSON object including the transaction ID, the hex used to execute
         /// the transaction, and the transaction fee.</returns>
         [Route("build-transaction")]
@@ -211,7 +363,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Sends a transaction that has already been built.
         /// Use the /api/Wallet/build-transaction call to create transactions.
         /// </summary>
-        /// <param name="request">An object containing the necessary parameters used to a send transaction request.</param>
+        /// <param Command="request">An object containing the necessary parameters used to a send transaction request.</param>
         /// <returns>A JSON object containing information about the sent transaction.</returns>
         [Route("send-transaction")]
         [HttpPost]
@@ -235,7 +387,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// <summary>
         /// Gets a list of accounts for the specified wallet.
         /// </summary>
-        /// <param name="request">An object containing the necessary parameters to list the accounts for a wallet.</param>
+        /// <param Command="request">An object containing the necessary parameters to list the accounts for a wallet.</param>
         /// <returns>A JSON object containing a list of accounts for the specified wallet.</returns>
         [Route("accounts")]
         [HttpGet]
@@ -248,7 +400,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Gets an unused address (in the Base58 format) for a wallet account. This address will not have been assigned
         /// to any known UTXO (neither to pay funds into the wallet or to pay change back to the wallet).
         /// </summary>
-        /// <param name="request">An object containing the necessary parameters to retrieve an
+        /// <param Command="request">An object containing the necessary parameters to retrieve an
         /// unused address for a wallet account.</param>
         /// <returns>A JSON object containing the last created and unused address (in Base58 format).</returns>
         [Route("unusedaddress")]
@@ -262,7 +414,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Gets a specified number of unused addresses (in the Base58 format) for a wallet account. These addresses
         /// will not have been assigned to any known UTXO (neither to pay funds into the wallet or to pay change back
         /// to the wallet).
-        /// <param name="request">An object containing the necessary parameters to retrieve
+        /// <param Command="request">An object containing the necessary parameters to retrieve
         /// unused addresses for a wallet account.</param>
         /// <returns>A JSON object containing the required amount of unused addresses (in Base58 format).</returns>
         /// </summary>
@@ -275,7 +427,7 @@ namespace Obsidian.Features.SegWitWallet.Web
 
         /// <summary>
         /// Gets all addresses for a wallet account.
-        /// <param name="request">An object containing the necessary parameters to retrieve
+        /// <param Command="request">An object containing the necessary parameters to retrieve
         /// all addresses for a wallet account.</param>
         /// <returns>A JSON object containing all addresses for a wallet account (in Base58 format).</returns>
         /// </summary>
@@ -298,7 +450,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// proceeds to resync from there reinstating the confirmed transactions in the wallet. You can also cherry pick
         /// transactions to remove by specifying their transaction ID. 
         /// 
-        /// <param name="request">An object containing the necessary parameters to remove transactions
+        /// <param Command="request">An object containing the necessary parameters to remove transactions
         /// from a wallet. The includes several options for specifying the transactions to remove.</param>
         /// <returns>A JSON object containing all removed transactions identified by their
         /// transaction ID and creation time.</returns>
@@ -316,7 +468,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Internally, the specified block is taken as the new wallet tip
         /// and all blocks after it are resynced.
         /// </summary>
-        /// <param name="request">An object containing the necessary parameters
+        /// <param Command="request">An object containing the necessary parameters
         /// to request a resync.</param>
         /// <returns>A value of Ok if the resync was successful.</returns>
         [HttpPost]
@@ -331,7 +483,7 @@ namespace Obsidian.Features.SegWitWallet.Web
         /// Internally, the first block created on or after the supplied date and time
         /// is taken as the new wallet tip and all blocks after it are resynced.
         /// </summary>
-        /// <param name="request">An object containing the necessary parameters
+        /// <param Command="request">An object containing the necessary parameters
         /// to request a resync.</param>
         /// <returns>A value of Ok if the resync was successful.</returns>
         [HttpPost]
@@ -411,7 +563,8 @@ namespace Obsidian.Features.SegWitWallet.Web
                 string jsonString = JsonConvert.SerializeObject(coreResult);
 
                 byte[] cipherBytes = VCL.Encrypt(jsonString.ToUTF8Bytes(), Convert.FromBase64String(request.CurrentPublicKey), VCL.ECKeyPair.PrivateKey);
-                var model = new VCLModel {
+                var model = new VCLModel
+                {
                     CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(),
                     CipherV2Bytes = cipherBytes.ToHexString()
                 };
@@ -428,7 +581,7 @@ namespace Obsidian.Features.SegWitWallet.Web
                 this.logger.LogError(e.ToString());
                 return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
             }
-           
+
         }
 
         async Task<IActionResult> ExecuteRequestAsyncVoid<T>(RequestObject<T> request, Func<T, Task> coreControllerAction) where T : class
@@ -454,7 +607,7 @@ namespace Obsidian.Features.SegWitWallet.Web
                 this.logger.LogError(e.ToString());
                 return BuildErrorResponse(HttpStatusCode.BadRequest, e.Message);
             }
-           
+
         }
 
         string Decrpyt<T>(RequestObject<T> request) where T : class

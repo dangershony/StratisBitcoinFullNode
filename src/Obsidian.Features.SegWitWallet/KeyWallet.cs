@@ -42,8 +42,8 @@ namespace Obsidian.Features.SegWitWallet
         /// <summary>
         /// The height of the last block that was synced.
         /// </summary>
-        [JsonProperty(PropertyName = "lastBlockSyncedHeight", NullValueHandling = NullValueHandling.Ignore)]
-        public int? LastBlockSyncedHeight { get; set; }
+        [JsonProperty(PropertyName = "lastBlockSyncedHeight")]
+        public int LastBlockSyncedHeight { get; set; }
 
         /// <summary>
         /// The hash of the last block that was synced.

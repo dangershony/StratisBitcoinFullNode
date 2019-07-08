@@ -11,8 +11,8 @@ namespace Obsidian.ObsidianD.Api
         /// <summary>
         /// Finds all the types that are <see cref="Controller"/> or <see cref="FeatureController"/>and add them to the Api as services.
         /// </summary>
-        /// <param name="builder">The builder</param>
-        /// <param name="services">The services to look into</param>
+        /// <param Command="builder">The builder</param>
+        /// <param Command="services">The services to look into</param>
         /// <returns>The Mvc builder</returns>
         public static IMvcBuilder AddControllers(this IMvcBuilder builder, IServiceCollection services)
         {

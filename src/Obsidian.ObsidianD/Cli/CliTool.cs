@@ -23,10 +23,10 @@ namespace Obsidian.ObsidianD
         /// The expected sequence of arguments:
         /// <list>
         /// <item>
-        /// 1, [network-name] [options] [rpc-command] [rpc-params].
+        /// 1, [network-Command] [options] [rpc-command] [rpc-params].
         /// </item>
         /// <item>
-        /// 2, [network-name] [options] [api-controller "/" api-command] [api-params].
+        /// 2, [network-Command] [options] [api-controller "/" api-command] [api-params].
         /// </item>
         /// </list>
         /// </summary>
@@ -79,11 +79,11 @@ namespace Obsidian.ObsidianD
                 {
                     var builder = new StringBuilder();
                     builder.AppendLine("Usage:");
-                    builder.AppendLine(" dotnet run <Stratis.Bitcoin.Cli/Stratis.Bitcoin.Cli.dll> [network-name] [options] [method] <command> [arguments]");
+                    builder.AppendLine(" dotnet run <Stratis.Bitcoin.Cli/Stratis.Bitcoin.Cli.dll> [network-Command] [options] [method] <command> [arguments]");
                     builder.AppendLine();
                     builder.AppendLine("Command line arguments:");
                     builder.AppendLine();
-                    builder.AppendLine("[network-name]                     Name of the network - e.g. \"stratis\" or \"bitcoin\".");
+                    builder.AppendLine("[network-Command]                     Name of the network - e.g. \"stratis\" or \"bitcoin\".");
                     builder.AppendLine("[options]                          Options for the CLI (optional) - e.g. -help, -rpcuser, see below.");
                     builder.AppendLine("[method]                           Method to use for API calls - 'GET', 'POST' or 'DELETE'.");
                     builder.AppendLine("[command]                          Name of RPC method or API <controller>/<method>.");
@@ -98,7 +98,7 @@ namespace Obsidian.ObsidianD
                     builder.AppendLine();
                     builder.AppendLine("Examples:");
                     builder.AppendLine();
-                    builder.AppendLine("dotnet run stratis -testnet GET Wallet/history WalletName=testwallet - Lists all the historical transactions of the wallet called 'testwallet' on the stratis test network.");
+                    builder.AppendLine("dotnet run stratis -testnet GET Wallet/history Target=testwallet - Lists all the historical transactions of the wallet called 'testwallet' on the stratis test network.");
                     builder.AppendLine("dotnet run stratis -rpcuser=stratistestuser -rpcpassword=stratistestpassword -rpcconnect=127.0.0.3 -rpcport=26174 getinfo - Displays general information about the Stratis node on the 127.0.0.3:26174, authenticating with the RPC specified user.");
                     builder.AppendLine("dotnet run bitcoin -rpcuser=btctestuser -rpcpassword=btctestpass getbalance - Displays the current balance of the opened wallet on the 127.0.0.1:8332 node, authenticating with the RPC specified user.");
                     Console.WriteLine(builder);
@@ -110,7 +110,7 @@ namespace Obsidian.ObsidianD
 
                 
 
-                // API calls require both the contoller name and the method name separated by "/".
+                // API calls require both the contoller Command and the method Command separated by "/".
                 // If this is not an API call then assume it is an RPC call.
                 if (!command.Contains("/"))
                 {
@@ -253,7 +253,7 @@ namespace Obsidian.ObsidianD
         /// <summary>
         /// Determine both the exception message and any inner exception messages.
         /// </summary>
-        /// <param name="exception">The exception object.</param>
+        /// <param Command="exception">The exception object.</param>
         /// <returns>Returns the exception message plus any inner exceptions.</returns>
         public static string ExceptionToString(Exception exception)
         {

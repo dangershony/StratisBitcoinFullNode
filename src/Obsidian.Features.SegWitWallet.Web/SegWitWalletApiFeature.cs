@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Builder;
@@ -24,14 +25,12 @@ namespace Obsidian.Features.SegWitWallet
     {
         readonly SegWitWalletController segWitWalletController;
 
-
         public SegWitWalletApiFeature(
             SegWitWalletController segWitWalletController,
             ILoggerFactory loggerFactory
           )
         {
             this.segWitWalletController = segWitWalletController;
-           
         }
 
 

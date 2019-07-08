@@ -26,7 +26,7 @@ namespace Obsidian.ObsidianD
         /// <summary>
         /// Gets the deployment flags to set when the deployment activates.
         /// </summary>
-        /// <param name="deployment">The deployment number.</param>
+        /// <param Command="deployment">The deployment number.</param>
         /// <returns>The deployment flags.</returns>
         public override BIP9DeploymentFlags GetFlags(int deployment)
         {

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security;
 using System.Security.Cryptography;
@@ -9,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
+using Newtonsoft.Json;
 using Obsidian.Features.SegWitWallet.Tests;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Configuration;
@@ -24,102 +26,74 @@ namespace Obsidian.Features.SegWitWallet
     public class SegWitWalletManager
     {
         public static readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
-
+        public const string WalletFileExtension = ".keybag.json";
         const string DownloadChainLoop = "SegWitWalletManager.DownloadChain";
-        const string WalletFileExtension = "keybag.json"; // do not use 'wallet' in this string
-        const int WalletSaveIntervalMinutes = 5;
-
-        static readonly RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
-        static readonly Func<string, byte[], byte[]> KeyEncryption = VCL.EncryptWithPassphrase;
 
         readonly Network network;
         readonly IScriptAddressReader scriptAddressReader;
         readonly ILogger logger;
         readonly IDateTimeProvider dateTimeProvider;
-        readonly IAsyncProvider asyncProvider;
-        readonly INodeLifetime nodeLifeTime;
         readonly IBroadcasterManager broadcasterManager;
-        readonly FileStorage<KeyWallet> fileStorage;
         readonly ChainIndexer chainIndexer;
+        readonly INodeLifetime nodeLifetime;
+        readonly IAsyncProvider asyncProvider;
 
-        readonly ConcurrentDictionary<string, KeyWallet> wallets = new ConcurrentDictionary<string, KeyWallet>();
-
-
-
-
-        IAsyncLoop asyncLoop;
-
-
-        // In order to allow faster look-ups of transactions affecting the wallets' addresses,
-        // we keep a couple of objects in memory:
-        // 1. the list of unspent outputs for checking whether inputs from a transaction are being spent by our wallet and
-        // 2. the list of addresses contained in our wallet for checking whether a transaction is being paid to the wallet.
-        // 3. a mapping of all inputs with their corresponding transactions, to facilitate rapid lookup
-        readonly Dictionary<OutPoint, TransactionData> outpointLookup = new Dictionary<OutPoint, TransactionData>();
-        readonly ConcurrentDictionary<Script, KeyAddress> scriptToAddressLookup = new ConcurrentDictionary<Script, KeyAddress>();
-        readonly Dictionary<OutPoint, TransactionData> inputLookup = new Dictionary<OutPoint, TransactionData>();
-
-
-        /// <summary>
-        /// Constructs the cold staking manager which is used by the cold staking controller.
-        /// </summary>
-        /// <param name="network">The network that the manager is running on.</param>
-        /// <param name="chainIndexer">Thread safe class representing a chain of headers from genesis.</param>
-        /// <param name="dataFolder">Contains path locations to folders and files on disk.</param>
-        /// <param name="walletFeePolicy">The wallet fee policy.</param>
-        /// <param name="asyncProvider">Factory for creating and also possibly starting application defined tasks inside async loop.</param>
-        /// <param name="nodeLifeTime">Allows consumers to perform cleanup during a graceful shutdown.</param>
-        /// <param name="scriptAddressReader">A reader for extracting an address from a <see cref="Script"/>.</param>
-        /// <param name="loggerFactory">The logger factory to use to create the custom logger.</param>
-        /// <param name="dateTimeProvider">Provider of time functions.</param>
-        /// <param name="broadcasterManager">The broadcaster manager.</param>
-        public SegWitWalletManager(
-            Network network,
-            ChainIndexer chainIndexer,
-            DataFolder dataFolder,
-            IWalletFeePolicy walletFeePolicy,
-            IAsyncProvider asyncProvider,
-            INodeLifetime nodeLifeTime,
-            IScriptAddressReader scriptAddressReader,
-            ILoggerFactory loggerFactory,
-            IDateTimeProvider dateTimeProvider,
-            IBroadcasterManager broadcasterManager = null)
+        public SegWitWalletManager(string walletFilePath, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider)
         {
-            Guard.NotNull(loggerFactory, nameof(loggerFactory));
-            Guard.NotNull(dateTimeProvider, nameof(dateTimeProvider));
+            this.CurrentWalletFilePath = walletFilePath;
+            this.Wallet = JsonConvert.DeserializeObject<KeyWallet>(File.ReadAllText(walletFilePath));
+            if (Path.GetFileName(walletFilePath.Replace(WalletFileExtension, string.Empty)) != this.Wallet.Name)
+                throw new InvalidOperationException();
 
-            this.network = network;
-            this.scriptAddressReader = scriptAddressReader;
-            this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
-            this.dateTimeProvider = dateTimeProvider;
-            this.asyncProvider = asyncProvider;
-            this.nodeLifeTime = nodeLifeTime;
-            this.fileStorage = new FileStorage<KeyWallet>(dataFolder.WalletPath);
             this.chainIndexer = chainIndexer;
+            this.network = network;
+            this.logger = loggerFactory.CreateLogger(typeof(SegWitWalletManager).FullName);
+            this.scriptAddressReader = scriptAddressReader;
+            this.dateTimeProvider = dateTimeProvider;
+            this.nodeLifetime = nodeLifetime;
+            this.asyncProvider = asyncProvider;
             this.broadcasterManager = broadcasterManager;
+
             if (this.broadcasterManager != null)
             {
                 this.broadcasterManager.TransactionStateChanged += this.BroadcasterManager_TransactionStateChanged;
             }
         }
 
+        public string CurrentWalletFilePath { get; }
+        public KeyWallet Wallet { get; }
 
-        /// <summary>
-        /// Loads the wallet to be used by the manager if a wallet with this name has not already been loaded.
-        /// </summary>
-        /// <param name="wallet">The wallet to load.</param>
-        void Load(KeyWallet wallet)
-        {
-            Guard.NotNull(wallet, nameof(wallet));
+        IAsyncLoop asyncLoop;
 
-            if (this.wallets.TryGetValue(wallet.Name, out _))
-            {
-                this.logger.LogTrace("(-)[NOT_FOUND]");  // should be FOUND
-                return;
-            }
 
-            this.wallets[wallet.Name] = wallet;
-        }
+        
+
+        static readonly RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
+        static readonly Func<string, byte[], byte[]> KeyEncryption = VCL.EncryptWithPassphrase;
+
+        
+
+
+
+
+
+
+
+        // In order to allow faster look-ups of transactions affecting the wallets' addresses,
+        // we keep a couple of objects in memory:
+        // 1. the list of unspent outputs for checking whether inputs from a transaction are being spent by our Wallet and
+        // 2. the list of addresses contained in our Wallet for checking whether a transaction is being paid to the Wallet.
+        // 3. a mapping of all inputs with their corresponding transactions, to facilitate rapid lookup
+        readonly Dictionary<OutPoint, TransactionData> outpointLookup = new Dictionary<OutPoint, TransactionData>();
+        readonly ConcurrentDictionary<Script, KeyAddress> scriptToAddressLookup = new ConcurrentDictionary<Script, KeyAddress>();
+        readonly Dictionary<OutPoint, TransactionData> inputLookup = new Dictionary<OutPoint, TransactionData>();
+
+
+      
+
+
+
+
 
         #region IWalletManager 
 
@@ -127,13 +101,11 @@ namespace Obsidian.Features.SegWitWallet
         {
 
             // Find wallets and load them in memory.
-            IEnumerable<KeyWallet> wallets = this.fileStorage.LoadByFileExtension(WalletFileExtension);
+            //IEnumerable<KeyWallet> wallets = this.fileStorage.LoadByFileExtension(WalletFileExtension);
 
-            foreach (KeyWallet wallet in wallets)
-            {
-                Load(wallet);
-                //AddAddressesToMaintainBuffer()
-            }
+
+
+            // AddAddressesToMaintainBuffer()
 
             //if (this.walletSettings.IsDefaultWalletEnabled())
             //{
@@ -144,7 +116,7 @@ namespace Obsidian.Features.SegWitWallet
             //        this.CreateWallet(this.walletSettings.DefaultWalletPassword, this.walletSettings.DefaultWalletName, string.Empty, mnemonic);
             //    }
 
-            //    // Make sure both unlock is specified, and that we actually have a default wallet name specified.
+            //    // Make sure both unlock is specified, and that we actually have a default Wallet name specified.
             //    if (this.walletSettings.UnlockDefaultWallet)
             //    {
             //        this.UnlockWallet(this.walletSettings.DefaultWalletPassword, this.walletSettings.DefaultWalletName, MaxWalletUnlockDurationInSeconds);
@@ -153,45 +125,27 @@ namespace Obsidian.Features.SegWitWallet
 
             // Load data in memory for faster lookups.
             this.LoadKeysLookupLock();
-            // Find the last chain block received by the wallet manager.
-            HashHeightPair hashHeightPair = this.LastReceivedBlockInfo();
-            this.WalletTipHash = hashHeightPair.Hash;
-            this.WalletTipHeight = hashHeightPair.Height;
+            // Find the last chain block received by the Wallet manager.
+           
 
-            // Save the wallets file every 5 minutes to help against crashes.
-            this.asyncLoop = this.asyncProvider.CreateAndRunAsyncLoop("Wallet persist job", token =>
-            {
-                this.SaveWallets();
-                this.logger.LogInformation("Wallets saved to file at {0}.", this.dateTimeProvider.GetUtcNow());
-
-                this.logger.LogTrace("(-)[IN_ASYNC_LOOP]");
-                return Task.CompletedTask;
-            },
-            this.nodeLifeTime.ApplicationStopping,
-            repeatEvery: TimeSpan.FromMinutes(WalletSaveIntervalMinutes),
-            startAfter: TimeSpan.FromMinutes(WalletSaveIntervalMinutes));
+           
         }
 
         void LoadKeysLookupLock()
         {
-
-            foreach (KeyWallet wallet in this.wallets.Values)
+            foreach (KeyAddress address in this.Wallet.Addresses)
             {
+                this.scriptToAddressLookup[KeyAddressExtensions.GetPaymentScript(address)] = address;
+                //if (address.Pubkey != null)
+                //    this.scriptToAddressLookup[address.Pubkey] = address;
 
-                foreach (KeyAddress address in wallet.Addresses)
+                foreach (TransactionData transaction in address.Transactions)
                 {
-                    this.scriptToAddressLookup[KeyAddressExtensions.GetPaymentScript(address)] = address;
-                    //if (address.Pubkey != null)
-                    //    this.scriptToAddressLookup[address.Pubkey] = address;
-
-                    foreach (TransactionData transaction in address.Transactions)
+                    // Get the UTXOs that are unspent or spent but not confirmed.
+                    // We only exclude from the list the confirmed spent UTXOs.
+                    if (transaction.SpendingDetails?.BlockHeight == null)
                     {
-                        // Get the UTXOs that are unspent or spent but not confirmed.
-                        // We only exclude from the list the confirmed spent UTXOs.
-                        if (transaction.SpendingDetails?.BlockHeight == null)
-                        {
-                            this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
-                        }
+                        this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
                     }
                 }
             }
@@ -216,9 +170,8 @@ namespace Obsidian.Features.SegWitWallet
 
         public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(string walletName, int confirmations = 0)
         {
-            KeyWallet wallet = this.wallets[walletName];
             var res = new List<UnspentKeyAddressOutput>();
-            foreach (var adr in wallet.Addresses)
+            foreach (var adr in Wallet.Addresses)
             {
                 UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, confirmations);
                 res.AddRange(unspentKeyAddress);
@@ -237,32 +190,7 @@ namespace Obsidian.Features.SegWitWallet
             throw new NotImplementedException();
         }
 
-        public Wallet LoadWallet(string password, string name)
-        {
-            Guard.NotEmpty(password, nameof(password));
-            Guard.NotEmpty(name, nameof(name));
 
-            // Load the file from the local system.
-            KeyWallet wallet = this.fileStorage.LoadByFileName($"{name}.{WalletFileExtension}");
-
-            // Check the keyEncryptionPassphrase.
-            try
-            {
-                const string expectedPassword = "pw_check_in_login.component_is_not_supported";
-                if (password != expectedPassword)
-                    throw new Exception($"Error: Expected '{expectedPassword}'. The user should not enter the unlocking keyEncryptionPassphrase to load a .{WalletFileExtension} wallet.");
-            }
-            catch (Exception ex)
-            {
-                this.logger.LogTrace("Exception occurred: {0}", ex.ToString());
-                this.logger.LogTrace("(-)[EXCEPTION]");
-                throw new SecurityException(ex.Message);
-            }
-
-            this.Load(wallet);
-
-            return null;
-        }
 
         public void UnlockWallet(string password, string name, int timeout)
         {
@@ -300,12 +228,12 @@ namespace Obsidian.Features.SegWitWallet
 
         public KeyAddress GetChangeAddress(string walletName)
         {
-            return this.wallets[walletName].Addresses.First(a => a.IsChangeAddress());
+            return this.Wallet.Addresses.First(a => a.IsChangeAddress());
         }
 
         public IEnumerable<KeyAddress> GetUnusedAddresses(string walletName, int count, bool isChange = false)
         {
-            return this.wallets[walletName].Addresses.Where(a => a.IsChangeAddress() == isChange && a.Transactions.Count == 0)
+            return this.Wallet.Addresses.Where(a => a.IsChangeAddress() == isChange && a.Transactions.Count == 0)
                 .Take(count);
 
             #region we do not create new addresses here if there are no unused addresses
@@ -315,10 +243,10 @@ namespace Obsidian.Features.SegWitWallet
             //if (diff < 0)
             //{
 
-            //    newAddresses = CreateNdAddresses(Math.Abs(diff), isChange, wallet).ToList();
+            //    newAddresses = CreateNdAddresses(Math.Abs(diff), isChange, Wallet).ToList();
             //    foreach (var adr in newAddresses)
-            //        wallet.Addresses.Add(adr);
-            //    this.SaveWallet(wallet);
+            //        Wallet.Addresses.Add(adr);
+            //    this.SaveWallet(Wallet);
             //    this.UpdateKeysLookupLocked(newAddresses);
             //}
 
@@ -347,45 +275,23 @@ namespace Obsidian.Features.SegWitWallet
             return newAdresses;
         }
 
-        public IEnumerable<AccountHistory> GetHistory(string walletName, string accountName = null)
+
+
+        public FlatHistory[] GetHistory()
         {
-            Guard.NotEmpty(walletName, nameof(walletName));
-
-            var fakeHd = new HdAccount() { Name = walletName };
-            // In order to calculate the fee properly we need to retrieve all the transactions with spending details.
-            var accountsHistory = new List<AccountHistory>();
-            accountsHistory.Add(GetHistory(fakeHd));
-
-
-            return accountsHistory;
-        }
-
-        public AccountHistory GetHistory(HdAccount account)
-        {
-            var walletName = account.Name; // hack
-            KeyWallet wallet = this.wallets[walletName];
-
-            Guard.NotNull(account, nameof(account));
-
-            FlatHistory[] items;
-            var combinedAddresses = wallet.Addresses;
             // Get transactions contained in the account.
-            items = combinedAddresses
+            return this.Wallet.Addresses
                 .Where(a => a.Transactions.Any())
                 .SelectMany(s => s.Transactions.Select(t => new FlatHistory { Address = s.ToFakeHdAddress(), Transaction = t })).ToArray();
-
-            return new AccountHistory { Account = account, History = items };
         }
 
-        public IEnumerable<AccountBalance> GetBalances(string walletName, string accountName = null)
+        public IEnumerable<KeyAddressBalance> GetBalances(string walletName, string accountName = null)
         {
-            var balances = new List<AccountBalance>();
+            var balances = new List<KeyAddressBalance>();
 
-            KeyWallet wallet = this.wallets[walletName];
 
-            var fakeAccount = wallet.Addresses.ToFakeHdAccount(wallet);
 
-            foreach (KeyAddress address in wallet.Addresses)
+            foreach (KeyAddress address in this.Wallet.Addresses)
             {
                 // Calculates the amount of spendable coins.
                 UnspentKeyAddressOutput[] spendableBalance = GetSpendableTransactions(address);
@@ -403,12 +309,12 @@ namespace Obsidian.Features.SegWitWallet
 
 
 
-                balances.Add(new AccountBalance
+                balances.Add(new KeyAddressBalance
                 {
                     AmountConfirmed = result.amountConfirmed,
                     AmountUnconfirmed = result.amountUnconfirmed,
                     SpendableAmount = spendableAmount,
-                    Account = fakeAccount
+                    KeyAddress = address
                 });
             }
 
@@ -462,29 +368,11 @@ namespace Obsidian.Features.SegWitWallet
             throw new NotImplementedException();
         }
 
-        public Wallet GetWallet(string walletName)
-        {
-            return null;
-        }
+        
 
-        public IEnumerable<HdAccount> GetAccounts(string walletName)
-        {
-            throw new NotImplementedException();
-        }
+       
 
-        public int LastBlockHeight()
-        {
-            foreach (var w in this.wallets.Values)
-            {
-                if (w is KeyWallet wal)
-                {
-                    return wal.LastBlockSyncedHeight ?? 0;
-                }
 
-                // return ((Wallet)w).AccountsRoot.Single().LastBlockSyncedHeight ?? 0;
-            }
-            return this.chainIndexer.Tip.Height;
-        }
 
         public void RemoveBlocks(ChainedHeader fork)
         {
@@ -512,28 +400,19 @@ namespace Obsidian.Features.SegWitWallet
 
         public void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
-            Guard.NotNull(block, nameof(block));
-            Guard.NotNull(chainedHeader, nameof(chainedHeader));
-
-            // If there is no wallet yet, update the wallet tip hash and do nothing else.
-            if (this.wallets.Count == 0)
-            {
-                this.WalletTipHash = chainedHeader.HashBlock;
-                this.WalletTipHeight = chainedHeader.Height;
-                this.logger.LogTrace("(-)[NO_WALLET]");
-                return;
-            }
+            var tipHash = this.Wallet.LastBlockSyncedHash;
+            var tipHeight = this.Wallet.LastBlockSyncedHeight;
             // Is this the next block.
-            if (chainedHeader.Header.HashPrevBlock != this.WalletTipHash)
+            if (chainedHeader.Header.HashPrevBlock != tipHash)
             {
-                this.logger.LogTrace("New block's previous hash '{0}' does not match current wallet's tip hash '{1}'.", chainedHeader.Header.HashPrevBlock, this.WalletTipHash);
+                this.logger.LogTrace("New block's previous hash '{0}' does not match current Wallet's tip hash '{1}'.", chainedHeader.Header.HashPrevBlock, tipHash);
 
-                // The block coming in to the wallet should never be ahead of the wallet.
+                // The block coming in to the Wallet should never be ahead of the Wallet.
                 // If the block is behind, let it pass.
-                if (chainedHeader.Height > this.WalletTipHeight)
+                if (chainedHeader.Height > tipHeight)
                 {
                     this.logger.LogTrace("(-)[BLOCK_TOO_FAR]");
-                    throw new WalletException("block too far in the future has arrived to the wallet");
+                    throw new WalletException("block too far in the future has arrived to the Wallet");
                 }
             }
             bool trxFoundInBlock = false;
@@ -553,7 +432,7 @@ namespace Obsidian.Features.SegWitWallet
 
             if (trxFoundInBlock)
             {
-                this.logger.LogDebug("Block {0} contains at least one transaction affecting the user's wallet(s).", chainedHeader);
+                this.logger.LogDebug("Block {0} contains at least one transaction affecting the user's Wallet(s).", chainedHeader);
             }
 
         }
@@ -567,14 +446,14 @@ namespace Obsidian.Features.SegWitWallet
 
             if (block != null)
             {
-                // Do a pre-scan of the incoming transaction's inputs to see if they're used in other wallet transactions already.
+                // Do a pre-scan of the incoming transaction's inputs to see if they're used in other Wallet transactions already.
                 foreach (TxIn input in transaction.Inputs)
                 {
-                    // See if this input is being used by another wallet transaction present in the index.
-                    // The inputs themselves may not belong to the wallet, but the transaction data in the index has to be for a wallet transaction.
+                    // See if this input is being used by another Wallet transaction present in the index.
+                    // The inputs themselves may not belong to the Wallet, but the transaction data in the index has to be for a Wallet transaction.
                     if (this.inputLookup.TryGetValue(input.PrevOut, out TransactionData indexData))
                     {
-                        // It's the same transaction, which can occur if the transaction had been added to the wallet previously. Ignore.
+                        // It's the same transaction, which can occur if the transaction had been added to the Wallet previously. Ignore.
                         if (indexData.Id == hash)
                             continue;
 
@@ -585,10 +464,7 @@ namespace Obsidian.Features.SegWitWallet
                         }
 
                         // This is a double spend we remove the unconfirmed trx
-                        foreach (var wallet in this.wallets.Values)
-                        {
-                            this.RemoveTransactionsByIds(wallet.Name, new[] { indexData.Id });
-                        }
+                        this.RemoveTransactionsByIds(new[] { indexData.Id });
 
                         this.inputLookup.Remove(input.PrevOut);
                     }
@@ -603,7 +479,7 @@ namespace Obsidian.Features.SegWitWallet
                 {
                     AddTransactionToWallet(transaction, utxo, blockHeight, block, isPropagated);
                     foundReceivingTrx = true;
-                    this.logger.LogDebug("Transaction '{0}' contained funds received by the user's wallet(s).", hash);
+                    this.logger.LogDebug("Transaction '{0}' contained funds received by the user's Wallet(s).", hash);
                 }
             }
 
@@ -622,14 +498,14 @@ namespace Obsidian.Features.SegWitWallet
                     if (o.IsEmpty)
                         return false;
 
-                    // Check if the destination script is one of the wallet's.
+                    // Check if the destination script is one of the Wallet's.
                     bool found = this.scriptToAddressLookup.TryGetValue(o.ScriptPubKey, out KeyAddress addr);
 
                     // Include the keys not included in our wallets (external payees).
                     if (!found)
                         return true;
 
-                    // Include the keys that are in the wallet but that are for receiving
+                    // Include the keys that are in the Wallet but that are for receiving
                     // addresses (which would mean the user paid itself).
                     // We also exclude the keys involved in a staking transaction.
                     return !addr.IsChangeAddress() && !transaction.IsCoinStake;
@@ -637,7 +513,7 @@ namespace Obsidian.Features.SegWitWallet
 
                 this.AddSpendingTransactionToWallet(transaction, paidOutTo, tTx.Id, tTx.Index, blockHeight, block);
                 foundSendingTrx = true;
-                this.logger.LogDebug("Transaction '{0}' contained funds sent by the user's wallet(s).", hash);
+                this.logger.LogDebug("Transaction '{0}' contained funds sent by the user's Wallet(s).", hash);
             }
 
             return foundSendingTrx || foundReceivingTrx;
@@ -645,7 +521,7 @@ namespace Obsidian.Features.SegWitWallet
 
         /// <summary>
         /// Mark an output as spent, the credit of the output will not be used to calculate the balance.
-        /// The output will remain in the wallet for history (and reorg).
+        /// The output will remain in the Wallet for history (and reorg).
         /// </summary>
         /// <param name="transaction">The transaction from which details are added.</param>
         /// <param name="paidToOutputs">A list of payments made out</param>
@@ -733,92 +609,32 @@ namespace Obsidian.Features.SegWitWallet
             }
         }
 
-        public void SaveWallet(Wallet wallet)
+       
+
+
+
+       
+
+
+
+       
+
+       
+
+        
+
+
+
+       
+
+       
+
+        public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
         {
-            throw new NotImplementedException();
-        }
-
-        public void SaveWallets()
-        {
-            foreach (var wallet in this.wallets.Values)
-                SaveWallet(wallet);
-        }
-
-        public string GetWalletFileExtension()
-        {
-            return WalletFileExtension;
-        }
-
-        public IEnumerable<string> GetWalletsNames()
-        {
-            return this.wallets.Keys;
-        }
-
-
-
-        public void UpdateLastBlockSyncedHeight(ChainedHeader chainedHeader)
-        {
-            Guard.NotNull(chainedHeader, nameof(chainedHeader));
-
-            // Update the wallets with the last processed block height.
-            foreach (KeyWallet wallet in this.wallets.Values)
-            {
-                this.UpdateLastBlockSyncedHeight(wallet, chainedHeader);
-            }
-
-            this.WalletTipHash = chainedHeader.HashBlock;
-            this.WalletTipHeight = chainedHeader.Height;
-        }
-
-        public Wallet GetWalletByName(string walletName)
-        {
-            return null;
-        }
-
-        public ICollection<uint256> GetFirstWalletBlockLocator()
-        {
-            return this.wallets.Values.First().BlockLocator;
-        }
-
-        public (string folderPath, IEnumerable<string>) GetWalletsFiles()
-        {
-            return (this.fileStorage.FolderPath, this.fileStorage.GetFilesNames(this.GetWalletFileExtension()));
-        }
-
-        public bool ContainsWallets => this.wallets.Count > 0;
-
-        public string GetExtPubKey(WalletAccountReference accountReference)
-        {
-            throw new NotImplementedException();
-        }
-
-        public ExtKey GetExtKey(WalletAccountReference accountReference, string password = "", bool cache = false)
-        {
-            throw new NotImplementedException();
-        }
-
-        public int? GetEarliestWalletHeight()
-        {
-            throw new NotImplementedException();
-        }
-
-        public DateTimeOffset GetOldestWalletCreationTime()
-        {
-            throw new NotImplementedException();
-        }
-
-        public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(string walletName, IEnumerable<uint256> transactionsIds)
-        {
-            Guard.NotNull(transactionsIds, nameof(transactionsIds));
-            Guard.NotEmpty(walletName, nameof(walletName));
-
             List<uint256> idsToRemove = transactionsIds.ToList();
-            KeyWallet wallet = this.wallets[walletName];
-
             var result = new HashSet<(uint256, DateTimeOffset)>();
 
-
-            foreach (KeyAddress adr in wallet.Addresses)
+            foreach (KeyAddress adr in this.Wallet.Addresses)
             {
                 for (int i = 0; i < adr.Transactions.Count; i++)
                 {
@@ -848,7 +664,7 @@ namespace Obsidian.Features.SegWitWallet
                 // Reload the lookup dictionaries.
                 this.RefreshInputKeysLookupLock();
 
-                this.SaveWallet(wallet);
+                this.SaveWallet();
             }
 
             return result;
@@ -866,115 +682,46 @@ namespace Obsidian.Features.SegWitWallet
 
         #endregion
 
-        public void CreateNondeterministicWallet(string name, string keyEncryptionPassphrase)
-        {
-            try
-            {
-                if (this.wallets.ContainsKey(name))
-                    throw new InvalidOperationException($"A wallet with name {name} is already loaded.");
+      
 
-                if (this.fileStorage.Exists($"{name}.{WalletFileExtension}"))
-                    throw new InvalidOperationException(
-                        $"A wallet with name {name} is already present in the data folder!");
-
-                var wal = new KeyWallet
-                {
-                    Name = name,
-                    CreationTime = DateTime.UtcNow,
-                    WalletType = nameof(KeyWallet),
-                    WalletTypeVersion = 1,
-                    Addresses = new List<KeyAddress>()
-                };
-                const int witnessVersion = 0;
-                var bech32Prefix = "odx";  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
-
-                var uniqueIndex = 0;
-                var adr = KeyAddress.CreateWithPrivateKey(StaticWallet.Key1Bytes, keyEncryptionPassphrase, KeyEncryption, this.network.Consensus.CoinType, uniqueIndex++, witnessVersion, bech32Prefix);
-                wal.Addresses.Add(adr);
-                var adr2 = KeyAddress.CreateWithPrivateKey(StaticWallet.Key2Bytes, keyEncryptionPassphrase, KeyEncryption, this.network.Consensus.CoinType, uniqueIndex++, witnessVersion, bech32Prefix);
-                wal.Addresses.Add(adr2);
-
-
-
-                UpdateKeysLookupLocked(wal.Addresses);
-                // If the chain is downloaded, we set the height of the newly created wallet to it.
-                // However, if the chain is still downloading when the user creates a wallet,
-                // we wait until it is downloaded in order to set it. Otherwise, the height of the wallet will be the height of the chain at that moment.
-                if (this.chainIndexer.IsDownloaded())
-                {
-                    this.UpdateLastBlockSyncedHeight(wal, this.chainIndexer.Tip);
-                }
-                else
-                {
-                    this.UpdateWhenChainDownloaded(new[] { wal }, this.dateTimeProvider.GetUtcNow());
-                }
-
-                // Save the changes to the file and add addresses to be tracked.
-                this.SaveWallet(wal);
-                if (!this.wallets.TryAdd(wal.Name, wal))
-                    throw new InvalidOperationException($"A wallet with name {name} is already loaded.");
-            }
-            catch (Exception e)
-            {
-                this.logger.LogError($"Could not create wallet: {e.Message}");
-            }
-
-        }
-
-        public KeyWallet GetSegWitWallet(string name)
-        {
-            return this.wallets[name];
-        }
+        
 
         public Network GetNetwork()
         {
             return this.network;
         }
 
-        void SaveWallet(KeyWallet wallet)
+        void SaveWallet()
         {
-            Guard.NotNull(wallet, nameof(wallet));
-
-            this.fileStorage.SaveToFile(wallet, $"{wallet.Name}.{WalletFileExtension}", new FileStorageOption { SerializeNullValues = false });
+            var serializedWallet = JsonConvert.SerializeObject(this.Wallet, Formatting.Indented);
+            File.WriteAllText(this.CurrentWalletFilePath, serializedWallet);
         }
 
 
-        void UpdateLastBlockSyncedHeight(KeyWallet wallet, ChainedHeader chainedHeader)
-        {
-            Guard.NotNull(wallet, nameof(wallet));
-            Guard.NotNull(chainedHeader, nameof(chainedHeader));
-
-            // The block locator will help when the wallet
-            // needs to rewind this will be used to find the fork.
-            wallet.BlockLocator = chainedHeader.GetLocator().Blocks;
-            wallet.LastBlockSyncedHeight = chainedHeader.Height;
-            wallet.LastBlockSyncedHash = chainedHeader.HashBlock;
-        }
+       
 
         /// <summary>
-        /// Updates details of the last block synced in a wallet when the chain of headers finishes downloading.
+        /// Updates details of the last block synced in a Wallet when the chain of headers finishes downloading.
         /// </summary>
         /// <param name="wallets">The wallets to update when the chain has downloaded.</param>
-        /// <param name="date">The creation date of the block with which to update the wallet.</param>
-        void UpdateWhenChainDownloaded(IEnumerable<KeyWallet> wallets, DateTime date)
+        /// <param name="date">The creation date of the block with which to update the Wallet.</param>
+        void UpdateWhenChainDownloaded(DateTime date)
         {
             if (this.asyncProvider.IsAsyncLoopRunning(DownloadChainLoop))
             {
                 return;
             }
 
-            this.asyncProvider.CreateAndRunAsyncLoopUntil(DownloadChainLoop, this.nodeLifeTime.ApplicationStopping,
+            this.asyncLoop = this.asyncProvider.CreateAndRunAsyncLoopUntil(DownloadChainLoop, this.nodeLifetime.ApplicationStopping,
                 () => this.chainIndexer.IsDownloaded(),
                 () =>
                 {
                     int heightAtDate = this.chainIndexer.GetHeightAtTime(date);
 
-                    foreach (KeyWallet wallet in wallets)
-                    {
-                        this.logger.LogTrace("The chain of headers has finished downloading, updating wallet '{0}' with height {1}", wallet.Name, heightAtDate);
-                        this.UpdateLastBlockSyncedHeight(wallet, this.chainIndexer.GetHeader(heightAtDate));
-                        this.SaveWallet(wallet);
-                    }
+                   
+                        this.logger.LogTrace("The chain of headers has finished downloading, updating Wallet '{0}' with height {1}", this.Wallet.Name, heightAtDate);
+                        this.UpdateLastBlockSyncedHeight(this.chainIndexer.GetHeader(heightAtDate));
+                        this.SaveWallet();
                 },
                 (ex) =>
                 {
@@ -982,10 +729,7 @@ namespace Obsidian.Features.SegWitWallet
                     // sync from the current height.
                     this.logger.LogError($"Exception occurred while waiting for chain to download: {ex.Message}");
 
-                    foreach (KeyWallet wallet in wallets)
-                    {
-                        this.UpdateLastBlockSyncedHeight(wallet, this.chainIndexer.Tip);
-                    }
+                        this.UpdateLastBlockSyncedHeight(this.chainIndexer.Tip);
                 },
                 TimeSpans.FiveSeconds);
         }
@@ -993,52 +737,14 @@ namespace Obsidian.Features.SegWitWallet
 
 
 
-        /// <summary>
-        /// Gets the hash of the last block received by the wallets.
-        /// </summary>
-        /// <returns>Hash of the last block received by the wallets.</returns>
-        public HashHeightPair LastReceivedBlockInfo()
-        {
-            if (!this.wallets.Any())
-            {
-                ChainedHeader chainedHeader = this.chainIndexer.Tip;
-                this.logger.LogTrace("(-)[NO_WALLET]:'{0}'", chainedHeader);
-                return new HashHeightPair(chainedHeader);
-            }
-
-            uint256 lastBlockSyncedHash = null;
-            int lastSyncedBlockHeight = 0;
-
-            foreach (var w in this.wallets.Values)
-            {
-                if (w.LastBlockSyncedHeight.HasValue && w.LastBlockSyncedHeight.Value > lastSyncedBlockHeight)
-                {
-                    lastSyncedBlockHeight = w.LastBlockSyncedHeight.Value;
-                    lastBlockSyncedHash = w.LastBlockSyncedHash;
-                }
-
-            }
-
-
-            // If details about the last block synced are not present in the wallet,
-            // find out which is the oldest wallet and set the last block synced to be the one at this date.
-            if (lastBlockSyncedHash == null)
-            {
-                this.logger.LogWarning("There were no details about the last block synced in the wallets.");
-                DateTimeOffset earliestWalletDate = this.wallets.Values.Min(c => c.CreationTime);
-                this.UpdateWhenChainDownloaded(this.wallets.Values, earliestWalletDate.DateTime);
-                return new HashHeightPair(this.chainIndexer.Tip);
-            }
-
-            return new HashHeightPair(lastBlockSyncedHash, lastSyncedBlockHeight);
-        }
+      
         public void Stop()
         {
             if (this.broadcasterManager != null)
                 this.broadcasterManager.TransactionStateChanged -= this.BroadcasterManager_TransactionStateChanged;
 
             this.asyncLoop?.Dispose();
-            this.SaveWallets();
+            this.SaveWallet();
         }
 
         private void BroadcasterManager_TransactionStateChanged(object sender, TransactionBroadcastEntry transactionEntry)
@@ -1055,20 +761,15 @@ namespace Obsidian.Features.SegWitWallet
         }
 
 
-        public uint256 WalletTipHash { get; set; }
-        public int WalletTipHeight { get; set; }
-
+       
         void AddSegWitAddressesToLookup()
         {
 
-            foreach (KeyWallet wallet in this.wallets.Values)
-            {
-                foreach (KeyAddress adr in wallet.Addresses)
+                foreach (KeyAddress adr in Wallet.Addresses)
                 {
                     var script = KeyAddressExtensions.GetPaymentScript(adr);
                     //this.scriptToAddressLookup[script] = new HdAddress{ Address = adr.Bech32, Pubkey = script, ScriptPubKey = script};
                 }
-            }
         }
 
         public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
@@ -1086,10 +787,19 @@ namespace Obsidian.Features.SegWitWallet
             throw new NotImplementedException();
         }
 
-        public void UpdateLastBlockSyncedHeight(Wallet wallet, ChainedHeader chainedHeader)
+        
+        public void UpdateLastBlockSyncedHeight(ChainedHeader chainedHeader)
         {
-            throw new NotImplementedException();
+
+            // The block locator will help when the Wallet
+            // needs to rewind this will be used to find the fork.
+            this.Wallet.BlockLocator = chainedHeader.GetLocator().Blocks;
+            this.Wallet.LastBlockSyncedHeight = chainedHeader.Height;
+            this.Wallet.LastBlockSyncedHash = chainedHeader.HashBlock;
+            SaveWallet();
         }
+
+       
 
         /// <summary>
         /// Reloads the UTXOs we're tracking in memory for faster lookups.
@@ -1098,9 +808,7 @@ namespace Obsidian.Features.SegWitWallet
         {
             this.outpointLookup.Clear();
 
-            foreach (KeyWallet wallet in this.wallets.Values)
-            {
-                foreach (KeyAddress address in wallet.Addresses)
+                foreach (KeyAddress address in Wallet.Addresses)
                 {
                     // Get the UTXOs that are unspent or spent but not confirmed.
                     // We only exclude from the list the confirmed spent UTXOs.
@@ -1109,15 +817,14 @@ namespace Obsidian.Features.SegWitWallet
                         this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
                     }
                 }
-            }
         }
 
         /// <summary>
-        /// Adds a transaction that credits the wallet with new coins.
+        /// Adds a transaction that credits the Wallet with new coins.
         /// This method is can be called many times for the same transaction (idempotent).
         /// </summary>
         /// <param name="transaction">The transaction from which details are added.</param>
-        /// <param name="utxo">The unspent output to add to the wallet.</param>
+        /// <param name="utxo">The unspent output to add to the Wallet.</param>
         /// <param name="blockHeight">Height of the block.</param>
         /// <param name="block">The block containing the transaction to add.</param>
         /// <param name="isPropagated">Propagation state of the transaction.</param>
@@ -1218,30 +925,25 @@ namespace Obsidian.Features.SegWitWallet
 
         void TransactionFoundInternal(Script script, Func<HdAccount, bool> accountFilter = null)
         {
-            return;  // this method ensures there are enough unused addresses in the wallet. not sure if that will be supported here.
+            return;  // this method ensures there are enough unused addresses in the Wallet. not sure if that will be supported here.
 
-            foreach (KeyWallet wallet in this.wallets.Values)
-            {
+            
                 bool isChange;
-                if (wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == false))
+                if (Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == false))
                 {
                     isChange = false;
                 }
-                else if (wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == true))
+                else if (Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == true))
                 {
                     isChange = true;
                 }
-                else
-                {
-                    continue;
-                }
+              
 
                 // IEnumerable<NDAddress> newAddresses = this.AddAddressesToMaintainBuffer(account, isChange);
 
                 // this.UpdateKeysLookupLocked(newAddresses);
 
 
-            }
         }
 
         private IEnumerable<KeyAddress> AddAddressesToMaintainBuffer(object account, bool isChange)

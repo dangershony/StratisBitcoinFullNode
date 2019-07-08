@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using System;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -36,8 +38,8 @@ namespace Obsidian.ObsidianD.Api
                             builder
                                 .WithOrigins(allowedDomains)
                                 .AllowAnyHeader();
-                            //.AllowAnyMethod()
-                            //.AllowAnyHeader()
+                            // .AllowAnyMethod()
+                            // .AllowAnyHeader()
                             //.AllowCredentials();
                         }
                     );
@@ -50,6 +52,7 @@ namespace Obsidian.ObsidianD.Api
                 .AddJsonOptions(options => Stratis.Bitcoin.Utilities.JsonConverters.Serializer.RegisterFrontConverters(options.SerializerSettings))
                 .AddControllers(services);
 
+            services.AddSignalR();
 
         }
 
@@ -66,6 +69,7 @@ namespace Obsidian.ObsidianD.Api
                 app.UseDeveloperExceptionPage();
             }
             app.UseMvc();
+          
         }
     }
 }

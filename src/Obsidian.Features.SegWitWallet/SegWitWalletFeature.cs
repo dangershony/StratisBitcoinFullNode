@@ -1,20 +1,15 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Builder;
-using Stratis.Bitcoin.Builder.Feature;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Configuration.Logging;
 using Stratis.Bitcoin.Connection;
-using Stratis.Bitcoin.Features.ColdStaking.Controllers;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
-using Stratis.Bitcoin.Features.Wallet.Controllers;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
-using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
 
 namespace Obsidian.Features.SegWitWallet
@@ -23,14 +18,14 @@ namespace Obsidian.Features.SegWitWallet
     public class SegWitWalletFeature : BaseWalletFeature
     {
         readonly IWalletSyncManager walletSyncManager;
-        readonly SegWitWalletManager walletManager;
+        readonly WalletManagerFacade walletManagerFacade;
         readonly IConnectionManager connectionManager;
         readonly IAddressBookManager addressBookManager;
         readonly BroadcasterBehavior broadcasterBehavior;
 
         public SegWitWalletFeature(
+            IWalletManager walletManagerFacade,
             IWalletSyncManager walletSyncManager,
-            SegWitWalletManager walletManager,
             IAddressBookManager addressBookManager,
             IConnectionManager connectionManager,
             BroadcasterBehavior broadcasterBehavior,
@@ -38,8 +33,8 @@ namespace Obsidian.Features.SegWitWallet
             ILoggerFactory loggerFactory,
             INodeStats nodeStats)
         {
+            this.walletManagerFacade = (WalletManagerFacade)walletManagerFacade;
             this.walletSyncManager = walletSyncManager;
-            this.walletManager = walletManager;
             this.addressBookManager = addressBookManager;
             this.connectionManager = connectionManager;
             this.broadcasterBehavior = broadcasterBehavior;
@@ -51,20 +46,20 @@ namespace Obsidian.Features.SegWitWallet
 
         public override Task InitializeAsync()
         {
-            this.walletManager.Start();
-            this.walletSyncManager.Start();
-            this.addressBookManager.Initialize();
+            //this.walletManagerFacade.Start();
+            //this.walletSyncManager.Start();
+            //this.addressBookManager.Initialize();
 
             this.connectionManager.Parameters.TemplateBehaviors.Add(this.broadcasterBehavior);
-            this.walletSyncManager.SyncFromHeight(1);
+            //this.walletSyncManager.SyncFromHeight(1);
 
             return Task.CompletedTask;
         }
 
         public override void Dispose()
         {
-            this.walletManager.Stop();
-            this.walletSyncManager.Stop();
+            //this.walletManagerFacade.Stop();
+            //this.walletSyncManager.Stop();
         }
 
         public override void ValidateDependencies(IFullNodeServiceProvider services)
@@ -74,19 +69,35 @@ namespace Obsidian.Features.SegWitWallet
 
         private void AddInlineStats(StringBuilder log)
         {
-            if (this.walletManager is SegWitWalletManager manager)
-            {
-                HashHeightPair hashHeightPair = manager.LastReceivedBlockInfo();
+            var manager = this.walletManagerFacade.GetManager(null, true);
 
-                log.AppendLine("Wallet.Height: ".PadRight(LoggingConfiguration.ColumnLength + 1) +
-                               (manager.ContainsWallets ? hashHeightPair.Height.ToString().PadRight(8) : "No Wallet".PadRight(8)) +
-                               (manager.ContainsWallets ? (" Wallet.Hash: ".PadRight(LoggingConfiguration.ColumnLength - 1) + hashHeightPair.Hash) : string.Empty));
+            if (manager != null)
+            {
+                var height = manager.Wallet.LastBlockSyncedHeight.ToString();
+                var hash = manager.Wallet.LastBlockSyncedHash?.ToString() ?? "n/a";
+
+                log.AppendLine($"Wallet {manager.Wallet.Name}: Height: ".PadRight(LoggingConfiguration.ColumnLength + 1) + height.PadRight(8) +
+                               (" Wallet.Hash: ".PadRight(LoggingConfiguration.ColumnLength - 1) + hash));
+            }
+            else
+            {
+                log.AppendLine("No wallet loaded.");
             }
         }
 
         private void AddComponentStats(StringBuilder log)
         {
-            var walletNames = this.walletManager.GetWalletsNames().ToArray();
+            var manager = this.walletManagerFacade.GetManager(null, true);
+
+            if (manager == null)
+            {
+                log.AppendLine();
+                log.AppendLine("======Nondeterministic Wallets======");
+                log.AppendLine("No wallet loaded.");
+                return;
+            }
+
+            var walletNames = new[] { manager.Wallet.Name };
 
             if (walletNames.Length > 0)
             {
@@ -95,7 +106,7 @@ namespace Obsidian.Features.SegWitWallet
 
                 foreach (string walletName in walletNames)
                 {
-                    var balancesPerAddress = this.walletManager.GetBalances(walletName);
+                    var balancesPerAddress = manager.GetBalances(walletName);
                     Money confirmed = Money.Zero;
                     Money unconfirmed = Money.Zero;
                     Money spendable = Money.Zero;
@@ -112,9 +123,9 @@ namespace Obsidian.Features.SegWitWallet
                                    + " Spendable balance " + spendable.ToString()
                                    );
 
-                    //foreach (HdAccount account in this.walletManager.GetAccounts(walletName))
+                    //foreach (HdAccount account in this.walletManagerFacade.GetAccounts(walletName))
                     //{
-                    //    AccountBalance accountBalance = this.walletManager.GetBalances(walletName, account.Name).Single();
+                    //    AccountBalance accountBalance = this.walletManagerFacade.GetBalances(walletName, account.Name).Single();
                     //    log.AppendLine(($"{walletName}/{account.Name}" + ",").PadRight(LoggingConfiguration.ColumnLength + 10)
                     //                   + (" Confirmed balance: " + accountBalance.AmountConfirmed.ToString()).PadRight(LoggingConfiguration.ColumnLength + 20)
                     //                   + " Unconfirmed balance: " + accountBalance.AmountUnconfirmed.ToString());

@@ -42,7 +42,7 @@ namespace Obsidian.Features.SegWitWallet
                     {
                         services.AddSingleton<IWalletSyncManager, WalletSyncManager>();
                         services.AddSingleton<IWalletTransactionHandler, SegWitWalletTransactionHandler>();
-                        services.AddSingleton<SegWitWalletManager>();
+                        //services.AddSingleton<SegWitWalletManager>();
                         services.AddSingleton<IWalletManager, WalletManagerFacade>();
                         services.AddSingleton<IWalletFeePolicy, WalletFeePolicy>();
                         services.AddSingleton<WalletSettings>();

@@ -43,7 +43,7 @@ namespace Obsidian.ObsidianD.Api
         /// <summary>
         /// Initializes an instance of the object from the node configuration.
         /// </summary>
-        /// <param name="nodeSettings">The node configuration.</param>
+        /// <param Command="nodeSettings">The node configuration.</param>
         public ApiSettings(NodeSettings nodeSettings)
         {
             Guard.NotNull(nodeSettings, nameof(nodeSettings));
@@ -94,7 +94,7 @@ namespace Obsidian.ObsidianD.Api
         }
 
         /// <summary>Prints the help information on how to configure the API settings to the logger.</summary>
-        /// <param name="network">The network to use.</param>
+        /// <param Command="network">The network to use.</param>
         public static void PrintHelp(Network network)
         {
             var builder = new StringBuilder();
@@ -111,8 +111,8 @@ namespace Obsidian.ObsidianD.Api
         /// <summary>
         /// Get the default configuration.
         /// </summary>
-        /// <param name="builder">The string builder to add the settings to.</param>
-        /// <param name="network">The network to base the defaults off.</param>
+        /// <param Command="builder">The string builder to add the settings to.</param>
+        /// <param Command="network">The network to base the defaults off.</param>
         public static void BuildDefaultConfigurationFile(StringBuilder builder, Network network)
         {
             builder.AppendLine("####API Settings####");
