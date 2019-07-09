@@ -9,15 +9,14 @@ using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
-using Stratis.Bitcoin.Builder.Feature;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.ObsidianD.Api
+namespace Obsidian.OxD.Api
 {
     /// <summary>
     /// Provides an Api to the full node
     /// </summary>
-    public sealed class ApiFeature : FullNodeFeature
+    public sealed class ApiFeature : Stratis.Bitcoin.Builder.Feature.FullNodeFeature
     {
         readonly IFullNodeBuilder fullNodeBuilder;
         readonly FullNode fullNode;
@@ -126,29 +125,5 @@ namespace Obsidian.ObsidianD.Api
         }
 
       
-    }
-
-    
-
-    /// <summary>
-    /// A class providing extension methods for <see cref="IFullNodeBuilder"/>.
-    /// </summary>
-    public static class ApiFeatureExtension
-    {
-        public static IFullNodeBuilder UseApiSlim(this IFullNodeBuilder fullNodeBuilder)
-        {
-            fullNodeBuilder.ConfigureFeature(features =>
-            {
-                features
-                .AddFeature<ApiFeature>()
-                .FeatureServices(services =>
-                    {
-                        services.AddSingleton(fullNodeBuilder);
-                        services.AddSingleton<ApiSettings>();
-                    });
-            });
-
-            return fullNodeBuilder;
-        }
     }
 }

@@ -1,20 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
+using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
-using Stratis.Bitcoin.Utilities;
-using System.Linq;
-using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Interfaces;
+using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet
 {
-    public class WalletManagerFacade : IWalletManager
+    public class WalletManagerWrapper : IWalletManager
     {
         
        
@@ -30,7 +30,7 @@ namespace Obsidian.Features.SegWitWallet
         readonly INodeLifetime nodeLifetime;
         readonly IAsyncProvider asyncProvider;
 
-        public WalletManagerFacade(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, 
+        public WalletManagerWrapper(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, 
             IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider)
         {
             this.dataFolder = dataFolder;
@@ -38,24 +38,24 @@ namespace Obsidian.Features.SegWitWallet
             this.network = network;
             this.broadcasterManager = broadcasterManager;
             this.loggerFactory = loggerFactory;
-            this.logger = loggerFactory.CreateLogger(typeof(WalletManagerFacade).FullName);
+            this.logger = loggerFactory.CreateLogger(typeof(WalletManagerWrapper).FullName);
             this.scriptAddressReader = scriptAddressReader;
             this.dateTimeProvider = dateTimeProvider;
             this.nodeLifetime = nodeLifetime;
             this.asyncProvider = asyncProvider;
         }
 
-        SegWitWalletManager segWitWalletManager;
+        WalletManager walletManager;
 
-        public SegWitWalletManager GetManager(string walletName, bool doNotCheck = false)
+        public WalletManager GetManager(string walletName, bool doNotCheck = false)
         {
             if (doNotCheck)
-                return this.segWitWalletManager;
+                return this.walletManager;
 
-            if (this.segWitWalletManager != null)
+            if (this.walletManager != null)
             {
-                if (this.segWitWalletManager.Wallet.Name == walletName)
-                    return this.segWitWalletManager;
+                if (this.walletManager.Wallet.Name == walletName)
+                    return this.walletManager;
                 throw new ArgumentException("Invalid", nameof(walletName));
             }
 
@@ -68,7 +68,7 @@ namespace Obsidian.Features.SegWitWallet
                 try
                 {
                     Guard.NotNull(request, nameof(request));
-                    SegWitWalletManager.WalletSemaphore.Wait();
+                    WalletManager.WalletSemaphore.Wait();
 
                     return func();
                 }
@@ -79,7 +79,7 @@ namespace Obsidian.Features.SegWitWallet
                 }
                 finally
                 {
-                    SegWitWalletManager.WalletSemaphore.Release();
+                    WalletManager.WalletSemaphore.Release();
                 }
             }
 
@@ -87,7 +87,7 @@ namespace Obsidian.Features.SegWitWallet
             {
                 try
                 {
-                    SegWitWalletManager.WalletSemaphore.Wait();
+                    WalletManager.WalletSemaphore.Wait();
 
                     return func();
                 }
@@ -98,7 +98,7 @@ namespace Obsidian.Features.SegWitWallet
                 }
                 finally
                 {
-                    SegWitWalletManager.WalletSemaphore.Release();
+                    WalletManager.WalletSemaphore.Release();
                 }
             }
 
@@ -106,7 +106,7 @@ namespace Obsidian.Features.SegWitWallet
             {
                 try
                 {
-                    SegWitWalletManager.WalletSemaphore.Wait();
+                    WalletManager.WalletSemaphore.Wait();
 
                     action();
                 }
@@ -117,7 +117,7 @@ namespace Obsidian.Features.SegWitWallet
                 }
                 finally
                 {
-                    SegWitWalletManager.WalletSemaphore.Release();
+                    WalletManager.WalletSemaphore.Release();
                 }
             }
 
@@ -133,7 +133,7 @@ namespace Obsidian.Features.SegWitWallet
 
         public uint256 WalletTipHash
         {
-            get => Call(() => this.segWitWalletManager.Wallet.LastBlockSyncedHash);
+            get => Call(() => this.walletManager.Wallet.LastBlockSyncedHash);
             set => Call(() =>
             {
                 throw new NotSupportedException();
@@ -144,7 +144,7 @@ namespace Obsidian.Features.SegWitWallet
 
         public int WalletTipHeight
         {
-            get => Call(() => this.segWitWalletManager.Wallet.LastBlockSyncedHeight);
+            get => Call(() => this.walletManager.Wallet.LastBlockSyncedHeight);
             set => Call(() =>
             {
                 throw new NotSupportedException();
@@ -166,7 +166,7 @@ namespace Obsidian.Features.SegWitWallet
         {
             return new Dictionary<string, ScriptTemplate>();
             // TODO: When this method is first called (by PoSMinting) segWitWalletManager is still null.
-            return Call(() => this.segWitWalletManager.GetValidStakingTemplates());
+            return Call(() => this.walletManager.GetValidStakingTemplates());
         }
 
         public IEnumerable<BuilderExtension> GetTransactionBuilderExtensionsForStaking()
@@ -196,17 +196,17 @@ namespace Obsidian.Features.SegWitWallet
 
         public Wallet LoadWallet(string password, string name)
         {
-            var fileName = $"{name}{SegWitWalletManager.WalletFileExtension}";
+            var fileName = $"{name}{WalletManager.WalletFileExtension}";
             string filePath = Path.Combine(this.dataFolder.WalletPath, fileName);
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"No wallet file found at {filePath}");
-            if (this.segWitWalletManager != null)
+            if (this.walletManager != null)
             {
-                if (this.segWitWalletManager.CurrentWalletFilePath != filePath)
+                if (this.walletManager.CurrentWalletFilePath != filePath)
                     throw new NotSupportedException(
                         "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
-            this.segWitWalletManager = new SegWitWalletManager(filePath, this.chainIndexer, this.network,this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider);
+            this.walletManager = new WalletManager(filePath, this.chainIndexer, this.network,this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider);
             return null;
         }
 
@@ -295,7 +295,7 @@ namespace Obsidian.Features.SegWitWallet
             return Call(() =>
             {
                 if (GetManager(null,true) != null) // TODO: this does not look so good...
-                    return this.segWitWalletManager.Wallet.LastBlockSyncedHeight;
+                    return this.walletManager.Wallet.LastBlockSyncedHeight;
                 return this.chainIndexer.Tip.Height;
             });
         }
@@ -327,7 +327,7 @@ namespace Obsidian.Features.SegWitWallet
 
         public string GetWalletFileExtension()
         {
-            return SegWitWalletManager.WalletFileExtension;
+            return WalletManager.WalletFileExtension;
         }
 
         public IEnumerable<string> GetWalletsNames()
@@ -357,7 +357,7 @@ namespace Obsidian.Features.SegWitWallet
 
         public (string folderPath, IEnumerable<string>) GetWalletsFiles()
         {
-            var filePathes = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{SegWitWalletManager.WalletFileExtension}", SearchOption.TopDirectoryOnly);
+            var filePathes = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{WalletManager.WalletFileExtension}", SearchOption.TopDirectoryOnly);
             var files = filePathes.Select(Path.GetFileName);
             return (this.dataFolder.WalletPath, files);
         }

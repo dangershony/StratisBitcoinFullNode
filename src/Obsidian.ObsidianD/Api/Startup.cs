@@ -4,10 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Obsidian.Features.SegWitWallet.Web;
+using Obsidian.Features.X1Wallet.SecureApi;
 using Stratis.Bitcoin.Utilities.JsonConverters;
 
-namespace Obsidian.ObsidianD.Api
+namespace Obsidian.OxD.Api
 {
     public class Startup
     {

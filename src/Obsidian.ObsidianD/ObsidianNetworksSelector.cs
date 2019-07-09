@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
 	static class ObsidianNetworksSelector
     {

@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using Obsidian.Features.SegWitWallet.Web;
+using Obsidian.Features.X1Wallet.SecureApi;
 
-namespace Obsidian.ObsidianD.Api
+namespace Obsidian.OxD.Api
 {
     public static class ControllerResistration
     {

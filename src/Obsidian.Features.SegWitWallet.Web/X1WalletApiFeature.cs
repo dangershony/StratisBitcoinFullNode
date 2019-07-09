@@ -3,13 +3,13 @@ using Microsoft.Extensions.Logging;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Features.Wallet;
 
-namespace Obsidian.Features.SegWitWallet.Web
+namespace Obsidian.Features.X1Wallet.SecureApi
 {
-    public class SegWitWalletApiFeature : BaseWalletFeature
+    public class X1WalletApiFeature : BaseWalletFeature
     {
         readonly WalletController walletController;
 
-        public SegWitWalletApiFeature(
+        public X1WalletApiFeature(
             WalletController walletController,
             ILoggerFactory loggerFactory
           )

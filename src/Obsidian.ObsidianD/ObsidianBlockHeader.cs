@@ -1,6 +1,6 @@
 using NBitcoin;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
     public class ObsidianBlockHeader : PosBlockHeader
     {

@@ -6,7 +6,7 @@ using NBitcoin.DataEncoders;
 using Newtonsoft.Json;
 using Stratis.Bitcoin.Features.Wallet;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet.Models
 {
     public class KeyAddress
     {

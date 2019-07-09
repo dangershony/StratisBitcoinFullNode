@@ -5,7 +5,7 @@ using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 
-namespace Obsidian.Features.SegWitWallet.Tests
+namespace Obsidian.Features.X1Wallet.Temp
 {
     public static class StaticWallet
     {

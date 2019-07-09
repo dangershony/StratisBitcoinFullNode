@@ -2,7 +2,7 @@
 using System.Security.Cryptography;
 using NBitcoin;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
 	public static class ObsidianHash
     {

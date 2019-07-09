@@ -1,7 +1,7 @@
 ﻿using NBitcoin;
 using Stratis.Bitcoin.Features.Wallet;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet.Models
 {
     /// <summary>
     /// Represents an UTXO that keeps a reference to a <see cref="KeyAddress"/>.

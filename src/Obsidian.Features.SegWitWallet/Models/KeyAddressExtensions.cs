@@ -5,7 +5,7 @@ using NBitcoin;
 using NBitcoin.Crypto;
 using Stratis.Bitcoin.Features.Wallet;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet.Models
 {
     public static class KeyAddressExtensions
     {

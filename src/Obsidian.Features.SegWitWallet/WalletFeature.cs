@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using System.Text;
+﻿using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
@@ -12,18 +11,18 @@ using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet
 {
     /// <inheritdoc />
-    public class SegWitWalletFeature : BaseWalletFeature
+    public class WalletFeature : BaseWalletFeature
     {
         readonly IWalletSyncManager walletSyncManager;
-        readonly WalletManagerFacade walletManagerFacade;
+        readonly WalletManagerWrapper walletManagerWrapper;
         readonly IConnectionManager connectionManager;
         readonly IAddressBookManager addressBookManager;
         readonly BroadcasterBehavior broadcasterBehavior;
 
-        public SegWitWalletFeature(
+        public WalletFeature(
             IWalletManager walletManagerFacade,
             IWalletSyncManager walletSyncManager,
             IAddressBookManager addressBookManager,
@@ -33,7 +32,7 @@ namespace Obsidian.Features.SegWitWallet
             ILoggerFactory loggerFactory,
             INodeStats nodeStats)
         {
-            this.walletManagerFacade = (WalletManagerFacade)walletManagerFacade;
+            this.walletManagerWrapper = (WalletManagerWrapper)walletManagerFacade;
             this.walletSyncManager = walletSyncManager;
             this.addressBookManager = addressBookManager;
             this.connectionManager = connectionManager;
@@ -69,7 +68,7 @@ namespace Obsidian.Features.SegWitWallet
 
         private void AddInlineStats(StringBuilder log)
         {
-            var manager = this.walletManagerFacade.GetManager(null, true);
+            var manager = this.walletManagerWrapper.GetManager(null, true);
 
             if (manager != null)
             {
@@ -87,7 +86,7 @@ namespace Obsidian.Features.SegWitWallet
 
         private void AddComponentStats(StringBuilder log)
         {
-            var manager = this.walletManagerFacade.GetManager(null, true);
+            var manager = this.walletManagerWrapper.GetManager(null, true);
 
             if (manager == null)
             {

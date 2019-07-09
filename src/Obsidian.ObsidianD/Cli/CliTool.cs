@@ -10,12 +10,12 @@ using NBitcoin;
 using NBitcoin.Protocol;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Obsidian.ObsidianD.Api;
+using Obsidian.OxD.Api;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.RPC;
 using Stratis.Bitcoin.Utilities.Extensions;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD.Cli
 {
     public static class CliTool
     {

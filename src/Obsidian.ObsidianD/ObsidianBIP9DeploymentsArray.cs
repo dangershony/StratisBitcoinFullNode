@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using NBitcoin;
+﻿using NBitcoin;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
     public class ObsidianBIP9DeploymentsArray : BIP9DeploymentsArray
     {

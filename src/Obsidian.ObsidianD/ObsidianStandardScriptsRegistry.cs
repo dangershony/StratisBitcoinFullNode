@@ -3,7 +3,7 @@ using System.Linq;
 using NBitcoin;
 using NBitcoin.BitcoinCore;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
     /// <summary>
     /// ObsidianX-specific standard transaction definitions.

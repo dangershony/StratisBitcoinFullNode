@@ -1,8 +1,8 @@
 ﻿using NBitcoin;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet.Models
 {
-    public class WalletBalance
+    public class Balance
     {
         /// <summary>
         /// The balance of confirmed transactions.

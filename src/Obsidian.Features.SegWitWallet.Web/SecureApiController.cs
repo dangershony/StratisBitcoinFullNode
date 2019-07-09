@@ -2,14 +2,14 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
-using Newtonsoft.Json;
-using Obsidian.Features.SegWitWallet.Web.Models;
+using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.SecureApi.Models;
 using Stratis.Bitcoin.Controllers.Models;
 using Stratis.Bitcoin.Features.Miner.Models;
 using Stratis.Bitcoin.Features.Wallet.Models;
 using VisualCrypt.VisualCryptLight;
 
-namespace Obsidian.Features.SegWitWallet.Web
+namespace Obsidian.Features.X1Wallet.SecureApi
 {
     public class SecureApiController : SecureApiControllerBase
     {
@@ -56,8 +56,8 @@ namespace Obsidian.Features.SegWitWallet.Web
 
                     case "balance":
                         {
-                            WalletBalance walletBalanceModel = await this.walletController.GetBalanceAsync(decryptedRequest.Target);
-                            return CreateOk(walletBalanceModel, request);
+                            Balance balanceModel = await this.walletController.GetBalanceAsync(decryptedRequest.Target);
+                            return CreateOk(balanceModel, request);
                         }
 
                     case "history":

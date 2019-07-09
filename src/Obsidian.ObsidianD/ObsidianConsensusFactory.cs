@@ -3,7 +3,7 @@ using System.Text;
 using System.Threading.Tasks;
 using NBitcoin;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
     public class ObsidianConsensusFactory : PosConsensusFactory
     {

@@ -3,10 +3,11 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
-using Obsidian.Features.SegWitWallet.Web.Models;
+using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.SecureApi.Models;
 using VisualCrypt.VisualCryptLight;
 
-namespace Obsidian.Features.SegWitWallet.Web
+namespace Obsidian.Features.X1Wallet.SecureApi
 {
     public class SecureApiControllerBase : Controller
     {

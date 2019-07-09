@@ -4,7 +4,7 @@ using NBitcoin;
 using Newtonsoft.Json;
 using Stratis.Bitcoin.Utilities.JsonConverters;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet.Models
 {
     public class KeyWallet
     {

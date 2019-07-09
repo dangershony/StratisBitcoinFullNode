@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Net;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet.Models
 {
     public class SegWitWalletException : Exception
     {

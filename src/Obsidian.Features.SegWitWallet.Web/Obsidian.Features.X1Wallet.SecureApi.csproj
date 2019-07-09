@@ -7,11 +7,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.ViewFeatures" Version="2.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Obsidian.Features.SegWitWallet\Obsidian.Features.SegWitWallet.csproj" />
+    <ProjectReference Include="..\Obsidian.Features.SegWitWallet\Obsidian.Features.X1Wallet.csproj" />
     <ProjectReference Include="..\VisualCrypt.VisualCryptLight\VisualCrypt.VisualCryptLight.csproj" />
   </ItemGroup>
 

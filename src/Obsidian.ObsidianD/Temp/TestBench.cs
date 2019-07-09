@@ -1,12 +1,12 @@
 ﻿using System;
 using NBitcoin;
-using Obsidian.Features.SegWitWallet;
-using Obsidian.Features.SegWitWallet.Tests;
+using Obsidian.Features.X1Wallet;
+using Obsidian.Features.X1Wallet.Temp;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 
-namespace Obsidian.ObsidianD.Temp
+namespace Obsidian.OxD.Temp
 {
     public static class TestBench
     {

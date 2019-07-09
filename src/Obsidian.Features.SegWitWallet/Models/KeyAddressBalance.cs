@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet.Models
 {
     /// <summary>
     /// A class that represents the balance of an address.

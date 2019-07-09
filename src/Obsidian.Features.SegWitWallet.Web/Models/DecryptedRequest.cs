@@ -1,4 +1,4 @@
-﻿namespace Obsidian.Features.SegWitWallet.Web.Models
+﻿namespace Obsidian.Features.X1Wallet.SecureApi.Models
 {
     public class DecryptedRequest
     {

@@ -3,7 +3,7 @@ using System.Diagnostics;
 using NBitcoin;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
 	/// <inheritdoc />
 	public class ObsidianPoSConsensusOptions : PosConsensusOptions

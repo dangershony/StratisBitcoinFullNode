@@ -5,7 +5,7 @@ using NBitcoin;
 using NBitcoin.BouncyCastle.Math;
 using NBitcoin.DataEncoders;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
     public class ObsidianMain : Network
     {

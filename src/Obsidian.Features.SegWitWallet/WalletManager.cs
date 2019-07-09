@@ -3,17 +3,14 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security;
 using System.Security.Cryptography;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
 using Newtonsoft.Json;
-using Obsidian.Features.SegWitWallet.Tests;
+using Obsidian.Features.X1Wallet.Models;
 using Stratis.Bitcoin.AsyncWork;
-using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
@@ -21,13 +18,14 @@ using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet
 {
-    public class SegWitWalletManager
+    public class WalletManager
     {
-        public static readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
         public const string WalletFileExtension = ".keybag.json";
-        const string DownloadChainLoop = "SegWitWalletManager.DownloadChain";
+        const string DownloadChainLoop = nameof(DownloadChainLoop);
+
+        public static readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
 
         readonly Network network;
         readonly IScriptAddressReader scriptAddressReader;
@@ -38,7 +36,7 @@ namespace Obsidian.Features.SegWitWallet
         readonly INodeLifetime nodeLifetime;
         readonly IAsyncProvider asyncProvider;
 
-        public SegWitWalletManager(string walletFilePath, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider)
+        public WalletManager(string walletFilePath, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider)
         {
             this.CurrentWalletFilePath = walletFilePath;
             this.Wallet = JsonConvert.DeserializeObject<KeyWallet>(File.ReadAllText(walletFilePath));
@@ -47,7 +45,7 @@ namespace Obsidian.Features.SegWitWallet
 
             this.chainIndexer = chainIndexer;
             this.network = network;
-            this.logger = loggerFactory.CreateLogger(typeof(SegWitWalletManager).FullName);
+            this.logger = loggerFactory.CreateLogger(typeof(WalletManager).FullName);
             this.scriptAddressReader = scriptAddressReader;
             this.dateTimeProvider = dateTimeProvider;
             this.nodeLifetime = nodeLifetime;
@@ -171,7 +169,7 @@ namespace Obsidian.Features.SegWitWallet
         public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(int confirmations = 0)
         {
             var res = new List<UnspentKeyAddressOutput>();
-            foreach (var adr in Wallet.Addresses)
+            foreach (var adr in this.Wallet.Addresses)
             {
                 UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, confirmations);
                 res.AddRange(unspentKeyAddress);
@@ -765,7 +763,7 @@ namespace Obsidian.Features.SegWitWallet
         void AddSegWitAddressesToLookup()
         {
 
-                foreach (KeyAddress adr in Wallet.Addresses)
+                foreach (KeyAddress adr in this.Wallet.Addresses)
                 {
                     var script = KeyAddressExtensions.GetPaymentScript(adr);
                     //this.scriptToAddressLookup[script] = new HdAddress{ Address = adr.Bech32, Pubkey = script, ScriptPubKey = script};
@@ -808,7 +806,7 @@ namespace Obsidian.Features.SegWitWallet
         {
             this.outpointLookup.Clear();
 
-                foreach (KeyAddress address in Wallet.Addresses)
+                foreach (KeyAddress address in this.Wallet.Addresses)
                 {
                     // Get the UTXOs that are unspent or spent but not confirmed.
                     // We only exclude from the list the confirmed spent UTXOs.
@@ -929,11 +927,11 @@ namespace Obsidian.Features.SegWitWallet
 
             
                 bool isChange;
-                if (Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == false))
+                if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == false))
                 {
                     isChange = false;
                 }
-                else if (Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == true))
+                else if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == true))
                 {
                     isChange = true;
                 }

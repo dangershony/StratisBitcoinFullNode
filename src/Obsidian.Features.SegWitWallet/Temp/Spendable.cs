@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace Obsidian.Features.SegWitWallet.Tests
+namespace Obsidian.Features.X1Wallet.Temp
 {
     public class Spendable
     {

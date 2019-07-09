@@ -4,11 +4,12 @@ using System.Reflection;
 using System.Threading.Tasks;
 using NBitcoin;
 using NBitcoin.Protocol;
-using Obsidian.Features.SegWitWallet;
-using Obsidian.Features.SegWitWallet.Tests;
-using Obsidian.Features.SegWitWallet.Web;
-using Obsidian.ObsidianD.Api;
-using Obsidian.ObsidianD.Temp;
+using Obsidian.Features.X1Wallet;
+using Obsidian.Features.X1Wallet.SecureApi;
+using Obsidian.Features.X1Wallet.Temp;
+using Obsidian.OxD.Api;
+using Obsidian.OxD.Cli;
+using Obsidian.OxD.Temp;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
@@ -20,7 +21,7 @@ using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.RPC;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.ObsidianD
+namespace Obsidian.OxD
 {
     public static class Program
     {
@@ -54,9 +55,9 @@ namespace Obsidian.ObsidianD
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, StratisNode", args: args)
+                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, Stratis", args: args)
                 {
-                    MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
+                    MinProtocolVersion = ProtocolVersion.PROVEN_HEADER_VERSION
                 };
 
                 IFullNodeBuilder nodeBuilder = new FullNodeBuilder()
@@ -67,10 +68,10 @@ namespace Obsidian.ObsidianD
                 IFullNode node = nodeBuilder.UseBlockStore()
                     .UsePosConsensus()
                     .UseMempool()
-                    .UseSegWitWallet()
-                    .UseSegWitWalletApi()
+                    .UseX1Wallet()
+                    .UseX1WalletApi()
+                    .UseX1WalletApiHost()
                     .AddPowPosMining()
-                    .UseApiSlim()
                     .UseApps()
                     .AddRPC()
                     .Build();

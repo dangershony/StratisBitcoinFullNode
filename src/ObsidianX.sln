@@ -174,19 +174,19 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.CirrusMinerD", "Str
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.FederatedSidechains.AdminDashboard", "Stratis.FederatedSidechains.AdminDashboard\Stratis.FederatedSidechains.AdminDashboard.csproj", "{AB1DCAA5-9C86-411D-A730-83A896C0590F}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.ObsidianD", "Obsidian.ObsidianD\Obsidian.ObsidianD.csproj", "{546292A0-4D16-4319-9EF0-3B4F7D829BFB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.OxD", "Obsidian.ObsidianD\Obsidian.OxD.csproj", "{546292A0-4D16-4319-9EF0-3B4F7D829BFB}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Obsidian.DroidD", "Obsidian.DroidD\Obsidian.DroidD.csproj", "{0DEDC29E-F933-43FF-976F-F222B095F53B}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Obsidian", "Obsidian", "{E4693985-DDF7-4CF3-887B-0291135F9499}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Features.SegWitWallet", "Obsidian.Features.SegWitWallet\Obsidian.Features.SegWitWallet.csproj", "{47E84B90-1577-4131-91CF-6C90B5CD39BB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Features.X1Wallet", "Obsidian.Features.SegWitWallet\Obsidian.Features.X1Wallet.csproj", "{47E84B90-1577-4131-91CF-6C90B5CD39BB}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ObsidianX", "ObsidianX", "{4208F272-5766-46B4-8648-B5B5666166C5}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VisualCrypt.VisualCryptLight", "VisualCrypt.VisualCryptLight\VisualCrypt.VisualCryptLight.csproj", "{34BBF5AD-2FF1-4E58-A8DC-9424B427C28C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Obsidian.Features.SegWitWallet.Web", "Obsidian.Features.SegWitWallet.Web\Obsidian.Features.SegWitWallet.Web.csproj", "{46E66D04-8869-4861-846A-18600604B974}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Features.X1Wallet.SecureApi", "Obsidian.Features.SegWitWallet.Web\Obsidian.Features.X1Wallet.SecureApi.csproj", "{46E66D04-8869-4861-846A-18600604B974}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

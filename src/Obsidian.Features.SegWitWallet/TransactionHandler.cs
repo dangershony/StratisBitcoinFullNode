@@ -5,12 +5,13 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.Policy;
+using Obsidian.Features.X1Wallet.Models;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet
 {
     /// <summary>
     /// A handler with functionality related to transaction operations.
@@ -21,7 +22,7 @@ namespace Obsidian.Features.SegWitWallet
     /// TODO: Implement lockUnspents
     /// TODO: Implement subtractFeeFromOutputs
     /// </remarks>
-    public class SegWitWalletTransactionHandler : IWalletTransactionHandler
+    public class TransactionHandler : IWalletTransactionHandler
     {
         private readonly ILogger logger;
         
@@ -29,11 +30,11 @@ namespace Obsidian.Features.SegWitWallet
 
         protected readonly StandardTransactionPolicy TransactionPolicy;
 
-        readonly WalletManagerFacade walletManagerFacade;
+        readonly WalletManagerWrapper walletManagerWrapper;
 
         private readonly IWalletFeePolicy walletFeePolicy;
 
-        public SegWitWalletTransactionHandler(
+        public TransactionHandler(
             ILoggerFactory loggerFactory,
             IWalletManager walletManager,
             IWalletFeePolicy walletFeePolicy,
@@ -41,16 +42,16 @@ namespace Obsidian.Features.SegWitWallet
             StandardTransactionPolicy transactionPolicy)
         {
             this.network = network;
-            this.walletManagerFacade = (WalletManagerFacade)walletManager;
+            this.walletManagerWrapper = (WalletManagerWrapper)walletManager;
             this.walletFeePolicy = walletFeePolicy;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
             
             this.TransactionPolicy = transactionPolicy;
         }
 
-        public SegWitWalletManager GetManager(string walletName)
+        public WalletManager GetManager(string walletName)
         {
-            return this.walletManagerFacade.GetManager(walletName);
+            return this.walletManagerWrapper.GetManager(walletName);
         }
 
         /// <inheritdoc />

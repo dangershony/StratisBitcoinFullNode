@@ -6,7 +6,7 @@ using NBitcoin;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.ObsidianD.Api
+namespace Obsidian.OxD.Api
 {
     /// <summary>
     /// Configuration related to the API interface.

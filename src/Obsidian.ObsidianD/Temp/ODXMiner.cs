@@ -5,7 +5,7 @@ using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 
-namespace Obsidian.ObsidianD.Temp
+namespace Obsidian.OxD.Temp
 {
     public static class ODXMiner
     {

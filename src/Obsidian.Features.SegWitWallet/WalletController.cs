@@ -4,12 +4,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Security;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
-using Newtonsoft.Json;
+using Obsidian.Features.X1Wallet.Models;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Builder.Feature;
@@ -19,7 +18,6 @@ using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Controllers.Models;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Features.Miner.Models;
-using Stratis.Bitcoin.Features.Miner.Staking;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Helpers;
@@ -28,9 +26,8 @@ using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.P2P.Peer;
 using Stratis.Bitcoin.Utilities;
-using VisualCrypt.VisualCryptLight;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.X1Wallet
 {
     public class WalletController : Controller
     {
@@ -38,8 +35,8 @@ namespace Obsidian.Features.SegWitWallet
 
        
 
-        readonly WalletManagerFacade walletManagerFacade;
-        readonly SegWitWalletTransactionHandler walletTransactionHandler;
+        readonly WalletManagerWrapper walletManagerWrapper;
+        readonly TransactionHandler walletTransactionHandler;
         readonly IWalletSyncManager walletSyncManager;
         readonly CoinType coinType;
         readonly Network network;
@@ -56,9 +53,9 @@ namespace Obsidian.Features.SegWitWallet
 
         readonly IPosMinting posMinting;
 
-        public SegWitWalletManager GetManager(string walletName)
+        public WalletManager GetManager(string walletName)
         {
-            return this.walletManagerFacade.GetManager(walletName);
+            return this.walletManagerWrapper.GetManager(walletName);
         }
 
         public WalletController(
@@ -77,8 +74,8 @@ namespace Obsidian.Features.SegWitWallet
             IPosMinting posMinting
             )
         {
-            this.walletManagerFacade = (WalletManagerFacade)walletManagerFacade;
-            this.walletTransactionHandler = (SegWitWalletTransactionHandler)walletTransactionHandler;
+            this.walletManagerWrapper = (WalletManagerWrapper)walletManagerFacade;
+            this.walletTransactionHandler = (TransactionHandler)walletTransactionHandler;
             this.walletSyncManager = walletSyncManager;
             this.connectionManager = connectionManager;
             this.network = network;
@@ -144,7 +141,7 @@ namespace Obsidian.Features.SegWitWallet
         {
             await ExecuteAsync(walletName, async () =>
             {
-                this.walletManagerFacade.LoadWallet(null, walletName);
+                this.walletManagerWrapper.LoadWallet(null, walletName);
             });
         }
 
@@ -221,8 +218,8 @@ namespace Obsidian.Features.SegWitWallet
                     IsDecrypted = true
                 };
 
-                (string folder, IEnumerable<string> fileNameCollection) = this.walletManagerFacade.GetWalletsFiles();
-                string searchFile = Path.ChangeExtension(walletName, this.walletManagerFacade.GetWalletFileExtension());
+                (string folder, IEnumerable<string> fileNameCollection) = this.walletManagerWrapper.GetWalletsFiles();
+                string searchFile = Path.ChangeExtension(walletName, this.walletManagerWrapper.GetWalletFileExtension());
                 string fileName = fileNameCollection.FirstOrDefault(i => i.Equals(searchFile));
                 if (folder != null && fileName != null)
                     model.WalletFilePath = Path.Combine(folder, fileName);
@@ -401,13 +398,13 @@ namespace Obsidian.Features.SegWitWallet
         }
 
 
-        public async Task<WalletBalance> GetBalanceAsync(string walletName)
+        public async Task<Balance> GetBalanceAsync(string walletName)
         {
             return await ExecuteAsync(async () =>
             {
                 var balances = GetManager(walletName).GetBalances();
 
-                var walletBalance = new WalletBalance { AmountConfirmed = Money.Zero, AmountUnconfirmed = Money.Zero, SpendableAmount = Money.Zero };
+                var walletBalance = new Balance { AmountConfirmed = Money.Zero, AmountUnconfirmed = Money.Zero, SpendableAmount = Money.Zero };
 
                 foreach (var balance in balances)
                 {
@@ -424,7 +421,7 @@ namespace Obsidian.Features.SegWitWallet
         {
             return await ExecuteAsync(request, async () =>
             {
-                AddressBalance balanceResult = this.walletManagerFacade.GetAddressBalance(request.Address);
+                AddressBalance balanceResult = this.walletManagerWrapper.GetAddressBalance(request.Address);
                 return this.Json(new AddressBalanceModel
                 {
                     CoinType = this.coinType,
@@ -600,7 +597,7 @@ namespace Obsidian.Features.SegWitWallet
         {
             return await ExecuteAsync("", async () =>
             {
-                (string folderPath, IEnumerable<string> filesNames) result = this.walletManagerFacade.GetWalletsFiles();
+                (string folderPath, IEnumerable<string> filesNames) result = this.walletManagerWrapper.GetWalletsFiles();
                 var model = new WalletFileModel
                 {
                     WalletsPath = result.folderPath,
@@ -615,7 +612,7 @@ namespace Obsidian.Features.SegWitWallet
         {
             return await ExecuteAsync(request, async () =>
             {
-                IEnumerable<HdAccount> result = this.walletManagerFacade.GetAccounts(request.WalletName);
+                IEnumerable<HdAccount> result = this.walletManagerWrapper.GetAccounts(request.WalletName);
                 IEnumerable<string> model = result.Select(a => a.Name);
                 return model;
             });
@@ -675,16 +672,16 @@ namespace Obsidian.Features.SegWitWallet
 
                 if (request.DeleteAll)
                 {
-                    result = this.walletManagerFacade.RemoveAllTransactions(request.WalletName);
+                    result = this.walletManagerWrapper.RemoveAllTransactions(request.WalletName);
                 }
                 else if (request.FromDate != default(DateTime))
                 {
-                    result = this.walletManagerFacade.RemoveTransactionsFromDate(request.WalletName, request.FromDate);
+                    result = this.walletManagerWrapper.RemoveTransactionsFromDate(request.WalletName, request.FromDate);
                 }
                 else if (request.TransactionsIds != null)
                 {
                     IEnumerable<uint256> ids = request.TransactionsIds.Select(uint256.Parse);
-                    result = this.walletManagerFacade.RemoveTransactionsByIds(request.WalletName, ids);
+                    result = this.walletManagerWrapper.RemoveTransactionsByIds(request.WalletName, ids);
                 }
                 else
                 {
@@ -699,9 +696,9 @@ namespace Obsidian.Features.SegWitWallet
                     ChainedHeader chainedHeader = this.chainIndexer.GetHeader(this.chainIndexer.GetHeightAtTime(earliestDate.DateTime));
 
                     // Update the wallet and save it to the file system.
-                    Wallet wallet = this.walletManagerFacade.GetWallet(request.WalletName);
+                    Wallet wallet = this.walletManagerWrapper.GetWallet(request.WalletName);
                     wallet.SetLastBlockDetails(chainedHeader);
-                    this.walletManagerFacade.SaveWallet(wallet);
+                    this.walletManagerWrapper.SaveWallet(wallet);
 
                     // Start the syncing process from the block before the earliest transaction was seen.
                     this.walletSyncManager.SyncFromHeight(chainedHeader.Height - 1);
@@ -866,12 +863,12 @@ namespace Obsidian.Features.SegWitWallet
             try
             {
 
-                await SegWitWalletManager.WalletSemaphore.WaitAsync();
+                await WalletManager.WalletSemaphore.WaitAsync();
                 return await func();
             }
             finally
             {
-                SegWitWalletManager.WalletSemaphore.Release();
+                WalletManager.WalletSemaphore.Release();
             }
         }
         async Task<TResult> ExecuteAsync<T, TResult>(T request, Func<Task<TResult>> func) where T : class
@@ -879,12 +876,12 @@ namespace Obsidian.Features.SegWitWallet
             try
             {
 
-                await SegWitWalletManager.WalletSemaphore.WaitAsync();
+                await WalletManager.WalletSemaphore.WaitAsync();
                 return await func();
             }
             finally
             {
-                SegWitWalletManager.WalletSemaphore.Release();
+                WalletManager.WalletSemaphore.Release();
             }
         }
 
@@ -893,12 +890,12 @@ namespace Obsidian.Features.SegWitWallet
             try
             {
 
-                await SegWitWalletManager.WalletSemaphore.WaitAsync();
+                await WalletManager.WalletSemaphore.WaitAsync();
                 await func();
             }
             finally
             {
-                SegWitWalletManager.WalletSemaphore.Release();
+                WalletManager.WalletSemaphore.Release();
             }
         }
 

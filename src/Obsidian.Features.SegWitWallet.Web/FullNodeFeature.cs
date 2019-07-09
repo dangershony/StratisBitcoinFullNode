@@ -2,19 +2,19 @@
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration.Logging;
 
-namespace Obsidian.Features.SegWitWallet.Web
+namespace Obsidian.Features.X1Wallet.SecureApi
 {
     public static class FullNodeFeature
     {
-        public static IFullNodeBuilder UseSegWitWalletApi(this IFullNodeBuilder fullNodeBuilder)
+        public static IFullNodeBuilder UseX1WalletApi(this IFullNodeBuilder fullNodeBuilder)
         {
-            LoggingConfiguration.RegisterFeatureNamespace<SegWitWalletApiFeature>(nameof(SegWitWalletApiFeature));
+            LoggingConfiguration.RegisterFeatureNamespace<X1WalletApiFeature>(nameof(X1WalletApiFeature));
 
             fullNodeBuilder.ConfigureFeature(features =>
             {
                 features
-                    .AddFeature<SegWitWalletApiFeature>()
-                    .DependOn<SegWitWalletFeature>()
+                    .AddFeature<X1WalletApiFeature>()
+                    .DependOn<WalletFeature>()
                     .FeatureServices(services =>
                     {
                         services.AddTransient<SecureApiController>();
