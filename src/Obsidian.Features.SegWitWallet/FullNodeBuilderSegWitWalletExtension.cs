@@ -47,7 +47,7 @@ namespace Obsidian.Features.SegWitWallet
                         services.AddSingleton<IWalletFeePolicy, WalletFeePolicy>();
                         services.AddSingleton<WalletSettings>();
                         //services.AddSingleton<ColdStakingController>();
-                        services.AddTransient<SegWitWalletController>();
+                        services.AddTransient<WalletController>();
                         services.AddSingleton<WalletRPCController>();
                         services.AddSingleton<IBroadcasterManager, FullNodeBroadcasterManager>();
                         services.AddSingleton<BroadcasterBehavior>();

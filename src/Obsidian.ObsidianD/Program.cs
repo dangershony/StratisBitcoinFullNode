@@ -6,6 +6,7 @@ using NBitcoin;
 using NBitcoin.Protocol;
 using Obsidian.Features.SegWitWallet;
 using Obsidian.Features.SegWitWallet.Tests;
+using Obsidian.Features.SegWitWallet.Web;
 using Obsidian.ObsidianD.Api;
 using Obsidian.ObsidianD.Temp;
 using Stratis.Bitcoin;

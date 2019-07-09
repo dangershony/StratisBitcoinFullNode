@@ -168,7 +168,7 @@ namespace Obsidian.Features.SegWitWallet
 
 
 
-        public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(string walletName, int confirmations = 0)
+        public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(int confirmations = 0)
         {
             var res = new List<UnspentKeyAddressOutput>();
             foreach (var adr in Wallet.Addresses)
@@ -221,17 +221,17 @@ namespace Obsidian.Features.SegWitWallet
 
 
 
-        public KeyAddress GetUnusedAddress(string walletName)
+        public KeyAddress GetUnusedAddress()
         {
-            return this.GetUnusedAddresses(walletName, 1, false).SingleOrDefault();
+            return this.GetUnusedAddresses(1, false).SingleOrDefault();
         }
 
-        public KeyAddress GetChangeAddress(string walletName)
+        public KeyAddress GetChangeAddress()
         {
             return this.Wallet.Addresses.First(a => a.IsChangeAddress());
         }
 
-        public IEnumerable<KeyAddress> GetUnusedAddresses(string walletName, int count, bool isChange = false)
+        public IEnumerable<KeyAddress> GetUnusedAddresses(int count, bool isChange = false)
         {
             return this.Wallet.Addresses.Where(a => a.IsChangeAddress() == isChange && a.Transactions.Count == 0)
                 .Take(count);
@@ -285,7 +285,7 @@ namespace Obsidian.Features.SegWitWallet
                 .SelectMany(s => s.Transactions.Select(t => new FlatHistory { Address = s.ToFakeHdAddress(), Transaction = t })).ToArray();
         }
 
-        public IEnumerable<KeyAddressBalance> GetBalances(string walletName, string accountName = null)
+        public IEnumerable<KeyAddressBalance> GetBalances()
         {
             var balances = new List<KeyAddressBalance>();
 

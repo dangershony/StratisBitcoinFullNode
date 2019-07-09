@@ -106,7 +106,7 @@ namespace Obsidian.Features.SegWitWallet
 
                 foreach (string walletName in walletNames)
                 {
-                    var balancesPerAddress = manager.GetBalances(walletName);
+                    var balancesPerAddress = manager.GetBalances();
                     Money confirmed = Money.Zero;
                     Money unconfirmed = Money.Zero;
                     Money spendable = Money.Zero;

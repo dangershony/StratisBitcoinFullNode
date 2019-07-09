@@ -3,7 +3,7 @@
 namespace VisualCrypt.VisualCryptLight
 {
 	[DataContract]
-	public class VCLModel
+	public class ECCModel
 	{
 		[DataMember(Name = "cipherV2Bytes")]
 		public string CipherV2Bytes;

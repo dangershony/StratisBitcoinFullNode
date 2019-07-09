@@ -29,8 +29,7 @@ namespace Obsidian.Features.SegWitWallet
 
         protected readonly StandardTransactionPolicy TransactionPolicy;
 
-        readonly IWalletManager walletManager;
-        SegWitWalletManager segWitWalletManager;
+        readonly WalletManagerFacade walletManagerFacade;
 
         private readonly IWalletFeePolicy walletFeePolicy;
 
@@ -42,11 +41,16 @@ namespace Obsidian.Features.SegWitWallet
             StandardTransactionPolicy transactionPolicy)
         {
             this.network = network;
-            this.walletManager = walletManager;
+            this.walletManagerFacade = (WalletManagerFacade)walletManager;
             this.walletFeePolicy = walletFeePolicy;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
             
             this.TransactionPolicy = transactionPolicy;
+        }
+
+        public SegWitWalletManager GetManager(string walletName)
+        {
+            return this.walletManagerFacade.GetManager(walletName);
         }
 
         /// <inheritdoc />
@@ -126,7 +130,7 @@ namespace Obsidian.Features.SegWitWallet
             Guard.NotEmpty(accountReference.AccountName, nameof(accountReference.AccountName));
 
             // Get the total value of spendable coins in the account.
-            long maxSpendableAmount = this.segWitWalletManager.GetSpendableTransactionsInAccount(accountReference.WalletName, allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
+            long maxSpendableAmount = this.GetManager(accountReference.WalletName).GetSpendableTransactionsInAccount(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
 
             // Return 0 if the user has nothing to spend.
             if (maxSpendableAmount == Money.Zero)
@@ -182,7 +186,6 @@ namespace Obsidian.Features.SegWitWallet
         {
             Guard.NotNull(context, nameof(context));
             Guard.NotNull(context.Recipients, nameof(context.Recipients));
-            Guard.NotNull(context.AccountReference, nameof(context.AccountReference));
 
             // If inputs are selected by the user, we just choose them all.
             if (context.SelectedInputs != null && context.SelectedInputs.Any())
@@ -212,7 +215,7 @@ namespace Obsidian.Features.SegWitWallet
 
 
             // TODO: only decrypt the keys needed
-            var keys = this.segWitWalletManager.Wallet.Addresses
+            var keys = this.GetManager(context.AccountReference.WalletName).Wallet.Addresses
                 .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.EncryptedPrivateKey))
                 .Select(privateKeyBytes => new Key(privateKeyBytes))
                 .ToArray();
@@ -244,16 +247,17 @@ namespace Obsidian.Features.SegWitWallet
         /// <param name="context">The context associated with the current transaction being built.</param>
         protected void FindChangeAddress(TransactionBuildContext context, bool useUsedAddress)
         {
+            var manager = this.GetManager(context.AccountReference.WalletName);
             // Get an address to send the change to.
             if (useUsedAddress)
             {
-                KeyAddress changeAddressForFeeEstimateOnly = this.segWitWalletManager.Wallet.Addresses
+                KeyAddress changeAddressForFeeEstimateOnly = manager.Wallet.Addresses
                     .First(a => a.IsChangeAddress());
                 context.ChangeAddress = changeAddressForFeeEstimateOnly.ToFakeHdAddress();
             }
             else
             {
-                context.ChangeAddress = this.segWitWalletManager.GetChangeAddress(context.AccountReference.WalletName).ToFakeHdAddress();
+                context.ChangeAddress = manager.GetChangeAddress().ToFakeHdAddress();
             }
             context.TransactionBuilder.SetChange(context.ChangeAddress.ScriptPubKey);
         }
@@ -265,7 +269,7 @@ namespace Obsidian.Features.SegWitWallet
         /// <param name="context">The context associated with the current transaction being built.</param>
         void AddCoins(TransactionBuildContext context)
         {
-            context.UnspentOutputs = this.segWitWalletManager.GetSpendableTransactionsInAccount(context.AccountReference.WalletName, context.MinConfirmations)
+            context.UnspentOutputs = GetManager(context.AccountReference.WalletName).GetSpendableTransactionsInAccount(context.MinConfirmations)
                 .Select((u)=> 
                     new UnspentOutputReference{ Account = null, Address = u.Address.ToFakeHdAddress(), Confirmations = u.Confirmations, Transaction = u.Transaction}
                 ).ToList();

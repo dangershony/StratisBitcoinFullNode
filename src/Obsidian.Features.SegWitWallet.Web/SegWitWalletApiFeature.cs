@@ -1,36 +1,20 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.SignalR;
+﻿using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using NBitcoin;
 using Stratis.Bitcoin.Builder;
-using Stratis.Bitcoin.Builder.Feature;
-using Stratis.Bitcoin.Configuration;
-using Stratis.Bitcoin.Configuration.Logging;
-using Stratis.Bitcoin.Connection;
-using Stratis.Bitcoin.Features.ColdStaking.Controllers;
 using Stratis.Bitcoin.Features.Wallet;
-using Stratis.Bitcoin.Features.Wallet.Broadcasting;
-using Stratis.Bitcoin.Features.Wallet.Controllers;
-using Stratis.Bitcoin.Features.Wallet.Interfaces;
-using Stratis.Bitcoin.Signals;
-using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.Features.SegWitWallet
+namespace Obsidian.Features.SegWitWallet.Web
 {
-    /// <inheritdoc />
     public class SegWitWalletApiFeature : BaseWalletFeature
     {
-        readonly SegWitWalletController segWitWalletController;
+        readonly WalletController walletController;
 
         public SegWitWalletApiFeature(
-            SegWitWalletController segWitWalletController,
+            WalletController walletController,
             ILoggerFactory loggerFactory
           )
         {
-            this.segWitWalletController = segWitWalletController;
+            this.walletController = walletController;
         }
 
 
