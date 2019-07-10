@@ -219,7 +219,7 @@ namespace Obsidian.Features.X1Wallet
                 };
 
                 (string folder, IEnumerable<string> fileNameCollection) = this.walletManagerWrapper.GetWalletsFiles();
-                string searchFile = Path.ChangeExtension(walletName, this.walletManagerWrapper.GetWalletFileExtension());
+                string searchFile = Path.ChangeExtension(walletName, WalletManager.WalletFileExtension);
                 string fileName = fileNameCollection.FirstOrDefault(i => i.Equals(searchFile));
                 if (folder != null && fileName != null)
                     model.WalletFilePath = Path.Combine(folder, fileName);

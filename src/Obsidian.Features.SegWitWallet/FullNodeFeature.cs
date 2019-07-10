@@ -40,9 +40,12 @@ namespace Obsidian.Features.X1Wallet
                     .DependOn<RPCFeature>()
                     .FeatureServices(services =>
                     {
-                        services.AddSingleton<IWalletSyncManager, WalletSyncManager>();
+                        // WalletManagerWrapper implements 2 interfaces, ensure the same instance is used when resolved.
+                        services.AddSingleton<WalletManagerWrapper>();
+                        services.AddSingleton<IWalletManager>(x => x.GetRequiredService<WalletManagerWrapper>());
+                        services.AddSingleton<IWalletSyncManager>(x => x.GetRequiredService<WalletManagerWrapper>());
+
                         services.AddSingleton<IWalletTransactionHandler, TransactionHandler>();
-                        services.AddSingleton<IWalletManager, WalletManagerWrapper>();
                         services.AddSingleton<IWalletFeePolicy, WalletFeePolicy>();
                         services.AddSingleton<WalletSettings>();
                         services.AddTransient<WalletController>();

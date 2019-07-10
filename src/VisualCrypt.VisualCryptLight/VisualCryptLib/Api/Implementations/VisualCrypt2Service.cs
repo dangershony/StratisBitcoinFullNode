@@ -346,7 +346,7 @@ namespace VisualCrypt.VisualCryptLight.VisualCryptLib.Api.Implementations
 			MAC16 actualMAC = CreateMAC(cipherV2, context);
 
             if (!actualMAC.GetBytes().SequenceEqual(decryptedMAC.GetBytes()))
-				throw new Exception(LocalizableStrings.MsgPasswordError);
+				throw new AuthenticationFailedException(LocalizableStrings.MsgPasswordError);
 
 			PaddedData paddedData = this._internal.AESDecryptMessage(cipherV2, cipherV2.IV16, randomKey, ivCache, context);
 

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
@@ -7,18 +8,17 @@ using NBitcoin;
 using NBitcoin.BuilderExtensions;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.Features.BlockStore;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
+using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
 
 namespace Obsidian.Features.X1Wallet
 {
-    public class WalletManagerWrapper : IWalletManager
+    public partial class WalletManagerWrapper : IWalletManager
     {
-        
-       
-
         readonly DataFolder dataFolder;
         readonly ChainIndexer chainIndexer;
         readonly Network network;
@@ -30,8 +30,8 @@ namespace Obsidian.Features.X1Wallet
         readonly INodeLifetime nodeLifetime;
         readonly IAsyncProvider asyncProvider;
 
-        public WalletManagerWrapper(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, 
-            IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider)
+        public WalletManagerWrapper(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
+            IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider, ISignals signals, IBlockStore blockStore, StoreSettings storeSettings)
         {
             this.dataFolder = dataFolder;
             this.chainIndexer = chainIndexer;
@@ -43,7 +43,11 @@ namespace Obsidian.Features.X1Wallet
             this.dateTimeProvider = dateTimeProvider;
             this.nodeLifetime = nodeLifetime;
             this.asyncProvider = asyncProvider;
+
+            ConstructWalletSyncManager(signals, blockStore, storeSettings);
         }
+
+
 
         WalletManager walletManager;
 
@@ -60,96 +64,68 @@ namespace Obsidian.Features.X1Wallet
             }
 
             LoadWallet(null, walletName);
+            Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
+            ((IWalletSyncManager)this).Start();
             return GetManager(walletName);
         }
 
-        TResult Call<T, TResult>(T request, Func<TResult> func) where T : class
+        public Wallet LoadWallet(string password, string name)
+        {
+            var fileName = $"{name}{WalletManager.WalletFileExtension}";
+            string filePath = Path.Combine(this.dataFolder.WalletPath, fileName);
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException($"No wallet file found at {filePath}");
+            if (this.walletManager != null)
             {
-                try
-                {
-                    Guard.NotNull(request, nameof(request));
-                    WalletManager.WalletSemaphore.Wait();
-
-                    return func();
-                }
-                catch (Exception e)
-                {
-                    this.logger.LogError(e, "Exception occurred: {0}", e.StackTrace);
-                    throw;
-                }
-                finally
-                {
-                    WalletManager.WalletSemaphore.Release();
-                }
+                if (this.walletManager.CurrentWalletFilePath != filePath)
+                    throw new NotSupportedException(
+                        "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
+            this.walletManager = new WalletManager(filePath, this.chainIndexer, this.network, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider);
+            return null;
+        }
 
-            TResult Call<TResult>(Func<TResult> func)
-            {
-                try
-                {
-                    WalletManager.WalletSemaphore.Wait();
+        public (string folderPath, IEnumerable<string>) GetWalletsFiles()
+        {
+            var filePathes = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{WalletManager.WalletFileExtension}", SearchOption.TopDirectoryOnly);
+            var files = filePathes.Select(Path.GetFileName);
+            return (this.dataFolder.WalletPath, files);
+        }
 
-                    return func();
-                }
-                catch (Exception e)
-                {
-                    this.logger.LogError(e, "Exception occurred: {0}", e.StackTrace);
-                    throw;
-                }
-                finally
-                {
-                    WalletManager.WalletSemaphore.Release();
-                }
-            }
+        public Dictionary<string, ScriptTemplate> GetValidStakingTemplates()
+        {
+            return new Dictionary<string, ScriptTemplate>();
+        }
 
-            void Call(Action action)
-            {
-                try
-                {
-                    WalletManager.WalletSemaphore.Wait();
+        public void ProcessBlock(Block block, ChainedHeader chainedHeader)
+        {
+            this.walletManager.ProcessBlock(block, chainedHeader);
+        }
 
-                    action();
-                }
-                catch (Exception e)
-                {
-                    this.logger.LogError(e, "Exception occurred: {0}", e.StackTrace);
-                    throw;
-                }
-                finally
-                {
-                    WalletManager.WalletSemaphore.Release();
-                }
-            }
+        #region  throw new NotImplementedException();
 
-            public void Start()
-            {
-                throw new NotImplementedException();
-            }
+        public bool ContainsWallets => throw new NotImplementedException();
 
-            public void Stop()
-            {
-                throw new NotImplementedException();
-            }
+        public void Start()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Stop()
+        {
+            throw new NotImplementedException();
+        }
 
         public uint256 WalletTipHash
         {
-            get => Call(() => this.walletManager.Wallet.LastBlockSyncedHash);
-            set => Call(() =>
-            {
-                throw new NotSupportedException();
-                // this.segWitWalletManager.WalletTipHash = value; 
-
-            });
+            get => throw new NotImplementedException();
+            set => throw new NotImplementedException();
         }
 
         public int WalletTipHeight
         {
-            get => Call(() => this.walletManager.Wallet.LastBlockSyncedHeight);
-            set => Call(() =>
-            {
-                throw new NotSupportedException();
-                //this.segWitWalletManager.WalletTipHeight = value;
-            });
+            get => throw new NotImplementedException();
+            set => throw new NotImplementedException();
         }
 
         public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWallet(string walletName, int confirmations = 0)
@@ -160,13 +136,6 @@ namespace Obsidian.Features.X1Wallet
         public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
         {
             throw new NotImplementedException();
-        }
-
-        public Dictionary<string, ScriptTemplate> GetValidStakingTemplates()
-        {
-            return new Dictionary<string, ScriptTemplate>();
-            // TODO: When this method is first called (by PoSMinting) segWitWalletManager is still null.
-            return Call(() => this.walletManager.GetValidStakingTemplates());
         }
 
         public IEnumerable<BuilderExtension> GetTransactionBuilderExtensionsForStaking()
@@ -192,22 +161,6 @@ namespace Obsidian.Features.X1Wallet
         public bool VerifySignedMessage(string externalAddress, string message, string signature)
         {
             throw new NotImplementedException();
-        }
-
-        public Wallet LoadWallet(string password, string name)
-        {
-            var fileName = $"{name}{WalletManager.WalletFileExtension}";
-            string filePath = Path.Combine(this.dataFolder.WalletPath, fileName);
-            if (!File.Exists(filePath))
-                throw new FileNotFoundException($"No wallet file found at {filePath}");
-            if (this.walletManager != null)
-            {
-                if (this.walletManager.CurrentWalletFilePath != filePath)
-                    throw new NotSupportedException(
-                        "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
-            }
-            this.walletManager = new WalletManager(filePath, this.chainIndexer, this.network,this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider);
-            return null;
         }
 
         public void UnlockWallet(string password, string name, int timeout)
@@ -292,12 +245,7 @@ namespace Obsidian.Features.X1Wallet
 
         public int LastBlockHeight()
         {
-            return Call(() =>
-            {
-                if (GetManager(null,true) != null) // TODO: this does not look so good...
-                    return this.walletManager.Wallet.LastBlockSyncedHeight;
-                return this.chainIndexer.Tip.Height;
-            });
+            throw new NotImplementedException();
         }
 
         public void RemoveBlocks(ChainedHeader fork)
@@ -305,10 +253,7 @@ namespace Obsidian.Features.X1Wallet
             throw new NotImplementedException();
         }
 
-        public void ProcessBlock(Block block, ChainedHeader chainedHeader)
-        {
-            throw new NotImplementedException();
-        }
+       
 
         public bool ProcessTransaction(Transaction transaction, int? blockHeight = null, Block block = null, bool isPropagated = true)
         {
@@ -327,7 +272,7 @@ namespace Obsidian.Features.X1Wallet
 
         public string GetWalletFileExtension()
         {
-            return WalletManager.WalletFileExtension;
+            throw new NotImplementedException();
         }
 
         public IEnumerable<string> GetWalletsNames()
@@ -355,14 +300,6 @@ namespace Obsidian.Features.X1Wallet
             throw new NotImplementedException();
         }
 
-        public (string folderPath, IEnumerable<string>) GetWalletsFiles()
-        {
-            var filePathes = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{WalletManager.WalletFileExtension}", SearchOption.TopDirectoryOnly);
-            var files = filePathes.Select(Path.GetFileName);
-            return (this.dataFolder.WalletPath, files);
-        }
-
-        public bool ContainsWallets { get; }
         public string GetExtPubKey(WalletAccountReference accountReference)
         {
             throw new NotImplementedException();
@@ -397,5 +334,8 @@ namespace Obsidian.Features.X1Wallet
         {
             throw new NotImplementedException();
         }
+
+        #endregion
+
     }
 }

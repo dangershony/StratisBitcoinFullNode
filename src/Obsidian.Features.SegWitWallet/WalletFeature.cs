@@ -46,11 +46,10 @@ namespace Obsidian.Features.X1Wallet
         public override Task InitializeAsync()
         {
             //this.walletManagerFacade.Start();
-            //this.walletSyncManager.Start();
+            // this.walletSyncManager.Start(); Do not call this here!!!!
             //this.addressBookManager.Initialize();
 
             this.connectionManager.Parameters.TemplateBehaviors.Add(this.broadcasterBehavior);
-            //this.walletSyncManager.SyncFromHeight(1);
 
             return Task.CompletedTask;
         }
