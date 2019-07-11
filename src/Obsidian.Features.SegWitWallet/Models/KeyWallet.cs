@@ -37,7 +37,7 @@ namespace Obsidian.Features.X1Wallet.Models
         /// A collection of addresses contained in the wallet.
         /// </summary>
         [JsonProperty(PropertyName = "addresses")]
-        public List<KeyAddress> Addresses { get; set; }
+        public Dictionary<string, KeyAddress> Addresses { get; set; }
 
         /// <summary>
         /// The height of the last block that was synced.
@@ -59,6 +59,6 @@ namespace Obsidian.Features.X1Wallet.Models
         public ICollection<uint256> BlockLocator { get; set; }
 
 
- 
+
     }
 }

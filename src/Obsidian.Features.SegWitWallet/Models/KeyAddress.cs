@@ -5,6 +5,7 @@ using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
 using Newtonsoft.Json;
 using Stratis.Bitcoin.Features.Wallet;
+using Stratis.Bitcoin.Utilities.JsonConverters;
 
 namespace Obsidian.Features.X1Wallet.Models
 {
@@ -19,28 +20,31 @@ namespace Obsidian.Features.X1Wallet.Models
         [JsonProperty(PropertyName = "bech32")]
         public string Bech32 { get; set; }
 
-        [JsonProperty(PropertyName = "paymentscriptbytes")]
-        public byte[] PaymentScriptBytes { get; set; }
+        [JsonProperty(PropertyName = "scriptPubKey")]
+        [JsonConverter(typeof(ScriptJsonConverter))]
+        public Script ScriptPubKey { get; set; }
 
         [JsonProperty(PropertyName = "cointype")]
         public int CoinType { get; set; }
 
-        [JsonProperty(PropertyName = "uniqueIndex")]
-        public int UniqueIndex { get; set; }
+        [JsonProperty(PropertyName = "label")]
+        public string Label { get; set; }
 
-        [JsonProperty(PropertyName = "properties")]
-        public IDictionary<string, string> Properties { get; set; }
+        [JsonProperty(PropertyName = "isChange")]
+        public bool IsChange { get; set; }
+
+        [JsonProperty(PropertyName = "createdDateUtc")]
+        public DateTime CreatedDateUtc { get; set; }
 
         [JsonProperty(PropertyName = "transactions")]
         public List<TransactionData> Transactions { get; set; } = new List<TransactionData>();
 
-        public static KeyAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, int coinType, int uniqueIndex, byte witnessVersion, string bech32Prefix)
+        public static KeyAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, int coinType,  byte witnessVersion, string bech32Prefix)
         {
             var adr = new KeyAddress();
             adr.EncryptedPrivateKey = keyEncryption(keyEncryptionPassphrase, privateKey);
 
             adr.CoinType = coinType;
-            adr.UniqueIndex = uniqueIndex;
 
             var k = new Key(privateKey);
             adr.CompressedPublicKey = k.PubKey.Compress().ToBytes();
@@ -48,9 +52,9 @@ namespace Obsidian.Features.X1Wallet.Models
             var hash160 = Hashes.Hash160(adr.CompressedPublicKey).ToBytes();
             var enc = new Bech32Encoder(bech32Prefix);
             adr.Bech32 = enc.Encode(witnessVersion, hash160);
-
-            adr.PaymentScriptBytes = adr.GetPaymentScriptBytes();
-
+            adr.Label = adr.Bech32;
+            adr.ScriptPubKey = new Script(OpcodeType.OP_0, Op.GetPushOp(hash160));
+            adr.CreatedDateUtc = DateTime.UtcNow;
             return adr;
         }
     }

@@ -43,8 +43,8 @@ namespace Obsidian.OxD.Temp
 
         static void CreateNDWallet(FullNode fullNode)
         {
-            var segWitWalletController =  fullNode.NodeService<WalletController>();
-            segWitWalletController.CreateNondeterministicWallet("blackstone-nd", "password");
+            //var segWitWalletController =  fullNode.NodeService<WalletController>();
+            //segWitWalletController.CreateKeyWalletAsync("blackstone-nd", "password");
         }
 
         static void CreateWalletAndPrintWords(FullNode fullNode)

@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
+using Newtonsoft.Json;
+using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Temp;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.BlockStore;
@@ -14,6 +18,7 @@ using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
+using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet
 {
@@ -83,6 +88,48 @@ namespace Obsidian.Features.X1Wallet
             }
             this.walletManager = new WalletManager(filePath, this.chainIndexer, this.network, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider);
             return null;
+        }
+
+        public async Task CreateKeyWallet(WalletCreateRequest walletCreateRequest)
+        {
+            var fileName = $"{walletCreateRequest.Name}{WalletManager.WalletFileExtension}";
+            string filePath = Path.Combine(this.dataFolder.WalletPath, fileName);
+            if (File.Exists(filePath))
+                throw new InvalidOperationException($"A wallet with the name {walletCreateRequest.Name} already exists at {filePath}!");
+
+            if (walletCreateRequest.Password == null || walletCreateRequest.Password.Length < 12)
+                throw new InvalidOperationException("A passphrase with at least 12 characters is required.");
+
+            var keyWallet = new KeyWallet
+            {
+                Name = walletCreateRequest.Name,
+                CreationTime = DateTime.UtcNow,
+                WalletType = nameof(KeyWallet),
+                WalletTypeVersion = 1,
+                Addresses = new Dictionary<string, KeyAddress>(),
+                LastBlockSyncedHash = this.network.Consensus.HashGenesisBlock,
+                LastBlockSyncedHeight = 0
+            };
+            const int witnessVersion = 0;
+            var bech32Prefix = "odx";  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
+
+          
+
+            int start = 23;
+            int end = 43;
+            for (var i = start; i <= end; i++)
+            {
+                var bytes = new byte[32];
+                StaticWallet.Fill((byte)i, bytes);
+                var isChange = i % 2 == 0;
+                var address = KeyAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, this.network.Consensus.CoinType, witnessVersion, bech32Prefix);
+                address.IsChange = isChange;
+                keyWallet.Addresses.Add(address.ScriptPubKey.ToHex(), address);
+            }
+
+            var serializedWallet = JsonConvert.SerializeObject(keyWallet, Formatting.Indented);
+            File.WriteAllText(filePath, serializedWallet);
+
         }
 
         public (string folderPath, IEnumerable<string>) GetWalletsFiles()
@@ -253,7 +300,7 @@ namespace Obsidian.Features.X1Wallet
             throw new NotImplementedException();
         }
 
-       
+
 
         public bool ProcessTransaction(Transaction transaction, int? blockHeight = null, Block block = null, bool isPropagated = true)
         {

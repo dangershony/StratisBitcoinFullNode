@@ -42,47 +42,22 @@ namespace Obsidian.Features.X1Wallet.Models
             return (confirmed, total - confirmed);
         }
 
-        public static bool IsChangeAddress(this KeyAddress keyAddress)
-        {
-            return keyAddress.UniqueIndex % 2 != 0;
-        }
-
         public static HdAddress ToFakeHdAddress(this KeyAddress keyAddress)
         {
             var hd = new HdAddress
             {
                 Address = keyAddress.Bech32,
-                HdPath = HdOperations.CreateHdPath(keyAddress.CoinType, 0, keyAddress.IsChangeAddress(),
-                    keyAddress.UniqueIndex),
+                HdPath = HdOperations.CreateHdPath(keyAddress.CoinType, 0, keyAddress.IsChange,keyAddress.ScriptPubKey.GetHashCode()),
 
-                Index = keyAddress.UniqueIndex,
-                Pubkey = new Script(new Op[]
-                    {OpcodeType.OP_RETURN, Op.GetPushOp(Encoding.ASCII.GetBytes("HdAddress.PubKey"))}),
-                ScriptPubKey = keyAddress.GetPaymentScript(),
+                Index = keyAddress.ScriptPubKey.GetHashCode(),
+                Pubkey = new Script(keyAddress.CompressedPublicKey),
+                ScriptPubKey = keyAddress.ScriptPubKey,
                 Transactions = keyAddress.Transactions
             };
             return hd;
         }
 
-        public static HdAccount ToFakeHdAccount(this ICollection<KeyAddress> ndAddresses, KeyWallet wallet)
-        {
-            var accountIndex = 0;
-            var account = new HdAccount
-            {
-                ExternalAddresses = new List<HdAddress>(),
-                InternalAddresses = new List<HdAddress>(),
-                Index = accountIndex,
-                Name = $"account {accountIndex}",
-                HdPath = HdOperations.GetAccountHdPath(ndAddresses.First().CoinType, accountIndex),
-                CreationTime = wallet.CreationTime,
-                ExtendedPubKey = "ExtendedPubKey: not supported",
-            };
-            foreach (var adr in ndAddresses)
-                if (!adr.IsChangeAddress())
-                    account.ExternalAddresses.Add(adr.ToFakeHdAddress());
-                else
-                    account.InternalAddresses.Add(adr.ToFakeHdAddress());
-            return account;
-        }
+
+
     }
 }

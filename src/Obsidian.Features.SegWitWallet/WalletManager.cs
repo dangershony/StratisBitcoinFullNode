@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -83,7 +84,6 @@ namespace Obsidian.Features.X1Wallet
         // 2. the list of addresses contained in our Wallet for checking whether a transaction is being paid to the Wallet.
         // 3. a mapping of all inputs with their corresponding transactions, to facilitate rapid lookup
         readonly Dictionary<OutPoint, TransactionData> outpointLookup = new Dictionary<OutPoint, TransactionData>();
-        readonly ConcurrentDictionary<Script, KeyAddress> scriptToAddressLookup = new ConcurrentDictionary<Script, KeyAddress>();
         readonly Dictionary<OutPoint, TransactionData> inputLookup = new Dictionary<OutPoint, TransactionData>();
 
 
@@ -133,7 +133,7 @@ namespace Obsidian.Features.X1Wallet
         {
             this.outpointLookup.Clear();
 
-            foreach (KeyAddress address in this.Wallet.Addresses)
+            foreach (KeyAddress address in this.Wallet.Addresses.Values)
             {
                 // Get the UTXOs that are unspent or spent but not confirmed.
                 // We only exclude from the list the confirmed spent UTXOs.
@@ -146,12 +146,8 @@ namespace Obsidian.Features.X1Wallet
 
         void LoadKeysLookupLock()
         {
-            foreach (KeyAddress address in this.Wallet.Addresses)
+            foreach (KeyAddress address in this.Wallet.Addresses.Values)
             {
-                this.scriptToAddressLookup[KeyAddressExtensions.GetPaymentScript(address)] = address;
-                //if (address.Pubkey != null)
-                //    this.scriptToAddressLookup[address.Pubkey] = address;
-
                 foreach (TransactionData transaction in address.Transactions)
                 {
                     // Get the UTXOs that are unspent or spent but not confirmed.
@@ -164,28 +160,11 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-        void UpdateKeysLookupLocked(IEnumerable<KeyAddress> addresses)
-        {
-            if (addresses == null || !addresses.Any())
-            {
-                return;
-            }
-
-            foreach (KeyAddress address in addresses)
-            {
-                this.scriptToAddressLookup[KeyAddressExtensions.GetPaymentScript(address)] = address;
-                //if (address.Pubkey != null)
-                //    this.scriptToAddressLookup[address.Pubkey] = address;
-            }
-        }
-
-
-
 
         public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(int confirmations = 0)
         {
             var res = new List<UnspentKeyAddressOutput>();
-            foreach (var adr in this.Wallet.Addresses)
+            foreach (var adr in this.Wallet.Addresses.Values)
             {
                 UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, confirmations);
                 res.AddRange(unspentKeyAddress);
@@ -242,12 +221,12 @@ namespace Obsidian.Features.X1Wallet
 
         public KeyAddress GetChangeAddress()
         {
-            return this.Wallet.Addresses.First(a => a.IsChangeAddress());
+            return this.Wallet.Addresses.Values.First(a => a.IsChange);
         }
 
         public IEnumerable<KeyAddress> GetUnusedAddresses(int count, bool isChange = false)
         {
-            return this.Wallet.Addresses.Where(a => a.IsChangeAddress() == isChange && a.Transactions.Count == 0)
+            return this.Wallet.Addresses.Values.Where(a => a.IsChange == isChange && a.Transactions.Count == 0)
                 .Take(count);
 
             #region we do not create new addresses here if there are no unused addresses
@@ -276,14 +255,11 @@ namespace Obsidian.Features.X1Wallet
         {
             throw new NotImplementedException("Creating new addresses will require the passphrase.");
             var newAdresses = new KeyAddress[amountToCreate];
-            var oldMaxIndex = wallet.Addresses.Where(a => a.IsChangeAddress() == isChange).Max(a => a.UniqueIndex);
-            var newIndex = oldMaxIndex;
             for (var i = 0; i < amountToCreate; i++)
             {
                 var privateKey = new byte[32];
                 rng.GetBytes(privateKey);
-                newIndex += 2;
-                // newAdresses[i] = KeyAddress.CreateWithPrivateKey(privateKey, this.network.Consensus.CoinType, newIndex);
+                newAdresses[i] = KeyAddress.CreateWithPrivateKey(privateKey, "password", null, this.network.Consensus.CoinType, 0, "odx");
             }
 
             return newAdresses;
@@ -291,12 +267,27 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        public FlatHistory[] GetHistory()
+        public List<FlatAddressHistory> GetHistory()// TODO: make sure resyncing also locks the wallet via semaphore, otherwise calls such as getHistory will throw collection modified
         {
+            var histories = new List<FlatAddressHistory>();
+
+            foreach (var a in this.Wallet.Addresses.Values)
+            {
+                foreach (var t in a.Transactions)
+                {
+                    var h = new FlatAddressHistory {Address = a, Transaction = t};
+                    histories.Add(h);
+                }
+            }
+               
+
             // Get transactions contained in the account.
-            return this.Wallet.Addresses
+           var check = this.Wallet.Addresses.Values
                 .Where(a => a.Transactions.Any())
-                .SelectMany(s => s.Transactions.Select(t => new FlatHistory { Address = s.ToFakeHdAddress(), Transaction = t })).ToArray();
+                .SelectMany(s => s.Transactions.Select(t => new FlatAddressHistory { Address = s, Transaction = t })).ToArray();
+           Debug.Assert(histories.Count == check.Length);
+
+           return histories;
         }
 
         public IEnumerable<KeyAddressBalance> GetBalances()
@@ -305,7 +296,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-            foreach (KeyAddress address in this.Wallet.Addresses)
+            foreach (KeyAddress address in this.Wallet.Addresses.Values)
             {
                 // Calculates the amount of spendable coins.
                 UnspentKeyAddressOutput[] spendableBalance = GetSpendableTransactions(address);
@@ -386,9 +377,8 @@ namespace Obsidian.Features.X1Wallet
         public void RemoveBlocks(ChainedHeader chainedHeader)
         {
 
-            for (var i = 0; i < this.Wallet.Addresses.Count; i++)
+            foreach (var address in  this.Wallet.Addresses.Values)
             {
-                var address = this.Wallet.Addresses[i];
 
                 for (var j = 0; j < address.Transactions.Count; j++)
                 {
@@ -434,29 +424,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        public void RemoveBlocksOld(ChainedHeader fork)
-        {
-            Guard.NotNull(fork, nameof(fork));
 
-            var allAddresses = this.scriptToAddressLookup.Values;
-            foreach (var address in allAddresses)
-            {
-                // Remove all the UTXO that have been reorged.
-                IEnumerable<TransactionData> makeUnspendable = address.Transactions.Where(w => w.BlockHeight > fork.Height).ToList();
-                foreach (TransactionData transactionData in makeUnspendable)
-                    address.Transactions.Remove(transactionData);
-
-                // Bring back all the UTXO that are now spendable after the reorg.
-                IEnumerable<TransactionData> makeSpendable = address.Transactions.Where(w => (w.SpendingDetails != null) && (w.SpendingDetails.BlockHeight > fork.Height));
-                foreach (TransactionData transactionData in makeSpendable)
-                    transactionData.SpendingDetails = null;
-            }
-
-            this.UpdateLastBlockSyncedHeight(fork);
-
-            // Reload the lookup dictionaries.
-            this.RefreshInputKeysLookupLock();
-        }
 
         public void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
@@ -534,10 +502,10 @@ namespace Obsidian.Features.X1Wallet
             // Check the outputs, ignoring the ones with a 0 amount.
             foreach (TxOut utxo in transaction.Outputs.Where(o => o.Value != Money.Zero))
             {
-                // Check if the outputs contain one of our addresses.
-                if (this.scriptToAddressLookup.TryGetValue(utxo.ScriptPubKey, out KeyAddress _))
+                var address = FindAddressByScriptPubKey(utxo.ScriptPubKey);
+                if (address != null)
                 {
-                    AddTransactionToWallet(transaction, utxo, blockHeight, block, isPropagated);
+                    AddTransactionToWallet(transaction, utxo, address, blockHeight, block, isPropagated);
                     foundReceivingTrx = true;
                     this.logger.LogDebug("Transaction '{0}' contained funds received by the user's Wallet(s).", hash);
                 }
@@ -559,16 +527,28 @@ namespace Obsidian.Features.X1Wallet
                         return false;
 
                     // Check if the destination script is one of the Wallet's.
-                    bool found = this.scriptToAddressLookup.TryGetValue(o.ScriptPubKey, out KeyAddress addr);
-
-                    // Include the keys not included in our wallets (external payees).
-                    if (!found)
+                    //bool found = this.scriptToAddressLookup.TryGetValue(o.ScriptPubKey, out KeyAddress addr);
+                    bool found = false;
+                    KeyAddress address = FindAddressByScriptPubKey(o.ScriptPubKey);
+                    if (address != null)
+                    {
+                        AddTransactionToWallet(transaction, o, address, blockHeight, block, isPropagated);
+                        foundReceivingTrx = true;
+                        this.logger.LogDebug("Transaction '{0}' contained funds received by the user's Wallet(s).", hash);
+                        found = true;
+                    }
+                    else
+                    {
+                        // Include the keys not included in our wallets (external payees).
+                        //if (!found)
+                        //    return true;
                         return true;
+                    }
 
                     // Include the keys that are in the Wallet but that are for receiving
                     // addresses (which would mean the user paid itself).
                     // We also exclude the keys involved in a staking transaction.
-                    return !addr.IsChangeAddress() && !transaction.IsCoinStake;
+                    return !address.IsChange && !transaction.IsCoinStake;
                 });
 
                 this.AddSpendingTransactionToWallet(transaction, paidOutTo, tTx.Id, tTx.Index, blockHeight, block);
@@ -577,6 +557,12 @@ namespace Obsidian.Features.X1Wallet
             }
 
             return foundSendingTrx || foundReceivingTrx;
+        }
+
+        KeyAddress FindAddressByScriptPubKey(Script scriptPubKey)
+        {
+            this.Wallet.Addresses.TryGetValue(scriptPubKey.ToHex(), out KeyAddress keyAddress);
+            return keyAddress;
         }
 
         /// <summary>
@@ -597,9 +583,9 @@ namespace Obsidian.Features.X1Wallet
 
             uint256 transactionHash = transaction.GetHash();
 
-            // Get the transaction being spent.
-            TransactionData spentTransaction = this.scriptToAddressLookup.Values.Distinct().SelectMany(v => v.Transactions)
-                .SingleOrDefault(t => (t.Id == spendingTransactionId) && (t.Index == spendingTransactionIndex));
+            IEnumerable<TransactionData> allTransactionData = this.Wallet.Addresses.Values.SelectMany(v => v.Transactions);
+            var spentTransaction = allTransactionData.SingleOrDefault(t => (t.Id == spendingTransactionId) && (t.Index == spendingTransactionIndex));
+
             if (spentTransaction == null)
             {
                 // Strange, why would it be null?
@@ -618,8 +604,14 @@ namespace Obsidian.Features.X1Wallet
                     // Figure out how to retrieve the destination address.
                     string destinationAddress = this.scriptAddressReader.GetAddressFromScriptPubKey(this.network, paidToOutput.ScriptPubKey);
                     if (string.IsNullOrEmpty(destinationAddress))
-                        if (this.scriptToAddressLookup.TryGetValue(paidToOutput.ScriptPubKey, out KeyAddress destination))
+                    {
+                        var destination = FindAddressByScriptPubKey(paidToOutput.ScriptPubKey);
+                        if (destination != null)
+                        {
                             destinationAddress = destination.Bech32;
+                        }
+                    }
+
 
                     payments.Add(new PaymentDetails
                     {
@@ -694,7 +686,7 @@ namespace Obsidian.Features.X1Wallet
             List<uint256> idsToRemove = transactionsIds.ToList();
             var result = new HashSet<(uint256, DateTimeOffset)>();
 
-            foreach (KeyAddress adr in this.Wallet.Addresses)
+            foreach (KeyAddress adr in this.Wallet.Addresses.Values)
             {
                 for (int i = 0; i < adr.Transactions.Count; i++)
                 {
@@ -822,15 +814,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        void AddSegWitAddressesToLookup()
-        {
-
-            foreach (KeyAddress adr in this.Wallet.Addresses)
-            {
-                var script = KeyAddressExtensions.GetPaymentScript(adr);
-                //this.scriptToAddressLookup[script] = new HdAddress{ Address = adr.Bech32, Pubkey = script, ScriptPubKey = script};
-            }
-        }
+        
 
         public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
         {
@@ -874,7 +858,7 @@ namespace Obsidian.Features.X1Wallet
         /// <param name="blockHeight">Height of the block.</param>
         /// <param name="block">The block containing the transaction to add.</param>
         /// <param name="isPropagated">Propagation state of the transaction.</param>
-        void AddTransactionToWallet(Transaction transaction, TxOut utxo, int? blockHeight = null, Block block = null, bool isPropagated = true)
+        void AddTransactionToWallet(Transaction transaction, TxOut utxo, KeyAddress address, int? blockHeight = null, Block block = null, bool isPropagated = true)
         {
             Guard.NotNull(transaction, nameof(transaction));
             Guard.NotNull(utxo, nameof(utxo));
@@ -883,7 +867,7 @@ namespace Obsidian.Features.X1Wallet
 
             // Get the collection of transactions to add to.
             Script script = utxo.ScriptPubKey;
-            this.scriptToAddressLookup.TryGetValue(script, out KeyAddress address);
+            //this.scriptToAddressLookup.TryGetValue(script, out KeyAddress address);
             ICollection<TransactionData> addressTransactions = address.Transactions;
 
             // Check if a similar UTXO exists or not (same transaction ID and same index).
@@ -974,15 +958,15 @@ namespace Obsidian.Features.X1Wallet
             return;  // this method ensures there are enough unused addresses in the Wallet. not sure if that will be supported here.
 
 
-            bool isChange;
-            if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == false))
-            {
-                isChange = false;
-            }
-            else if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == true))
-            {
-                isChange = true;
-            }
+            //bool isChange;
+            //if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == false))
+            //{
+            //    isChange = false;
+            //}
+            //else if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == true))
+            //{
+            //    isChange = true;
+            //}
 
 
             // IEnumerable<NDAddress> newAddresses = this.AddAddressesToMaintainBuffer(account, isChange);

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Temp;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Builder.Feature;
@@ -26,14 +27,13 @@ using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.P2P.Peer;
 using Stratis.Bitcoin.Utilities;
+using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet
 {
     public class WalletController : Controller
     {
         const int MaxHistoryItemsPerAccount = int.MaxValue;
-
-       
 
         readonly WalletManagerWrapper walletManagerWrapper;
         readonly TransactionHandler walletTransactionHandler;
@@ -145,60 +145,13 @@ namespace Obsidian.Features.X1Wallet
             });
         }
 
-        public void CreateNondeterministicWallet(string name, string keyEncryptionPassphrase)
+        public async Task CreateKeyWalletAsync(WalletCreateRequest walletCreateRequest)
         {
-            //try
-            //{
-            //    if (this.wallets.ContainsKey(name))
-            //        throw new InvalidOperationException($"A Wallet with name {name} is already loaded.");
-
-            //    if (this.fileStorage.Exists($"{name}{WalletFileExtension}"))
-            //        throw new InvalidOperationException(
-            //            $"A Wallet with name {name} is already present in the data folder!");
-
-            //    var wal = new KeyWallet
-            //    {
-            //        Name = name,
-            //        CreationTime = DateTime.UtcNow,
-            //        WalletType = nameof(KeyWallet),
-            //        WalletTypeVersion = 1,
-            //        Addresses = new List<KeyAddress>()
-            //    };
-            //    const int witnessVersion = 0;
-            //    var bech32Prefix = "odx";  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
-
-            //    var uniqueIndex = 0;
-            //    var adr = KeyAddress.CreateWithPrivateKey(StaticWallet.Key1Bytes, keyEncryptionPassphrase, KeyEncryption, this.network.Consensus.CoinType, uniqueIndex++, witnessVersion, bech32Prefix);
-            //    wal.Addresses.Add(adr);
-            //    var adr2 = KeyAddress.CreateWithPrivateKey(StaticWallet.Key2Bytes, keyEncryptionPassphrase, KeyEncryption, this.network.Consensus.CoinType, uniqueIndex++, witnessVersion, bech32Prefix);
-            //    wal.Addresses.Add(adr2);
-
-
-
-            //    UpdateKeysLookupLocked(wal.Addresses);
-            //    // If the chain is downloaded, we set the height of the newly created Wallet to it.
-            //    // However, if the chain is still downloading when the user creates a Wallet,
-            //    // we wait until it is downloaded in order to set it. Otherwise, the height of the Wallet will be the height of the chain at that moment.
-            //    if (this.chainIndexer.IsDownloaded())
-            //    {
-            //        this.UpdateLastBlockSyncedHeight(this.chainIndexer.Tip);
-            //    }
-            //    else
-            //    {
-            //        this.UpdateWhenChainDownloaded(this.dateTimeProvider.GetUtcNow());
-            //    }
-
-            //    // Save the changes to the file and add addresses to be tracked.
-            //    this.SaveWallet();
-            //}
-            //catch (Exception e)
-            //{
-            //    this.logger.LogError($"Could not create Wallet: {e.Message}");
-            //}
-
+            await ExecuteAsync(walletCreateRequest,
+                async () => await this.walletManagerWrapper.CreateKeyWallet(walletCreateRequest));
         }
 
-      
+
 
         public async Task<WalletGeneralInfoModel> GetGeneralInfoAsync(string walletName)
         {
@@ -235,28 +188,28 @@ namespace Obsidian.Features.X1Wallet
                 var model = new WalletHistoryModel();
 
                 // Get a list of all the transactions found in an account (or in a wallet if no account is specified), with the addresses associated with them.
-                FlatHistory[] histories = GetManager(request.WalletName).GetHistory();
+                var histories = GetManager(request.WalletName).GetHistory();
 
 
                 var transactionItems = new List<TransactionItemModel>();
 
                 // Sorting the history items by descending dates. That includes received and sent dates.
-                List<FlatHistory> items = histories.OrderBy(o => o.Transaction.IsConfirmed() ? 1 : 0)
+                var items = histories.OrderBy(o => o.Transaction.IsConfirmed() ? 1 : 0)
                                                         .ThenByDescending(o => o.Transaction.SpendingDetails?.CreationTime ?? o.Transaction.CreationTime)
                                                         .ToList();
 
                 // Represents a sublist containing only the transactions that have already been spent.
-                List<FlatHistory> spendingDetails = items.Where(t => t.Transaction.SpendingDetails != null).ToList();
+                var spendingDetails = items.Where(t => t.Transaction.SpendingDetails != null).ToList();
 
                 // Represents a sublist of transactions associated with receive addresses + a sublist of already spent transactions associated with change addresses.
                 // In effect, we filter out 'change' transactions that are not spent, as we don't want to show these in the history.
-                List<FlatHistory> history = items.Where(t => !t.Address.IsChangeAddress() || (t.Address.IsChangeAddress() && t.Transaction.IsSpent())).ToList();
+                var history = items.Where(t => !t.Address.IsChange || (t.Address.IsChange && t.Transaction.IsSpent())).ToList();
 
                 // Represents a sublist of 'change' transactions.
-                List<FlatHistory> allchange = items.Where(t => t.Address.IsChangeAddress()).ToList();
+                var allchange = items.Where(t => t.Address.IsChange).ToList();
 
                 int itemsCount = 0;
-                foreach (FlatHistory item in history)
+                foreach (FlatAddressHistory item in history)
                 {
 
                     if (itemsCount == MaxHistoryItemsPerAccount)
@@ -265,14 +218,14 @@ namespace Obsidian.Features.X1Wallet
                     }
 
                     TransactionData transaction = item.Transaction;
-                    HdAddress address = item.Address;
+                    var address = item.Address;
 
                     // First we look for staking transaction as they require special attention.
                     // A staking transaction spends one of our inputs into 2 outputs or more, paid to the same address.
                     if (transaction.SpendingDetails?.IsCoinStake != null && transaction.SpendingDetails.IsCoinStake.Value)
                     {
                         // We look for the output(s) related to our spending input.
-                        List<FlatHistory> relatedOutputs = items.Where(h => h.Transaction.Id == transaction.SpendingDetails.TransactionId && h.Transaction.IsCoinStake != null && h.Transaction.IsCoinStake.Value).ToList();
+                        var relatedOutputs = items.Where(h => h.Transaction.Id == transaction.SpendingDetails.TransactionId && h.Transaction.IsCoinStake != null && h.Transaction.IsCoinStake.Value).ToList();
                         if (relatedOutputs.Any())
                         {
                             // Add staking transaction details.
@@ -280,7 +233,7 @@ namespace Obsidian.Features.X1Wallet
                             var stakingItem = new TransactionItemModel
                             {
                                 Type = TransactionItemType.Staked,
-                                ToAddress = address.Address,
+                                ToAddress = address.Bech32,
                                 Amount = relatedOutputs.Sum(o => o.Transaction.Amount) - transaction.Amount,
                                 Id = transaction.SpendingDetails.TransactionId,
                                 Timestamp = transaction.SpendingDetails.CreationTime,
@@ -331,7 +284,7 @@ namespace Obsidian.Features.X1Wallet
                         }
 
                         // Get the change address for this spending transaction.
-                        FlatHistory changeAddress = allchange.FirstOrDefault(a => a.Transaction.Id == spendingTransactionId);
+                        var changeAddress = allchange.FirstOrDefault(a => a.Transaction.Id == spendingTransactionId);
 
                         // Find all the spending details containing the spending transaction id and aggregate the sums.
                         // This is our best shot at finding the total value of inputs for this transaction.
@@ -356,13 +309,13 @@ namespace Obsidian.Features.X1Wallet
                     }
 
                     // Create a record for a 'receive' transaction.
-                    if (transaction.IsCoinStake == null && !address.IsChangeAddress())
+                    if (transaction.IsCoinStake == null && !address.IsChange)
                     {
                         // Add incoming fund transaction details.
                         var receivedItem = new TransactionItemModel
                         {
                             Type = TransactionItemType.Received,
-                            ToAddress = address.Address,
+                            ToAddress = address.Bech32,
                             Amount = transaction.Amount,
                             Id = transaction.Id,
                             Timestamp = transaction.CreationTime,
@@ -461,7 +414,7 @@ namespace Obsidian.Features.X1Wallet
                         Amount = st.Transaction.Amount,
                         Address = st.Address.Bech32,
                         Index = st.Transaction.Index,
-                        IsChange = st.Address.IsChangeAddress(),
+                        IsChange = st.Address.IsChange,
                         CreationTime = st.Transaction.CreationTime,
                         Confirmations = st.Confirmations
                     }).ToList()
@@ -651,11 +604,11 @@ namespace Obsidian.Features.X1Wallet
             {
                 var model = new AddressesModel
                 {
-                    Addresses = GetManager(walletName).Wallet.Addresses.Select(address => new AddressModel
+                    Addresses = GetManager(walletName).Wallet.Addresses.Values.Select(address => new AddressModel
                     {
                         Address = address.Bech32,
                         IsUsed = address.Transactions.Any(),
-                        IsChange = address.IsChangeAddress()
+                        IsChange = address.IsChange
                     }).ToArray()
                 };
 

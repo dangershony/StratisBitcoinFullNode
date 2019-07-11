@@ -37,7 +37,7 @@ namespace Obsidian.Features.X1Wallet.Temp
 
 
 
-        static void Fill(byte pattern, byte[] bytes)
+        public static void Fill(byte pattern, byte[] bytes)
         {
             for (var index = 0; index < bytes.Length; index++)
                 bytes[index] = pattern;

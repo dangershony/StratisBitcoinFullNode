@@ -216,7 +216,7 @@ namespace Obsidian.Features.X1Wallet
 
 
             // TODO: only decrypt the keys needed
-            var keys = this.GetManager(context.AccountReference.WalletName).Wallet.Addresses
+            var keys = this.GetManager(context.AccountReference.WalletName).Wallet.Addresses.Values
                 .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.EncryptedPrivateKey))
                 .Select(privateKeyBytes => new Key(privateKeyBytes))
                 .ToArray();
@@ -252,8 +252,8 @@ namespace Obsidian.Features.X1Wallet
             // Get an address to send the change to.
             if (useUsedAddress)
             {
-                KeyAddress changeAddressForFeeEstimateOnly = manager.Wallet.Addresses
-                    .First(a => a.IsChangeAddress());
+                KeyAddress changeAddressForFeeEstimateOnly = manager.Wallet.Addresses.Values
+                    .First(a => a.IsChange);
                 context.ChangeAddress = changeAddressForFeeEstimateOnly.ToFakeHdAddress();
             }
             else

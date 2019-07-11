@@ -18,7 +18,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
         public SecureApiController(WalletController walletController)
         {
             this.walletController = walletController;
-            CommandsWithoutWalletNameCheck = new[] { "getWalletFiles" };
+            CommandsWithoutWalletNameCheck = new[] { "createWallet", "getWalletFiles" };
         }
 
         [HttpPost]
@@ -33,6 +33,13 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                 switch (decryptedRequest.Command)
                 {
+
+                    case "createWallet":
+                    {
+                        WalletCreateRequest walletCreateRequest = Deserialize<WalletCreateRequest>(decryptedRequest.Payload);
+                        await this.walletController.CreateKeyWalletAsync(walletCreateRequest);
+                        return CreateOk(request);
+                    }
                     case "getWalletFiles":
                         {
                             WalletFileModel walletFileModel = await this.walletController.ListWalletsFilesAsync();
@@ -113,7 +120,6 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                     //case "receivedByAddress":
                     //case "verifyMessage":
                     //case "signMessage":
-                    //case "createWallet":
                     default:
                         throw new NotSupportedException($"The command '{decryptedRequest.Command}' is not supported.");
                 }
