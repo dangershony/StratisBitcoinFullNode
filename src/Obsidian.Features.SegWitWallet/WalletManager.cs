@@ -161,7 +161,7 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-        public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(int confirmations = 0)
+        public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(int confirmations = 50)
         {
             var res = new List<UnspentKeyAddressOutput>();
             foreach (var adr in this.Wallet.Addresses.Values)
@@ -288,6 +288,12 @@ namespace Obsidian.Features.X1Wallet
            Debug.Assert(histories.Count == check.Length);
 
            return histories;
+        }
+
+        internal Script GetUnusedChangeAddress()
+        {
+            var unusedChangeAddress = this.Wallet.Addresses.Values.First(a => a.IsChange && a.Transactions.Count == 0);
+            return unusedChangeAddress.ScriptPubKey;
         }
 
         public IEnumerable<KeyAddressBalance> GetBalances()

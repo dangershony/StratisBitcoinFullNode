@@ -46,7 +46,8 @@ namespace Obsidian.OxD
                 maxStandardVersion: 2,
                 maxStandardTxWeight: 100_000,
                 maxBlockSigopsCost: 20_000,
-                maxStandardTxSigopsCost: 20_000 / 5
+                maxStandardTxSigopsCost: 20_000 / 5,
+                witnessScaleFactor: 4
             );
 
             var bip9Deployments = new ObsidianBIP9DeploymentsArray

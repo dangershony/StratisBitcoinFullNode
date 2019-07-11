@@ -49,7 +49,7 @@ namespace Obsidian.Features.X1Wallet
             this.TransactionPolicy = transactionPolicy;
         }
 
-        public WalletManager GetManager(string walletName)
+        WalletManager GetManager(string walletName)
         {
             return this.walletManagerWrapper.GetManager(walletName);
         }
@@ -128,10 +128,9 @@ namespace Obsidian.Features.X1Wallet
         {
             Guard.NotNull(accountReference, nameof(accountReference));
             Guard.NotEmpty(accountReference.WalletName, nameof(accountReference.WalletName));
-            Guard.NotEmpty(accountReference.AccountName, nameof(accountReference.AccountName));
 
             // Get the total value of spendable coins in the account.
-            long maxSpendableAmount = this.GetManager(accountReference.WalletName).GetSpendableTransactionsInAccount(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
+            long maxSpendableAmount = GetManager(accountReference.WalletName).GetSpendableTransactionsInAccount(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
 
             // Return 0 if the user has nothing to spend.
             if (maxSpendableAmount == Money.Zero)
@@ -187,6 +186,7 @@ namespace Obsidian.Features.X1Wallet
         {
             Guard.NotNull(context, nameof(context));
             Guard.NotNull(context.Recipients, nameof(context.Recipients));
+            Guard.NotNull(context.AccountReference, nameof(context.AccountReference));
 
             // If inputs are selected by the user, we just choose them all.
             if (context.SelectedInputs != null && context.SelectedInputs.Any())
@@ -198,7 +198,7 @@ namespace Obsidian.Features.X1Wallet
             this.AddOpReturnOutput(context);
             this.AddCoins(context);
             this.AddSecrets(context);
-            this.FindChangeAddress(context, context.Sign == false);
+            this.FindChangeAddress(context);
             this.AddFee(context);
 
             if (context.Time.HasValue)
@@ -214,17 +214,17 @@ namespace Obsidian.Features.X1Wallet
             if (!context.Sign)
                 return;
 
-
             // TODO: only decrypt the keys needed
-            var keys = this.GetManager(context.AccountReference.WalletName).Wallet.Addresses.Values
+            var keys = GetManager(context.AccountReference.WalletName).Wallet.Addresses.Values
                 .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.EncryptedPrivateKey))
                 .Select(privateKeyBytes => new Key(privateKeyBytes))
                 .ToArray();
 
             context.TransactionBuilder.AddKeys(keys);
 
+            //Wallet wallet = this.walletManager.GetWalletByName(context.AccountReference.WalletName);
             //ExtKey seedExtKey = this.walletManager.GetExtKey(context.AccountReference, context.WalletPassword, context.CacheSecret);
-            
+
             //var signingKeys = new HashSet<ISecret>();
             //var added = new HashSet<HdAddress>();
             //foreach (UnspentOutputReference unspentOutputsItem in context.UnspentOutputs)
@@ -246,21 +246,20 @@ namespace Obsidian.Features.X1Wallet
         /// Find the next available change address.
         /// </summary>
         /// <param name="context">The context associated with the current transaction being built.</param>
-        protected void FindChangeAddress(TransactionBuildContext context, bool useUsedAddress)
+        protected void FindChangeAddress(TransactionBuildContext context)
         {
-            var manager = this.GetManager(context.AccountReference.WalletName);
             // Get an address to send the change to.
-            if (useUsedAddress)
-            {
-                KeyAddress changeAddressForFeeEstimateOnly = manager.Wallet.Addresses.Values
-                    .First(a => a.IsChange);
-                context.ChangeAddress = changeAddressForFeeEstimateOnly.ToFakeHdAddress();
-            }
-            else
-            {
-                context.ChangeAddress = manager.GetChangeAddress().ToFakeHdAddress();
-            }
-            context.TransactionBuilder.SetChange(context.ChangeAddress.ScriptPubKey);
+            var unusedChangeAddressScriptPubKey = GetManager(context.AccountReference.WalletName).GetUnusedChangeAddress();
+            context.TransactionBuilder.SetChange(unusedChangeAddressScriptPubKey);
+            //context.ChangeAddress =
+            //if (context.UseSegwitChangeAddress)
+            //{
+            //    context.TransactionBuilder.SetChange(new BitcoinWitPubKeyAddress(context.ChangeAddress.Bech32Address, this.network).ScriptPubKey);
+            //}
+            //else
+            //{
+            //    context.TransactionBuilder.SetChange(context.ChangeAddress.ScriptPubKey);
+            //}
         }
 
         /// <summary>
@@ -268,20 +267,28 @@ namespace Obsidian.Features.X1Wallet
         /// Then add them to the <see cref="TransactionBuildContext.UnspentOutputs"/>.
         /// </summary>
         /// <param name="context">The context associated with the current transaction being built.</param>
-        void AddCoins(TransactionBuildContext context)
+        protected void AddCoins(TransactionBuildContext context)
         {
-            context.UnspentOutputs = GetManager(context.AccountReference.WalletName).GetSpendableTransactionsInAccount(context.MinConfirmations)
-                .Select((u)=> 
-                    new UnspentOutputReference{ Account = null, Address = u.Address.ToFakeHdAddress(), Confirmations = u.Confirmations, Transaction = u.Transaction}
-                ).ToList();
-
-            if (context.UnspentOutputs.Count == 0)
+            List<UnspentKeyAddressOutput> unspentOutputs = GetManager(context.AccountReference.WalletName).GetSpendableTransactionsInAccount(context.MinConfirmations).ToList();
+            if (unspentOutputs.Count == 0)
             {
                 throw new WalletException("No spendable transactions found.");
             }
 
+            context.UnspentOutputs = new List<UnspentOutputReference>();  // let's see if we can get away with a local var instead
+
+            foreach(var uo in unspentOutputs)
+            {
+                var ur = new UnspentOutputReference
+                {
+                    Transaction = uo.Transaction, Confirmations = uo.Confirmations, Account = new HdAccount(),
+                    Address = new HdAddress {ScriptPubKey = uo.Address.ScriptPubKey, Address = uo.Address.Bech32}
+                };
+                context.UnspentOutputs.Add(ur);
+            }
+
             // Get total spendable balance in the account.
-            long balance = context.UnspentOutputs.Sum(t => t.Transaction.Amount);
+            long balance = unspentOutputs.Sum(t => t.Transaction.Amount);
             long totalToSend = context.Recipients.Sum(s => s.Amount);
             if (balance < totalToSend)
                 throw new WalletException("Not enough funds.");
@@ -296,30 +303,30 @@ namespace Obsidian.Features.X1Wallet
                 // input is part of the UTXO set and filter out UTXOs that are not
                 // in the initial list if 'context.AllowOtherInputs' is false.
 
-                Dictionary<OutPoint, UnspentOutputReference> availableHashList = context.UnspentOutputs.ToDictionary(item => item.ToOutPoint(), item => item);
+                Dictionary<OutPoint, UnspentKeyAddressOutput> availableHashList = unspentOutputs.ToDictionary(item => item.ToOutPoint(), item => item);
 
                 if (!context.SelectedInputs.All(input => availableHashList.ContainsKey(input)))
                     throw new WalletException("Not all the selected inputs were found on the wallet.");
 
                 if (!context.AllowOtherInputs)
                 {
-                    foreach (KeyValuePair<OutPoint, UnspentOutputReference> unspentOutputsItem in availableHashList)
+                    foreach (KeyValuePair<OutPoint, UnspentKeyAddressOutput> unspentOutputsItem in availableHashList)
                     {
                         if (!context.SelectedInputs.Contains(unspentOutputsItem.Key))
-                            context.UnspentOutputs.Remove(unspentOutputsItem.Value);
+                            unspentOutputs.Remove(unspentOutputsItem.Value);
                     }
                 }
 
                 foreach (OutPoint outPoint in context.SelectedInputs)
                 {
-                    UnspentOutputReference item = availableHashList[outPoint];
+                    UnspentKeyAddressOutput item = availableHashList[outPoint];
 
                     coins.Add(new Coin(item.Transaction.Id, (uint)item.Transaction.Index, item.Transaction.Amount, item.Transaction.ScriptPubKey));
                     sum += item.Transaction.Amount;
                 }
             }
 
-            foreach (UnspentOutputReference item in context.UnspentOutputs
+            foreach (UnspentKeyAddressOutput item in unspentOutputs
                 .OrderByDescending(a => a.Confirmations > 0)
                 .ThenByDescending(a => a.Transaction.Amount))
             {

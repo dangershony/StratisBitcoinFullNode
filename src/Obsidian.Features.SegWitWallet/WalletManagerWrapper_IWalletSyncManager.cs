@@ -189,7 +189,7 @@ namespace Obsidian.Features.X1Wallet
 
                     this.logger.LogInformation("Reorg detected, going back from '{0}' to '{1}'.", this.syncState.WalletTip, fork);
 
-                    RemoveBlocks(fork);
+                    this.walletManager.RemoveBlocks(fork);
                     this.syncState.WalletTip = fork;
 
                     this.logger.LogTrace("Wallet tip set to '{0}'.", this.syncState.WalletTip);

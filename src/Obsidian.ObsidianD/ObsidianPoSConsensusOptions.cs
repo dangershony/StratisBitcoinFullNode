@@ -8,17 +8,38 @@ namespace Obsidian.OxD
 	/// <inheritdoc />
 	public class ObsidianPoSConsensusOptions : PosConsensusOptions
 	{
-		public ObsidianPoSConsensusOptions(uint maxBlockBaseSize,
-			int maxStandardVersion,
-			int maxStandardTxWeight,
-			int maxBlockSigopsCost,
-			int maxStandardTxSigopsCost) : base(maxBlockBaseSize, maxStandardVersion, maxStandardTxWeight, maxBlockSigopsCost,
-			maxStandardTxSigopsCost
-		)
-		{ }
+		
+        /// <summary>
+        /// Initializes all values. Used by networks that use block weight rules.
+        /// </summary>
+        public ObsidianPoSConsensusOptions(
+            uint maxBlockBaseSize,
+            uint maxBlockWeight,
+            uint maxBlockSerializedSize,
+            int witnessScaleFactor,
+            int maxStandardVersion,
+            int maxStandardTxWeight,
+            int maxBlockSigopsCost,
+            int maxStandardTxSigopsCost) : base(maxBlockBaseSize, maxBlockWeight, maxBlockSerializedSize, witnessScaleFactor, maxStandardVersion, maxStandardTxWeight, maxBlockSigopsCost, maxStandardTxSigopsCost)
+        {
+        }
 
-		/// <inheritdoc />
-		public override int GetStakeMinConfirmations(int height, Network network)
+        /// <summary>
+        /// Initializes values for networks that use block size rules.
+        /// </summary>
+        public ObsidianPoSConsensusOptions(
+            uint maxBlockBaseSize,
+            int maxStandardVersion,
+            int maxStandardTxWeight,
+            int maxBlockSigopsCost,
+            int maxStandardTxSigopsCost,
+            int witnessScaleFactor
+        ) : base(maxBlockBaseSize, maxStandardVersion, maxStandardTxWeight, maxBlockSigopsCost, maxStandardTxSigopsCost, witnessScaleFactor)
+        {
+        }
+
+        /// <inheritdoc />
+        public override int GetStakeMinConfirmations(int height, Network network)
         {
             if (network.IsTest() || network.IsRegTest())
                 throw new NotImplementedException();
