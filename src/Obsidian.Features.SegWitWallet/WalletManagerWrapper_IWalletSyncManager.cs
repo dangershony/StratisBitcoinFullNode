@@ -57,12 +57,12 @@ namespace Obsidian.Features.X1Wallet
                 // that in the wallet. The block locator will help finding
                 // a common fork and bringing the wallet back to a good
                 // state (behind the best chain).
-                ICollection<uint256> locators = this.ContainsWallets ? GetFirstWalletBlockLocator() : new[] { this.chainIndexer.Tip.HashBlock };
+                ICollection<uint256> locators =  this.walletManager.Wallet.BlockLocator;
                 var blockLocator = new BlockLocator { Blocks = locators.ToList() };
                 ChainedHeader fork = this.chainIndexer.FindFork(blockLocator);
-                RemoveBlocks(fork);
-                this.WalletTipHash = fork.HashBlock;
-                this.WalletTipHeight = fork.Height;
+                this.walletManager.RemoveBlocks(fork);
+                //this.WalletTipHash = fork.HashBlock;
+                //this.WalletTipHeight = fork.Height;
                 this.syncState.WalletTip = fork;
             }
 
@@ -138,11 +138,14 @@ namespace Obsidian.Features.X1Wallet
         void IWalletSyncManager.SyncFromHeight(int height)
         {
             ChainedHeader chainedHeader = this.chainIndexer.GetHeader(height);
-            //await this.walletController.SyncAsync(new HashModel { Hash = chainedHeader.HashBlock.ToString() });
+            if(chainedHeader == null)
+                throw  new WalletException("Invalid block height");
 
-            this.syncState.WalletTip = chainedHeader ?? throw new WalletException("Invalid block height");
-            this.WalletTipHash = chainedHeader.HashBlock;
-            this.WalletTipHeight = chainedHeader.Height;
+            this.walletManager.RemoveBlocks(chainedHeader);
+           
+            //this.WalletTipHash = chainedHeader.HashBlock;
+            //this.WalletTipHeight = chainedHeader.Height;
+            this.syncState.WalletTip = chainedHeader;
         }
 
 

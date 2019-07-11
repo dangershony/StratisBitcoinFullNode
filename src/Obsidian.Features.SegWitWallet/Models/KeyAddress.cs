@@ -32,7 +32,7 @@ namespace Obsidian.Features.X1Wallet.Models
         public IDictionary<string, string> Properties { get; set; }
 
         [JsonProperty(PropertyName = "transactions")]
-        public ICollection<TransactionData> Transactions { get; set; } = new List<TransactionData>();
+        public List<TransactionData> Transactions { get; set; } = new List<TransactionData>();
 
         public static KeyAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, int coinType, int uniqueIndex, byte witnessVersion, string bech32Prefix)
         {

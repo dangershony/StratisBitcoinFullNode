@@ -64,12 +64,12 @@ namespace Obsidian.Features.X1Wallet
         IAsyncLoop asyncLoop;
 
 
-        
+
 
         static readonly RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
         static readonly Func<string, byte[], byte[]> KeyEncryption = VCL.EncryptWithPassphrase;
 
-        
+
 
 
 
@@ -87,7 +87,7 @@ namespace Obsidian.Features.X1Wallet
         readonly Dictionary<OutPoint, TransactionData> inputLookup = new Dictionary<OutPoint, TransactionData>();
 
 
-      
+
 
 
 
@@ -124,9 +124,24 @@ namespace Obsidian.Features.X1Wallet
             // Load data in memory for faster lookups.
             this.LoadKeysLookupLock();
             // Find the last chain block received by the Wallet manager.
-           
 
-           
+
+
+        }
+
+        void RefreshInputKeysLookupLock()
+        {
+            this.outpointLookup.Clear();
+
+            foreach (KeyAddress address in this.Wallet.Addresses)
+            {
+                // Get the UTXOs that are unspent or spent but not confirmed.
+                // We only exclude from the list the confirmed spent UTXOs.
+                foreach (TransactionData transaction in address.Transactions.Where(t => t.SpendingDetails?.BlockHeight == null))
+                {
+                    this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
+                }
+            }
         }
 
         void LoadKeysLookupLock()
@@ -163,6 +178,7 @@ namespace Obsidian.Features.X1Wallet
                 //    this.scriptToAddressLookup[address.Pubkey] = address;
             }
         }
+
 
 
 
@@ -366,13 +382,59 @@ namespace Obsidian.Features.X1Wallet
             throw new NotImplementedException();
         }
 
-        
 
-       
+        public void RemoveBlocks(ChainedHeader chainedHeader)
+        {
+
+            for (var i = 0; i < this.Wallet.Addresses.Count; i++)
+            {
+                var address = this.Wallet.Addresses[i];
+
+                for (var j = 0; j < address.Transactions.Count; j++)
+                {
+                    var tx = address.Transactions[j];
+
+                    //  Remove tx later than height                 
+                    if (tx.BlockHeight > chainedHeader.Height)
+                        address.Transactions.Remove(tx);
+                }
+
+                for (var j = 0; j < address.Transactions.Count; j++)
+                {
+                    var tx = address.Transactions[j];
+
+                    //  Bring back all the UTXO that are now spendable again after the rewind          
+                    if ((tx.SpendingDetails != null) && (tx.SpendingDetails.BlockHeight > chainedHeader.Height))
+                        address.Transactions[j].SpendingDetails = null;
+                }
+
+                // Update outpointLookup
+                this.outpointLookup.Clear();
+                for (var j = 0; j < address.Transactions.Count; j++)
+                {
+                    // Get the UTXOs that are unspent or spent but not confirmed.
+                    // We only exclude from the list the confirmed spent UTXOs.
+                    var tx = address.Transactions[j];
+                    if (tx.SpendingDetails?.BlockHeight == null)
+                    {
+                        this.outpointLookup[new OutPoint(tx.Id, tx.Index)] = tx;
+                    }
+
+                }
+            }
+
+            // Update last block synced height
+            this.Wallet.BlockLocator = chainedHeader.GetLocator().Blocks;
+            this.Wallet.LastBlockSyncedHeight = chainedHeader.Height;
+            this.Wallet.LastBlockSyncedHash = chainedHeader.HashBlock;
+
+            SaveWallet();
+        }
 
 
 
-        public void RemoveBlocks(ChainedHeader fork)
+
+        public void RemoveBlocksOld(ChainedHeader fork)
         {
             Guard.NotNull(fork, nameof(fork));
 
@@ -607,25 +669,25 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-       
 
 
 
-       
 
 
 
-       
-
-       
-
-        
 
 
 
-       
 
-       
+
+
+
+
+
+
+
+
+
 
         public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
         {
@@ -680,9 +742,9 @@ namespace Obsidian.Features.X1Wallet
 
         #endregion
 
-      
 
-        
+
+
 
         public Network GetNetwork()
         {
@@ -696,7 +758,7 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-       
+
 
         /// <summary>
         /// Updates details of the last block synced in a Wallet when the chain of headers finishes downloading.
@@ -716,10 +778,10 @@ namespace Obsidian.Features.X1Wallet
                 {
                     int heightAtDate = this.chainIndexer.GetHeightAtTime(date);
 
-                   
-                        this.logger.LogTrace("The chain of headers has finished downloading, updating Wallet '{0}' with height {1}", this.Wallet.Name, heightAtDate);
-                        this.UpdateLastBlockSyncedHeight(this.chainIndexer.GetHeader(heightAtDate));
-                        this.SaveWallet();
+
+                    this.logger.LogTrace("The chain of headers has finished downloading, updating Wallet '{0}' with height {1}", this.Wallet.Name, heightAtDate);
+                    this.UpdateLastBlockSyncedHeight(this.chainIndexer.GetHeader(heightAtDate));
+                    this.SaveWallet();
                 },
                 (ex) =>
                 {
@@ -727,7 +789,7 @@ namespace Obsidian.Features.X1Wallet
                     // sync from the current height.
                     this.logger.LogError($"Exception occurred while waiting for chain to download: {ex.Message}");
 
-                        this.UpdateLastBlockSyncedHeight(this.chainIndexer.Tip);
+                    this.UpdateLastBlockSyncedHeight(this.chainIndexer.Tip);
                 },
                 TimeSpans.FiveSeconds);
         }
@@ -735,7 +797,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-      
+
         public void Stop()
         {
             if (this.broadcasterManager != null)
@@ -759,15 +821,15 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-       
+
         void AddSegWitAddressesToLookup()
         {
 
-                foreach (KeyAddress adr in this.Wallet.Addresses)
-                {
-                    var script = KeyAddressExtensions.GetPaymentScript(adr);
-                    //this.scriptToAddressLookup[script] = new HdAddress{ Address = adr.Bech32, Pubkey = script, ScriptPubKey = script};
-                }
+            foreach (KeyAddress adr in this.Wallet.Addresses)
+            {
+                var script = KeyAddressExtensions.GetPaymentScript(adr);
+                //this.scriptToAddressLookup[script] = new HdAddress{ Address = adr.Bech32, Pubkey = script, ScriptPubKey = script};
+            }
         }
 
         public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
@@ -785,8 +847,10 @@ namespace Obsidian.Features.X1Wallet
             throw new NotImplementedException();
         }
 
-        
-        public void UpdateLastBlockSyncedHeight(ChainedHeader chainedHeader)
+        /// <summary>
+        /// Saves the tip and BlockLocator from chainedHeader to the wallet file.
+        /// </summary>
+        void UpdateLastBlockSyncedHeight(ChainedHeader chainedHeader)
         {
 
             // The block locator will help when the Wallet
@@ -797,25 +861,9 @@ namespace Obsidian.Features.X1Wallet
             SaveWallet();
         }
 
-       
 
-        /// <summary>
-        /// Reloads the UTXOs we're tracking in memory for faster lookups.
-        /// </summary>
-        void RefreshInputKeysLookupLock()
-        {
-            this.outpointLookup.Clear();
 
-                foreach (KeyAddress address in this.Wallet.Addresses)
-                {
-                    // Get the UTXOs that are unspent or spent but not confirmed.
-                    // We only exclude from the list the confirmed spent UTXOs.
-                    foreach (TransactionData transaction in address.Transactions.Where(t => t.SpendingDetails?.BlockHeight == null))
-                    {
-                        this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
-                    }
-                }
-        }
+
 
         /// <summary>
         /// Adds a transaction that credits the Wallet with new coins.
@@ -925,21 +973,21 @@ namespace Obsidian.Features.X1Wallet
         {
             return;  // this method ensures there are enough unused addresses in the Wallet. not sure if that will be supported here.
 
-            
-                bool isChange;
-                if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == false))
-                {
-                    isChange = false;
-                }
-                else if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == true))
-                {
-                    isChange = true;
-                }
-              
 
-                // IEnumerable<NDAddress> newAddresses = this.AddAddressesToMaintainBuffer(account, isChange);
+            bool isChange;
+            if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == false))
+            {
+                isChange = false;
+            }
+            else if (this.Wallet.Addresses.Any(address => KeyAddressExtensions.GetPaymentScript(address) == script && address.IsChangeAddress() == true))
+            {
+                isChange = true;
+            }
 
-                // this.UpdateKeysLookupLocked(newAddresses);
+
+            // IEnumerable<NDAddress> newAddresses = this.AddAddressesToMaintainBuffer(account, isChange);
+
+            // this.UpdateKeysLookupLocked(newAddresses);
 
 
         }

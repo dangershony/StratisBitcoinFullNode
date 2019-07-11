@@ -98,9 +98,15 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             await this.walletController.SendTransactionAsync(decryptedRequest.Target, sendTransactionRequest);
                             return CreateOk(request);
                         }
+
+                    case "syncFromDate":
+                        {
+                            var walletSyncFromDateRequest = Deserialize<WalletSyncFromDateRequest>(decryptedRequest.Payload);
+                            await this.walletController.SyncFromDate(walletSyncFromDateRequest);
+                            return CreateOk(request);
+                        }
                     //case "splitCoins":
                     //case "syncFromHash":
-                    //case "syncFromDate":
                     //case "removeTransactions":
                     //case "spendableTransactions":
                     //case "maxBalance":
