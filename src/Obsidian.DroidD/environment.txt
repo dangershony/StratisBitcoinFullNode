@@ -1,0 +1,3 @@
+MONO_LOG_LEVEL=error
+MONO_LOG_MASK=asm
+MONO_GC_PARAMS=bridge-implementation=old

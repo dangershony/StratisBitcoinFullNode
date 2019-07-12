@@ -2,7 +2,7 @@
 
 namespace Obsidian.Networks.Obsidian
 {
-	static class ObsidianNetworksSelector
+	public static class ObsidianNetworksSelector
     {
 	    public static NetworksSelector Obsidian
 	    {
