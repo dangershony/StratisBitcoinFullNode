@@ -2,7 +2,9 @@
 using NBitcoin;
 using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.Temp;
+using Obsidian.Networks.ObsidianX;
 using Stratis.Bitcoin;
+using Stratis.Bitcoin.Base.Deployments;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 
@@ -17,7 +19,7 @@ namespace Obsidian.OxD.Temp
         {
 
 
-           //CreateNDWallet(fullNode);
+            //CreateNDWallet(fullNode);
             //CreateWalletAndPrintWords(fullNode);
 
 
@@ -39,6 +41,8 @@ namespace Obsidian.OxD.Temp
 
             // StaticWallet.PrintBlocks();
         }
+
+        
 
 
         static void CreateNDWallet(FullNode fullNode)
