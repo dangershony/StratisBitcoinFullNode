@@ -12,7 +12,5 @@ namespace Stratis.Bitcoin.Mining
         {
             this.Block = network.CreateBlock();
         }
-
-        public byte[] CoinbaseCommitment { get; set; }
     }
 }

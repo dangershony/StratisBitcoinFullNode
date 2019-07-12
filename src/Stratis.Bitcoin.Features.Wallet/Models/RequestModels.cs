@@ -401,8 +401,6 @@ namespace Stratis.Bitcoin.Features.Wallet.Models
                     new[] { $"{nameof(this.FeeType)}" });
             }
         }
-
-        public string ClientPublicKey { get; set; }
     }
 
     /// <summary>

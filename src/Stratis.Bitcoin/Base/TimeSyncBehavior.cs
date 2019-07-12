@@ -222,8 +222,8 @@ namespace Stratis.Bitcoin.Base
                             TimeOffset = offsetSample
                         };
 
-                        (bool condition, TimestampOffsetSample oldSample) = samples.Add(newSample);
-                        if (condition)
+                        TimestampOffsetSample oldSample;
+                        if (samples.Add(newSample, out oldSample))
                         {
                             // If we reached the maximum number of samples, we need to remove oldest sample.
                             sources.Remove(oldSample.Source);

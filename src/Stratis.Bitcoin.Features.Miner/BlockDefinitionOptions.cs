@@ -25,7 +25,6 @@ namespace Stratis.Bitcoin.Features.Miner
             this.BlockMaxWeight = blockMaxWeight;
             this.BlockMaxSize = blockMaxSize;
             this.BlockMinFeeRate = new FeeRate(PowMining.DefaultBlockMinTxFee); // TODO: Where should this be set, really?
-            this.BlockMinFeeRate = new FeeRate(1); // blackstone TODO: Where should this be set, really?
         }
 
         /// <summary>

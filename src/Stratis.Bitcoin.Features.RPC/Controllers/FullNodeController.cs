@@ -323,7 +323,7 @@ namespace Stratis.Bitcoin.Features.RPC.Controllers
                 {
                     result.IsValid = true;
                 }
-                // P2WSH: Pay-to-Witness-Script-Hash - Corresponds to P2SH (Pay-to-Script-Hash)
+                // P2WSH
                 else if (BitcoinWitScriptAddress.IsValid(address, this.Network, out Exception _))
                 {
                     result.IsValid = true;

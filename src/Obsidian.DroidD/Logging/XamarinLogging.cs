@@ -1,15 +1,23 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.Linq;
 using System.Text;
+
+using Android.App;
+using Android.Content;
+using Android.OS;
+using Android.Runtime;
+using Android.Views;
+using Android.Widget;
 using Microsoft.Extensions.Logging;
 
-namespace Stratis.Bitcoin.Configuration.Logging.Xamarin
+namespace Obsidian.DroidD.Logging
 {
     public class XamarinLoggerProvider : ILoggerProvider
     {
-        private readonly ConcurrentDictionary<string, XamarinLogger> loggers = new ConcurrentDictionary<string, XamarinLogger>();
+        private readonly ConcurrentDictionary<string, XamarinLogger> loggers =
+            new ConcurrentDictionary<string, XamarinLogger>();
 
         public ILogger CreateLogger(string categoryName)
         {
@@ -28,7 +36,9 @@ namespace Stratis.Bitcoin.Configuration.Logging.Xamarin
     public class XamarinLogger : ILogger
     {
         public static event EventHandler EntryAdded;
-        public static readonly ConcurrentQueue<XamarinLoggerEventArgs> Queue = new ConcurrentQueue<XamarinLoggerEventArgs>();
+
+        public static readonly ConcurrentQueue<XamarinLoggerEventArgs> Queue =
+            new ConcurrentQueue<XamarinLoggerEventArgs>();
 
         private readonly string name;
 
@@ -49,7 +59,8 @@ namespace Stratis.Bitcoin.Configuration.Logging.Xamarin
             return false;
         }
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception,
+            Func<TState, Exception, string> formatter)
         {
             if (logLevel == LogLevel.Trace)
                 return;
