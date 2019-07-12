@@ -3,13 +3,13 @@ using System.Text;
 using System.Threading.Tasks;
 using NBitcoin;
 
-namespace Obsidian.OxD
+namespace Obsidian.Networks.ObsidianX
 {
-    public class ObsidianConsensusFactory : PosConsensusFactory
+    public class ObsidianXConsensusFactory : PosConsensusFactory
     {
         public override BlockHeader CreateBlockHeader()
         {
-            return new ObsidianBlockHeader();
+            return new ObsidianXBlockHeader();
         }
 
         public Block CreateObsidianGenesisBlock(uint genesisTime, uint genesisNonce, uint genesisBits, int genesisVersion, Money genesisReward, bool? mine = false)

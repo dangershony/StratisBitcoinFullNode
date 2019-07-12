@@ -1,8 +1,8 @@
 ﻿using NBitcoin;
 
-namespace Obsidian.OxD
+namespace Obsidian.Networks.ObsidianX
 {
-    public class ObsidianBIP9DeploymentsArray : BIP9DeploymentsArray
+    public class ObsidianXBIP9DeploymentsArray : BIP9DeploymentsArray
     {
         // The position of each deployment in the deployments array.
         public const int TestDummy = 0;
@@ -16,7 +16,7 @@ namespace Obsidian.OxD
         /// <summary>
         /// Constructs the BIP9 deployments array.
         /// </summary>
-        public ObsidianBIP9DeploymentsArray() : base(NumberOfDeployments)
+        public ObsidianXBIP9DeploymentsArray() : base(NumberOfDeployments)
         {
         }
 

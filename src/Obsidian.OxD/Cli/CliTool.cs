@@ -10,6 +10,7 @@ using NBitcoin;
 using NBitcoin.Protocol;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Obsidian.Networks.ObsidianX;
 using Obsidian.OxD.Api;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.RPC;
@@ -106,7 +107,7 @@ namespace Obsidian.OxD.Cli
                 }
 
                 // Determine API port.
-                NetworksSelector networksSelector = ObsidianNetworksSelector.Obsidian;
+                NetworksSelector networksSelector = ObsidianXNetworksSelector.Obsidian;
 
                 
 

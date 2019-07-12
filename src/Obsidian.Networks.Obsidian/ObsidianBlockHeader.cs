@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace Obsidian.DroidD.Node
+namespace Obsidian.Networks.Obsidian
 {
     public class ObsidianBlockHeader : PosBlockHeader
     {

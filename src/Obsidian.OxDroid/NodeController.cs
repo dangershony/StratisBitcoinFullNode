@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NBitcoin;
 using NBitcoin.Protocol;
-using Obsidian.DroidD.Node;
+using Obsidian.Networks.ObsidianX;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
@@ -32,12 +32,12 @@ namespace Obsidian.DroidD
 
         public void StartFullNode(string[] startParameters)
         {
-            PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
+            PosBlockHeader.CustomPoWHash = ObsidianXHash.GetObsidianXPoWHash;
 
             try
             {
-                var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, StratisNode", args: startParameters)
+                var nodeSettings = new NodeSettings(networksSelector: ObsidianXNetworksSelector.Obsidian,
+                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, Stratis", args: startParameters)
                 {
                     MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
                 };
@@ -139,9 +139,9 @@ namespace Obsidian.DroidD
         static string GetName()
         {
 #if DEBUG
-            return $"Obsidian.DroidD {Assembly.GetEntryAssembly()?.GetName().Version} (Debug)";
+            return $"Obsidian.OxDroidD {Assembly.GetEntryAssembly()?.GetName().Version} (Debug)";
 #else
-			return $"Obsidian.DroidD {Assembly.GetEntryAssembly()?.GetName().Version} (Release)";
+			return $"Obsidian.OxDroidD {Assembly.GetEntryAssembly()?.GetName().Version} (Release)";
 #endif
         }
     }

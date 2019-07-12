@@ -1,7 +1,6 @@
 ﻿using NBitcoin;
-using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.DroidD.Node
+namespace Obsidian.Networks.Obsidian
 {
 	/// <inheritdoc />
 	public class ObsidianPoSConsensusOptions : PosConsensusOptions
@@ -16,8 +15,8 @@ namespace Obsidian.DroidD.Node
 			int maxStandardVersion,
 			int maxStandardTxWeight,
 			int maxBlockSigopsCost,
-			int maxStandardTxSigopsCost) : base(maxBlockBaseSize, maxStandardVersion, maxStandardTxWeight, maxBlockSigopsCost,
-			maxStandardTxSigopsCost
+			int maxStandardTxSigopsCost, int witnessScaleFactor) : base(maxBlockBaseSize, maxStandardVersion, maxStandardTxWeight, maxBlockSigopsCost,
+			maxStandardTxSigopsCost, witnessScaleFactor
 		)
 		{ }
 

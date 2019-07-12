@@ -2,9 +2,9 @@
 using System.Security.Cryptography;
 using NBitcoin;
 
-namespace Obsidian.OxD
+namespace Obsidian.Networks.ObsidianX
 {
-	public static class ObsidianHash
+	public static class ObsidianXHash
     {
         public static uint256 GetObsidianXPoWHash(byte[] blockBytes)
         {

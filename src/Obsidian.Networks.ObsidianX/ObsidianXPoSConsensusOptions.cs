@@ -1,18 +1,17 @@
 using System;
 using System.Diagnostics;
 using NBitcoin;
-using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.OxD
+namespace Obsidian.Networks.ObsidianX
 {
 	/// <inheritdoc />
-	public class ObsidianPoSConsensusOptions : PosConsensusOptions
+	public class ObsidianXPoSConsensusOptions : PosConsensusOptions
 	{
 		
         /// <summary>
         /// Initializes all values. Used by networks that use block weight rules.
         /// </summary>
-        public ObsidianPoSConsensusOptions(
+        public ObsidianXPoSConsensusOptions(
             uint maxBlockBaseSize,
             uint maxBlockWeight,
             uint maxBlockSerializedSize,
@@ -27,7 +26,7 @@ namespace Obsidian.OxD
         /// <summary>
         /// Initializes values for networks that use block size rules.
         /// </summary>
-        public ObsidianPoSConsensusOptions(
+        public ObsidianXPoSConsensusOptions(
             uint maxBlockBaseSize,
             int maxStandardVersion,
             int maxStandardTxWeight,

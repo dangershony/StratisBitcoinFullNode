@@ -7,6 +7,7 @@ using NBitcoin.Protocol;
 using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Features.X1Wallet.Temp;
+using Obsidian.Networks.ObsidianX;
 using Obsidian.OxD.Api;
 using Obsidian.OxD.Cli;
 using Obsidian.OxD.Temp;
@@ -50,11 +51,11 @@ namespace Obsidian.OxD
         /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
         static async Task MainAsync(string[] args)
         {
-            PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianXPoWHash;
+            PosBlockHeader.CustomPoWHash = ObsidianXHash.GetObsidianXPoWHash;
             
             try
             {
-                var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
+                var nodeSettings = new NodeSettings(networksSelector: ObsidianXNetworksSelector.Obsidian,
                     protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, Stratis", args: args)
                 {
                     MinProtocolVersion = ProtocolVersion.PROVEN_HEADER_VERSION

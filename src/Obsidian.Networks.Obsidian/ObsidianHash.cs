@@ -2,7 +2,7 @@
 using System.Security.Cryptography;
 using NBitcoin;
 
-namespace Obsidian.DroidD.Node
+namespace Obsidian.Networks.Obsidian
 {
 	public static class ObsidianHash
     {

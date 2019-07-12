@@ -6,7 +6,7 @@ using NBitcoin;
 using NBitcoin.BouncyCastle.Math;
 using NBitcoin.DataEncoders;
 
-namespace Obsidian.OxD
+namespace Obsidian.Networks.ObsidianX
 {
     public class ObsidianXMain : Network
     {
@@ -32,7 +32,7 @@ namespace Obsidian.OxD
             this.MinRelayTxFee = 100;
 
 
-            var consensusFactory = new ObsidianConsensusFactory();
+            var consensusFactory = new ObsidianXConsensusFactory();
             this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 6, 13, 16, 06, 23, DateTimeKind.Utc));
             this.GenesisNonce = 4677480;
             this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
@@ -41,7 +41,7 @@ namespace Obsidian.OxD
             this.Genesis = consensusFactory.CreateObsidianGenesisBlock(this.GenesisTime, this.GenesisNonce, this.GenesisBits, this.GenesisVersion, this.GenesisReward);
 
 
-            var consensusOptions = new ObsidianPoSConsensusOptions(
+            var consensusOptions = new ObsidianXPoSConsensusOptions(
                 maxBlockBaseSize: 1_000_000,
                 maxStandardVersion: 2,
                 maxStandardTxWeight: 100_000,
@@ -50,12 +50,12 @@ namespace Obsidian.OxD
                 witnessScaleFactor: 4
             );
 
-            var bip9Deployments = new ObsidianBIP9DeploymentsArray
+            var bip9Deployments = new ObsidianXBIP9DeploymentsArray
             {
-                [ObsidianBIP9DeploymentsArray.TestDummy] = new BIP9DeploymentsParameters(28, BIP9DeploymentsParameters.AlwaysActive, 999999999),    // BTC main uses bit 28 for CSV
-                [ObsidianBIP9DeploymentsArray.ColdStaking] = new BIP9DeploymentsParameters(27, BIP9DeploymentsParameters.AlwaysActive, 999999999),  // use a high bit for ColdStaking
-                [ObsidianBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters(0, BIP9DeploymentsParameters.AlwaysActive, 999999999),           // BTC main uses bit 0 for CSV
-                [ObsidianBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters(1, BIP9DeploymentsParameters.AlwaysActive, 999999999)         // BTC main uses bit 1 for SegWit
+                [ObsidianXBIP9DeploymentsArray.TestDummy] = new BIP9DeploymentsParameters(28, BIP9DeploymentsParameters.AlwaysActive, 999999999),    // BTC main uses bit 28 for CSV
+                [ObsidianXBIP9DeploymentsArray.ColdStaking] = new BIP9DeploymentsParameters(27, BIP9DeploymentsParameters.AlwaysActive, 999999999),  // use a high bit for ColdStaking
+                [ObsidianXBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters(0, BIP9DeploymentsParameters.AlwaysActive, 999999999),           // BTC main uses bit 0 for CSV
+                [ObsidianXBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters(1, BIP9DeploymentsParameters.AlwaysActive, 999999999)         // BTC main uses bit 1 for SegWit
             };
 
 
@@ -101,7 +101,7 @@ namespace Obsidian.OxD
                 );
 
             this.Consensus.PosEmptyCoinbase = false;
-            this.StandardScriptsRegistry = new ObsidianStandardScriptsRegistry();
+            this.StandardScriptsRegistry = new ObsidianXStandardScriptsRegistry();
 
             this.Base58Prefixes = new byte[12][];
             this.Base58Prefixes[(int)Base58Type.PUBKEY_ADDRESS] = new byte[] { (75) }; // ODN
