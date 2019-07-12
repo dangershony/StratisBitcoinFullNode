@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using NBitcoin;
+using NBitcoin.DataEncoders;
+using Obsidian.Features.X1Wallet;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
@@ -18,14 +21,27 @@ namespace Obsidian.OxD.Temp
         ///  </summary>
         /// <param Command="fullNode"></param>
         /// <param Command="targetAddress"></param>
-        public static void Start(FullNode fullNode, Script targetAddress)
+        public static void Start(FullNode fullNode)
         {
-            Task.Run(() =>
+            Task.Run(async () =>
             {
                 try
                 {
+                    // The X1Wallet feature does not automatically start the wallet, so load one before mining.
+                    // You can create a wallet via the wallet ui or via walletController.CreateKeyWalletAsync()
+                    var walletName = "blacky";
+                    
+                    var walletController = fullNode.NodeService<WalletController>();
+                    await walletController.LoadAsync(walletName);
+
+
+                    var addressesModel = await walletController.GetAllAddressesAsync(walletName);
+                    var bech32 = addressesModel.Addresses.First(a => a.IsChange == false).Address;
+                    var mineToAddress = new BitcoinWitPubKeyAddress(bech32, fullNode.Network);
+
                     var powMining = fullNode.NodeService<IPowMining>();
-                    var reserveScript = new ReserveScript { ReserveFullNodeScript = targetAddress };
+                    var reserveScript = new ReserveScript { ReserveFullNodeScript = mineToAddress.ScriptPubKey };
+                    Console.WriteLine($"Mining to address {bech32} in wallet {walletName} (ScriptPubKey: {mineToAddress.ScriptPubKey})");
                     var blockHashes = powMining.GenerateBlocks(reserveScript, (ulong)50000, uint.MaxValue);
                 }
                 catch (Exception e)

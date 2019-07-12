@@ -17,7 +17,7 @@ namespace Obsidian.Networks.ObsidianX
             if (mine == true)
                 MineGenesisBlock(genesisTime, genesisBits, genesisVersion, genesisReward);
 
-            string pszTimestamp = "这是黑曜石";  // "This is Obsidian" (Chinese)
+            string pszTimestamp = "这是黑曜石和危险的古海神";  // "This is Obsidian" (Chinese)
 
             Transaction txNew = CreateTransaction();
             txNew.Version = 1;
@@ -44,8 +44,8 @@ namespace Obsidian.Networks.ObsidianX
             genesis.UpdateMerkleRoot();
 
             if (mine == false)
-                if (genesis.GetHash() != uint256.Parse("0x00000aac21cdf38f4adad8ffe497c120055d313c6dbffb1172cff0078fb40d47") ||
-                    genesis.Header.HashMerkleRoot != uint256.Parse("0x80ca98cb11b36e1db2d34755bead7852a85661a4411259a26ec498b24a96b011"))
+                if (genesis.GetHash() != uint256.Parse("0x0000001197d319c45afcae16a40ecc591e7eb857e45490065e7269eb4970cae5") ||
+                    genesis.Header.HashMerkleRoot != uint256.Parse("0xbd5c65d7a7f045752112160d37bd62a4a023642b944a19d8e8be104018edad5a"))
                     throw new InvalidOperationException("Invalid network");
             return genesis;
         }

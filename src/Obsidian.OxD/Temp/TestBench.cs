@@ -21,7 +21,7 @@ namespace Obsidian.OxD.Temp
             //CreateWalletAndPrintWords(fullNode);
 
 
-            Miner.Start(fullNode, StaticWallet.PWPKH1Script);
+            Miner.Start(fullNode);
 
             //var account = fullNode.NodeService<IWalletManager>().GetWallet("blackstone").GetAccounts().First();
             //account.CreateAddresses(fullNode.Network, 2);

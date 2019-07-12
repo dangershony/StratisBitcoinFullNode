@@ -80,18 +80,14 @@ namespace Obsidian.OxD
               
 
 #if DEBUG
-                // test hook
-                var fullNode = (FullNode)node;
-                StaticWallet.CreateWallet(fullNode.Network, fullNode);
-
                 _ = Task.Run(async () =>
                   {
                       await Task.Delay(15000);
-                      TestBench.Run((FullNode)node);
+                      TestBench.Run((FullNode)node);  // start mining to the wallet
                   });
 #endif
 
-              
+
                 if (node != null)
                     await node.RunAsync();
             }
