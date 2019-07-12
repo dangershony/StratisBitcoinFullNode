@@ -33,8 +33,8 @@ namespace Obsidian.Networks.ObsidianX
 
 
             var consensusFactory = new ObsidianXConsensusFactory();
-            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 7, 12, 15, 02, 23, DateTimeKind.Utc));
-            this.GenesisNonce = 28275416;
+            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 7, 12, 18, 04, 23, DateTimeKind.Utc));
+            this.GenesisNonce = 30140632;
             this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
@@ -100,7 +100,7 @@ namespace Obsidian.Networks.ObsidianX
                 proofOfStakeReward: Money.Coins(15) 
                 );
 
-            this.Consensus.PosEmptyCoinbase = false;
+            this.Consensus.PosEmptyCoinbase = true;
             this.StandardScriptsRegistry = new ObsidianXStandardScriptsRegistry();
 
             this.Base58Prefixes = new byte[0][];

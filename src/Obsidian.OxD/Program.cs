@@ -83,7 +83,7 @@ namespace Obsidian.OxD
                 _ = Task.Run(async () =>
                   {
                       await Task.Delay(15000);
-                      TestBench.Run((FullNode)node);  // start mining to the wallet
+                      //TestBench.Run((FullNode)node);  // start mining to the wallet
                   });
 #endif
 

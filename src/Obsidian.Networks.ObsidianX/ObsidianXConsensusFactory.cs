@@ -44,8 +44,8 @@ namespace Obsidian.Networks.ObsidianX
             genesis.UpdateMerkleRoot();
 
             if (mine == false)
-                if (genesis.GetHash() != uint256.Parse("0x0000001197d319c45afcae16a40ecc591e7eb857e45490065e7269eb4970cae5") ||
-                    genesis.Header.HashMerkleRoot != uint256.Parse("0xbd5c65d7a7f045752112160d37bd62a4a023642b944a19d8e8be104018edad5a"))
+                if (genesis.GetHash() != uint256.Parse("0x00000604e84044bf137dba3f4aa871440b5b438c8fa7c9eea50964a9926ed420") ||
+                    genesis.Header.HashMerkleRoot != uint256.Parse("0x11c00cb2d53add0ba7df062823e64b1fb1676194f7bbcada58b0873463c1ebef"))
                     throw new InvalidOperationException("Invalid network");
             return genesis;
         }
