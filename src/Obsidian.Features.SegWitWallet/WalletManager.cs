@@ -166,7 +166,7 @@ namespace Obsidian.Features.X1Wallet
             var res = new List<UnspentKeyAddressOutput>();
             foreach (var adr in this.Wallet.Addresses.Values)
             {
-                UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, confirmations);
+                UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, 50);
                 res.AddRange(unspentKeyAddress);
             }
             return res;

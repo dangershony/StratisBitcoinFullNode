@@ -48,7 +48,7 @@ namespace Stratis.Bitcoin.Features.Miner
         private readonly IDateTimeProvider dateTimeProvider;
 
         /// <summary>Default for "-blockmintxfee", which sets the minimum feerate for a transaction in blocks created by mining code.</summary>
-        public const int DefaultBlockMinTxFee = 1000;
+        public const int DefaultBlockMinTxFee = 1;
 
         private uint256 hashPrevBlock;
 
