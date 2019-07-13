@@ -8,9 +8,12 @@
   <ItemGroup>
     <PackageReference Include="Flurl" Version="2.8.2" />
     <PackageReference Include="Flurl.Http" Version="2.4.2" />
+    <PackageReference Include="Microsoft.AspNetCore.App" Version="2.2.5" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Obsidian.Features.SegWitWallet.Web\Obsidian.Features.X1Wallet.SecureApi.csproj" />
+    <ProjectReference Include="..\Obsidian.Features.SegWitWallet\Obsidian.Features.X1Wallet.csproj" />
     <ProjectReference Include="..\Obsidian.Networks.Obsidian\Obsidian.Networks.Obsidian.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.Api\Stratis.Bitcoin.Features.Api.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.Apps\Stratis.Bitcoin.Features.Apps.csproj" />
@@ -22,6 +25,7 @@
     <ProjectReference Include="..\Stratis.Bitcoin.Features.RPC\Stratis.Bitcoin.Features.RPC.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.Wallet\Stratis.Bitcoin.Features.Wallet.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin\Stratis.Bitcoin.csproj" />
+    <ProjectReference Include="..\VisualCrypt.VisualCryptLight\VisualCrypt.VisualCryptLight.csproj" />
   </ItemGroup>
 
   <ItemGroup>

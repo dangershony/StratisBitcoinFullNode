@@ -4,7 +4,10 @@ using System.Reflection;
 using System.Threading.Tasks;
 using NBitcoin;
 using NBitcoin.Protocol;
+using Obsidian.Features.X1Wallet;
+using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Networks.Obsidian;
+using Obsidian.ObsidianD.Api;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
@@ -22,8 +25,6 @@ namespace Obsidian.ObsidianD
 {
     public static class Program
     {
-
-
         public static void Main(string[] args)
         {
             if (args != null && args.Length > 0 && args[0] == "cli")
@@ -52,25 +53,34 @@ namespace Obsidian.ObsidianD
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, StratisNode", args: args)
+                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, Stratis ", args: args)
                 {
                     MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
                 };
 
-                IFullNode node = new FullNodeBuilder()
+                var useHDWallet = false;
+
+                var nodeBuilder = new FullNodeBuilder()
                     .UseNodeSettings(nodeSettings)
                     .UseBlockStore()
                     .UsePosConsensus()
                     .UseMempool()
-                    .UseColdStakingWallet()
                     .AddPowPosMining()
-                    .UseApi()
-                    .UseApps()
-                    .AddRPC()
-                    .Build();
+                    .AddRPC();
+                if (useHDWallet)
+                {
+                    nodeBuilder.UseColdStakingWallet()
+                        .UseApi();
+                }
+                else
+                {
+                    nodeBuilder.UseX1Wallet()
+                        .UseX1WalletApi()
+                        .UseX1WalletApiHost();
+                }
 
-                if (node != null)
-                    await node.RunAsync();
+                var node = nodeBuilder.Build();
+                await node.RunAsync();
             }
             catch (Exception ex)
             {
@@ -81,9 +91,9 @@ namespace Obsidian.ObsidianD
         static string GetName()
         {
 #if DEBUG
-            return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (Debug)";
+            return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (D)";
 #else
-			return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (Release)";
+			return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (R)";
 #endif
         }
     }
