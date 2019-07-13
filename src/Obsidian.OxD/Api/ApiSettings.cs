@@ -14,7 +14,7 @@ namespace Obsidian.OxD.Api
     public class ApiSettings
     {
         /// <summary>The default port used by the API when the node runs on the Stratis network.</summary>
-        public const string DefaultApiHost = "http://localhost";
+        public const string DefaultApiHost = "http://0.0.0.0";
 
         /// <summary>Instance logger.</summary>
         private readonly ILogger logger;
