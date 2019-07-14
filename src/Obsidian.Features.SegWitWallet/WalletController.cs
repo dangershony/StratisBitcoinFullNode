@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Models;
-using Obsidian.Features.X1Wallet.Temp;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Builder.Feature;
@@ -19,6 +18,7 @@ using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Controllers.Models;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Features.Miner.Models;
+using Stratis.Bitcoin.Features.Miner.Staking;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Helpers;
@@ -37,7 +37,6 @@ namespace Obsidian.Features.X1Wallet
 
         readonly WalletManagerWrapper walletManagerWrapper;
         readonly TransactionHandler walletTransactionHandler;
-        readonly IWalletSyncManager walletSyncManager;
         readonly CoinType coinType;
         readonly Network network;
         readonly IConnectionManager connectionManager;
@@ -45,7 +44,6 @@ namespace Obsidian.Features.X1Wallet
         readonly IBroadcasterManager broadcasterManager;
         readonly IDateTimeProvider dateTimeProvider;
 
-        // needed for nodeStatus call
         readonly IFullNode fullNode;
         readonly NodeSettings nodeSettings;
         readonly IChainState chainState;
@@ -53,15 +51,17 @@ namespace Obsidian.Features.X1Wallet
 
         readonly IPosMinting posMinting;
 
-        public WalletManager GetManager(string walletName)
+        string walletName;
+
+
+        WalletContext GetWalletContext()
         {
-            return this.walletManagerWrapper.GetManager(walletName);
+            return this.walletManagerWrapper.GetWalletContext(this.walletName);
         }
 
         public WalletController(
-            IWalletManager walletManagerFacade,
+            WalletManagerWrapper walletManagerFacade,
             IWalletTransactionHandler walletTransactionHandler,
-            IWalletSyncManager walletSyncManager,
             IConnectionManager connectionManager,
             Network network,
             ChainIndexer chainIndexer,
@@ -76,7 +76,6 @@ namespace Obsidian.Features.X1Wallet
         {
             this.walletManagerWrapper = (WalletManagerWrapper)walletManagerFacade;
             this.walletTransactionHandler = (TransactionHandler)walletTransactionHandler;
-            this.walletSyncManager = walletSyncManager;
             this.connectionManager = connectionManager;
             this.network = network;
             this.coinType = (CoinType)network.Consensus.CoinType;
@@ -87,88 +86,75 @@ namespace Obsidian.Features.X1Wallet
             this.nodeSettings = nodeSettings;
             this.chainState = chainState;
             this.networkDifficulty = networkDifficulty;
+
+            // TODO
             this.posMinting = posMinting;
+            var pos = (PosMinting)posMinting;
+            pos.ValidStakingTemplates = new Dictionary<string, ScriptTemplate>();
         }
 
 
-        public async Task<string> CreateAsync(WalletCreationRequest request)
-        {
-            return await ExecuteAsync(request, async () =>
-            {
-                try
-                {
-                    Mnemonic requestMnemonic = string.IsNullOrEmpty(request.Mnemonic) ? null : new Mnemonic(request.Mnemonic);
-                    return default(string);
-                    throw new NotImplementedException();
-                    //Mnemonic mnemonic = this.segWitWalletManager.CreateWallet(request.Password, request.Name, request.Passphrase, mnemonic: requestMnemonic);
-
-                    //// start syncing the wallet from the creation date
-                    //this.walletSyncManager.SyncFromDate(this.dateTimeProvider.GetUtcNow());
-
-                    //return this.Json(mnemonic.ToString());
-                }
-                catch (WalletException e)
-                {
-                    throw new SegWitWalletException(HttpStatusCode.Conflict, "The wallet already exists.", e);
-
-                }
-                catch (NotSupportedException e)
-                {
-                    throw new SegWitWalletException(HttpStatusCode.BadGateway, "Could not create the wallet: " + e.Message, e);
-                }
-            });
-        }
 
 
 
         public async Task<string> SignMessageAsync(SignMessageRequest request)
         {
-            return await ExecuteAsync(request, async () => GetManager(request.WalletName).SignMessage(request.Password, request.WalletName,
-                request.ExternalAddress, request.Message));
+            using (var context = GetWalletContext())
+            {
+                return context.WalletManager.SignMessage(request.Password, request.WalletName,
+                    request.ExternalAddress, request.Message);
+            }
         }
 
+        public void SetWalletName(string target)
+        {
+            if (this.walletName != null)
+                throw new InvalidOperationException("walletName is already set - this controller must be a new instance per request!");
+            this.walletName = target;
+        }
 
         public async Task<bool> VerifyMessageAsync(VerifyRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            using (var context = GetWalletContext())
             {
-                return GetManager(null/*request.WalletName*/).VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
-            });
+                return context.WalletManager.VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
+            }
         }
 
 
-        public async Task LoadAsync(string walletName)
+        public async Task LoadAsync()
         {
-            await ExecuteAsync(walletName, async () =>
+            using (var context = GetWalletContext())
             {
-                this.walletManagerWrapper.LoadWallet(null, walletName);
-            });
+                ; // this will load the wallet or ensure it's loaded, because ExecuteAsync does that.
+            }
         }
 
         public async Task CreateKeyWalletAsync(WalletCreateRequest walletCreateRequest)
         {
-            await ExecuteAsync(walletCreateRequest,
-                async () => await this.walletManagerWrapper.CreateKeyWallet(walletCreateRequest));
+            await this.walletManagerWrapper.CreateKeyWalletAsync(walletCreateRequest);
         }
 
-        public async Task<ImportKeysResponse> ImportKeysAsync(string walletName, ImportKeysRequest importKeysRequest)
+        public async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
         {
-            return await ExecuteAsync(importKeysRequest,
-                 async () => await GetManager(walletName).ImportKeysAsync(importKeysRequest));
-        }
-
-        public async Task<WalletGeneralInfoModel> GetGeneralInfoAsync(string walletName)
-        {
-            return await ExecuteAsync(async () =>
+            using (var context = GetWalletContext())
             {
-                var manager = GetManager(walletName);
-                KeyWallet wallet = manager.Wallet;
+                return await context.WalletManager.ImportKeysAsync(importKeysRequest);
+            }
+
+        }
+
+        public async Task<WalletGeneralInfoModel> GetGeneralInfoAsync()
+        {
+            using (var context = GetWalletContext())
+            {
+                var manager = context.WalletManager;
 
                 var model = new WalletGeneralInfoModel
                 {
                     Network = manager.GetNetwork(),
-                    CreationTime = wallet.CreationTime,
-                    LastBlockSyncedHeight = wallet.LastBlockSyncedHeight,
+                    CreationTime = manager.WalletCreationTime,
+                    LastBlockSyncedHeight = manager.WalletLastBlockSyncedHeight,
                     ConnectedNodes = this.connectionManager.ConnectedPeers.Count(),
                     ChainTip = this.chainIndexer.Tip.Height,
                     IsChainSynced = this.chainIndexer.IsDownloaded(),
@@ -176,23 +162,25 @@ namespace Obsidian.Features.X1Wallet
                 };
 
                 (string folder, IEnumerable<string> fileNameCollection) = this.walletManagerWrapper.GetWalletsFiles();
-                string searchFile = Path.ChangeExtension(walletName, WalletManager.WalletFileExtension);
+                string searchFile = Path.ChangeExtension(this.walletName, WalletManager.WalletFileExtension);
                 string fileName = fileNameCollection.FirstOrDefault(i => i.Equals(searchFile));
                 if (folder != null && fileName != null)
                     model.WalletFilePath = Path.Combine(folder, fileName);
                 return model;
-            });
+            }
+
+
         }
 
 
         public async Task<WalletHistoryModel> GetHistoryAsync(WalletHistoryRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            using (var context = GetWalletContext())
             {
                 var model = new WalletHistoryModel();
 
                 // Get a list of all the transactions found in an account (or in a wallet if no account is specified), with the addresses associated with them.
-                var histories = GetManager(request.WalletName).GetHistory();
+                var histories = context.WalletManager.GetHistory();
 
 
                 var transactionItems = new List<TransactionItemModel>();
@@ -351,15 +339,16 @@ namespace Obsidian.Features.X1Wallet
 
 
                 return model;
-            });
+            }
+
         }
 
 
         public async Task<Balance> GetBalanceAsync(string walletName)
         {
-            return await ExecuteAsync(async () =>
+            using (var context = GetWalletContext())
             {
-                var balances = GetManager(walletName).GetBalances();
+                var balances = context.WalletManager.GetBalances();
 
                 var walletBalance = new Balance { AmountConfirmed = Money.Zero, AmountUnconfirmed = Money.Zero, SpendableAmount = Money.Zero };
 
@@ -370,15 +359,16 @@ namespace Obsidian.Features.X1Wallet
                     walletBalance.SpendableAmount += balance.SpendableAmount;
                 }
                 return walletBalance;
-            });
+
+            }
         }
 
 
         public async Task<IActionResult> GetReceivedByAddressAsync(ReceivedByAddressRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            using (var context = GetWalletContext())
             {
-                AddressBalance balanceResult = this.walletManagerWrapper.GetAddressBalance(request.Address);
+                AddressBalance balanceResult = context.WalletManager.GetAddressBalance(request.Address);
                 return this.Json(new AddressBalanceModel
                 {
                     CoinType = this.coinType,
@@ -386,29 +376,26 @@ namespace Obsidian.Features.X1Wallet
                     AmountConfirmed = balanceResult.AmountConfirmed,
                     AmountUnconfirmed = balanceResult.AmountUnconfirmed
                 });
-            });
+            }
         }
 
 
         public async Task<MaxSpendableAmountModel> GetMaximumSpendableBalanceAsync(WalletMaximumBalanceRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            (Money maximumSpendableAmount, Money Fee) transactionResult = this.walletTransactionHandler.GetMaximumSpendableAmount(new WalletAccountReference(this.walletName, this.walletName), FeeParser.Parse(request.FeeType), request.AllowUnconfirmed);
+            return new MaxSpendableAmountModel
             {
-                (Money maximumSpendableAmount, Money Fee) transactionResult = this.walletTransactionHandler.GetMaximumSpendableAmount(new WalletAccountReference(request.WalletName, request.AccountName), FeeParser.Parse(request.FeeType), request.AllowUnconfirmed);
-                return new MaxSpendableAmountModel
-                {
-                    MaxSpendableAmount = transactionResult.maximumSpendableAmount,
-                    Fee = transactionResult.Fee
-                };
-            });
+                MaxSpendableAmount = transactionResult.maximumSpendableAmount,
+                Fee = transactionResult.Fee
+            };
         }
 
 
         public async Task<SpendableTransactionsModel> GetSpendableTransactionsAsync(SpendableTransactionsRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            using (var context = GetWalletContext())
             {
-                var spendableTransactions = GetManager(request.WalletName).GetSpendableTransactionsInAccount(request.MinConfirmations);
+                var spendableTransactions = context.WalletManager.GetSpendableTransactionsInAccount(request.MinConfirmations);
 
                 return new SpendableTransactionsModel
                 {
@@ -423,94 +410,85 @@ namespace Obsidian.Features.X1Wallet
                         Confirmations = st.Confirmations
                     }).ToList()
                 };
-            });
+            }
+
         }
 
 
-        public async Task<Money> GetTransactionFeeEstimateAsync(string walletName, TxFeeEstimateRequest request)
+        public async Task<Money> GetTransactionFeeEstimateAsync(TxFeeEstimateRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            var recipients = new List<Recipient>();
+            foreach (RecipientModel recipientModel in request.Recipients)
             {
-                GetManager(walletName); // not needed, should already be checked, but should not fail
-
-                var recipients = new List<Recipient>();
-                foreach (RecipientModel recipientModel in request.Recipients)
+                recipients.Add(new Recipient
                 {
-                    recipients.Add(new Recipient
-                    {
-                        ScriptPubKey = BitcoinAddress.Create(recipientModel.DestinationAddress, this.network).ScriptPubKey,
-                        Amount = recipientModel.Amount
-                    });
-                }
+                    ScriptPubKey = BitcoinAddress.Create(recipientModel.DestinationAddress, this.network).ScriptPubKey,
+                    Amount = recipientModel.Amount
+                });
+            }
 
-                var context = new TransactionBuildContext(this.network)
-                {
-                    AccountReference = new WalletAccountReference(walletName, walletName),
-                    FeeType = FeeParser.Parse(request.FeeType),
-                    MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
-                    Recipients = recipients,
-                    OpReturnData = request.OpReturnData,
-                    OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
-                    Sign = false
-                };
-                Money model = this.walletTransactionHandler.EstimateFee(context);
-                return model;
-            });
-        }
-
-
-        public async Task<WalletBuildTransactionModel> BuildTransactionAsync(string walletName, BuildTransactionRequest request)
-        {
-            return await ExecuteAsync(request, async () =>
+            var context = new TransactionBuildContext(this.network)
             {
-
-
-                var recipients = new List<Recipient>();
-                foreach (RecipientModel recipientModel in request.Recipients)
-                {
-                    recipients.Add(new Recipient
-                    {
-                        ScriptPubKey = BitcoinAddress.Create(recipientModel.DestinationAddress, this.network).ScriptPubKey,
-                        Amount = recipientModel.Amount
-                    });
-                }
-
-                var context = new TransactionBuildContext(this.network)
-                {
-                    AccountReference = new WalletAccountReference(walletName, walletName),
-                    TransactionFee = string.IsNullOrEmpty(request.FeeAmount) ? null : Money.Parse(request.FeeAmount),
-                    MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
-                    Shuffle = request.ShuffleOutputs ?? true, // We shuffle transaction outputs by default as it's better for anonymity.
-                    OpReturnData = request.OpReturnData,
-                    OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
-                    WalletPassword = request.Password,
-                    SelectedInputs = request.Outpoints?.Select(u => new OutPoint(uint256.Parse(u.TransactionId), u.Index)).ToList(),
-                    AllowOtherInputs = false,
-                    Recipients = recipients
-                };
-
-                if (!string.IsNullOrEmpty(request.FeeType))
-                {
-                    context.FeeType = FeeParser.Parse(request.FeeType);
-                }
-
-                Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
-
-                var model = new WalletBuildTransactionModel
-                {
-                    Hex = transactionResult.ToHex(),
-                    Fee = context.TransactionFee,
-                    TransactionId = transactionResult.GetHash()
-                };
-
-                return model;
-            });
+                AccountReference = new WalletAccountReference(this.walletName, this.walletName),
+                FeeType = FeeParser.Parse(request.FeeType),
+                MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
+                Recipients = recipients,
+                OpReturnData = request.OpReturnData,
+                OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
+                Sign = false
+            };
+            Money model = this.walletTransactionHandler.EstimateFee(context);
+            return model;
         }
 
 
-        public async Task<WalletSendTransactionModel> SendTransactionAsync(string walletName, SendTransactionRequest request)
+        public async Task<WalletBuildTransactionModel> BuildTransactionAsync(BuildTransactionRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            var recipients = new List<Recipient>();
+            foreach (RecipientModel recipientModel in request.Recipients)
+            {
+                recipients.Add(new Recipient
+                {
+                    ScriptPubKey = BitcoinAddress.Create(recipientModel.DestinationAddress, this.network).ScriptPubKey,
+                    Amount = recipientModel.Amount
+                });
+            }
+
+            var context = new TransactionBuildContext(this.network)
+            {
+                AccountReference = new WalletAccountReference(this.walletName, this.walletName),
+                TransactionFee = string.IsNullOrEmpty(request.FeeAmount) ? null : Money.Parse(request.FeeAmount),
+                MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
+                Shuffle = request.ShuffleOutputs ?? true, // We shuffle transaction outputs by default as it's better for anonymity.
+                OpReturnData = request.OpReturnData,
+                OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
+                WalletPassword = request.Password,
+                SelectedInputs = request.Outpoints?.Select(u => new OutPoint(uint256.Parse(u.TransactionId), u.Index)).ToList(),
+                AllowOtherInputs = false,
+                Recipients = recipients
+            };
+
+            if (!string.IsNullOrEmpty(request.FeeType))
+            {
+                context.FeeType = FeeParser.Parse(request.FeeType);
+            }
+
+            Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
+
+            var model = new WalletBuildTransactionModel
+            {
+                Hex = transactionResult.ToHex(),
+                Fee = context.TransactionFee,
+                TransactionId = transactionResult.GetHash()
+            };
+
+            return model;
+        }
+
+
+        public async Task<WalletSendTransactionModel> SendTransactionAsync(SendTransactionRequest request)
+        {
+            using (var context = GetWalletContext())
             {
                 if (!this.connectionManager.ConnectedPeers.Any())
                 {
@@ -546,99 +524,83 @@ namespace Obsidian.Features.X1Wallet
                 }
 
                 return model;
-            });
+            }
+
         }
 
 
         public async Task<WalletFileModel> ListWalletsFilesAsync()
         {
-            return await ExecuteAsync("", async () =>
+            (string folderPath, IEnumerable<string> filesNames) result = this.walletManagerWrapper.GetWalletsFiles();
+            var model = new WalletFileModel
             {
-                (string folderPath, IEnumerable<string> filesNames) result = this.walletManagerWrapper.GetWalletsFiles();
-                var model = new WalletFileModel
-                {
-                    WalletsPath = result.folderPath,
-                    WalletsFiles = result.filesNames
-                };
-                return model;
-            });
+                WalletsPath = result.folderPath,
+                WalletsFiles = result.filesNames
+            };
+            return model;
         }
 
 
-        public async Task<IEnumerable<string>> ListAccountsAsync(ListAccountsModel request)
-        {
-            return await ExecuteAsync(request, async () =>
-            {
-                IEnumerable<HdAccount> result = this.walletManagerWrapper.GetAccounts(request.WalletName);
-                IEnumerable<string> model = result.Select(a => a.Name);
-                return model;
-            });
-        }
 
 
         public async Task<string> GetUnusedAddressAsync(GetUnusedAddressModel request)
         {
-            return await ExecuteAsync(request, async () =>
+            using (var context = GetWalletContext())
             {
                 var address = "";
-                var result = GetManager(request.WalletName).GetUnusedAddress();
+                var result = context.WalletManager.GetUnusedAddress();
 
                 if (result != null)
                     address = result.Bech32;
 
                 return address;
-            });
+            }
+            
         }
 
 
         public async Task<string[]> GetUnusedAddresses(GetUnusedAddressesModel request)
         {
-            return await ExecuteAsync(request, async () =>
+            using (var context = GetWalletContext())
             {
                 int count = int.Parse(request.Count);
-                string[] addresses = GetManager(request.WalletName).GetUnusedAddresses(count).Select(x => x.Bech32).ToArray();
+                string[] addresses = context.WalletManager.GetUnusedAddresses(count).Select(x => x.Bech32).ToArray();
                 return addresses;
-            });
+            }
+           
         }
 
 
-        public async Task<AddressesModel> GetAllAddressesAsync(string walletName)
+        public async Task<KeyAddressesModel> GetAllAddressesAsync(string walletName)
         {
-            return await ExecuteAsync(async () =>
+            using (var context = GetWalletContext())
             {
-                var model = new AddressesModel
-                {
-                    Addresses = GetManager(walletName).Wallet.Addresses.Values.Select(address => new AddressModel
-                    {
-                        Address = address.Bech32,
-                        IsUsed = address.Transactions.Any(),
-                        IsChange = address.IsChange
-                    }).ToArray()
-                };
-
+                var model = context.WalletManager.GetAllAddresses();
+                
                 return model;
-            });
+            }
         }
 
 
         public async Task<IEnumerable<RemovedTransactionModel>> RemoveTransactionsAsync(RemoveTransactionsModel request)
         {
-            return await ExecuteAsync(request, async () =>
+            using (var context = GetWalletContext())
             {
+                var manager = context.WalletManager;
                 HashSet<(uint256 transactionId, DateTimeOffset creationTime)> result;
 
                 if (request.DeleteAll)
                 {
-                    result = this.walletManagerWrapper.RemoveAllTransactions(request.WalletName);
+                    result = manager.RemoveAllTransactions(request.WalletName);
                 }
                 else if (request.FromDate != default(DateTime))
                 {
-                    result = this.walletManagerWrapper.RemoveTransactionsFromDate(request.WalletName, request.FromDate);
+                    result = manager.RemoveTransactionsFromDate(request.WalletName, request.FromDate);
                 }
                 else if (request.TransactionsIds != null)
                 {
                     IEnumerable<uint256> ids = request.TransactionsIds.Select(uint256.Parse);
-                    result = this.walletManagerWrapper.RemoveTransactionsByIds(request.WalletName, ids);
+                    result = manager.RemoveTransactionsByIds(ids);
                 }
                 else
                 {
@@ -651,14 +613,8 @@ namespace Obsidian.Features.X1Wallet
                     // From the list of removed transactions, check which one is the oldest and retrieve the block right before that time.
                     DateTimeOffset earliestDate = result.Min(r => r.creationTime);
                     ChainedHeader chainedHeader = this.chainIndexer.GetHeader(this.chainIndexer.GetHeightAtTime(earliestDate.DateTime));
-
-                    // Update the wallet and save it to the file system.
-                    Wallet wallet = this.walletManagerWrapper.GetWallet(request.WalletName);
-                    wallet.SetLastBlockDetails(chainedHeader);
-                    this.walletManagerWrapper.SaveWallet(wallet);
-
-                    // Start the syncing process from the block before the earliest transaction was seen.
-                    this.walletSyncManager.SyncFromHeight(chainedHeader.Height - 1);
+                   
+                    await this.walletManagerWrapper.WalletSyncManagerSyncFromHeightAsync(chainedHeader.Height - 1);
                 }
 
                 IEnumerable<RemovedTransactionModel> model = result.Select(r => new RemovedTransactionModel
@@ -668,14 +624,12 @@ namespace Obsidian.Features.X1Wallet
                 });
 
                 return model;
-            });
+            }
         }
 
 
         public async Task SyncAsync(HashModel request)
         {
-            await ExecuteAsync(request, async () =>
-            {
                 ChainedHeader block = this.chainIndexer.GetHeader(uint256.Parse(request.Hash));
 
                 if (block == null)
@@ -683,24 +637,20 @@ namespace Obsidian.Features.X1Wallet
                     throw new SegWitWalletException(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", new Exception());
                 }
 
-                this.walletSyncManager.SyncFromHeight(block.Height);
-            });
+                await this.walletManagerWrapper.WalletSyncManagerSyncFromHeightAsync(block.Height);
         }
 
 
         public async Task SyncFromDate(WalletSyncFromDateRequest request)
         {
-            await ExecuteAsync(request, async () =>
-            {
-                this.walletSyncManager.SyncFromDate(request.Date);
-            });
+                await this.walletManagerWrapper.WalletSyncManagerSyncFromDateAsync(request.Date);
         }
 
-        public async Task<WalletSendTransactionModel> SplitCoinsAsync(string walletName, SplitCoinsRequest request)
+        public async Task<WalletSendTransactionModel> SplitCoinsAsync(SplitCoinsRequest request)
         {
-            return await ExecuteAsync(request, async () =>
+            using (var context = GetWalletContext())
             {
-                KeyAddress address = GetManager(request.WalletName).GetUnusedAddress();
+                KeyAddress address = context.WalletManager.GetUnusedAddress();
 
                 Money totalAmount = request.TotalAmountToSplit;
                 Money singleUtxoAmount = totalAmount / request.UtxosCount;
@@ -709,7 +659,7 @@ namespace Obsidian.Features.X1Wallet
                 for (int i = 0; i < request.UtxosCount; i++)
                     recipients.Add(new Recipient { ScriptPubKey = address.GetPaymentScript(), Amount = singleUtxoAmount });
 
-                var context = new TransactionBuildContext(this.network)
+                var transactionBuildContext = new TransactionBuildContext(this.network)
                 {
                     AccountReference = new WalletAccountReference { WalletName = request.WalletName, AccountName = request.AccountName },
                     MinConfirmations = 1,
@@ -719,11 +669,11 @@ namespace Obsidian.Features.X1Wallet
                     Time = (uint)this.dateTimeProvider.GetAdjustedTimeAsUnixTimestamp()
                 };
 
-                Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
+                Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(transactionBuildContext);
 
-                WalletSendTransactionModel model = await SendTransactionAsync(walletName, new SendTransactionRequest(transactionResult.ToHex()));
+                WalletSendTransactionModel model = await SendTransactionAsync(new SendTransactionRequest(transactionResult.ToHex()));
                 return model;
-            });
+            }
         }
 
 
@@ -749,8 +699,6 @@ namespace Obsidian.Features.X1Wallet
             var target = this.networkDifficulty.GetNetworkDifficulty();
             if (target != null)
                 model.Difficulty = target.Difficulty;
-
-
 
             // Add the list of features that are enabled.
             foreach (IFullNodeFeature feature in this.fullNode.Services.Features)
@@ -802,60 +750,5 @@ namespace Obsidian.Features.X1Wallet
             GetStakingInfoModel model = this.posMinting != null ? this.posMinting.GetGetStakingInfoModel() : new GetStakingInfoModel();
             return model;
         }
-
-        void SyncFromBestHeightForRecoveredWallets(DateTime walletCreationDate)
-        {
-            // After recovery the wallet needs to be synced.
-            // We only sync if the syncing process needs to go back.
-            int blockHeightToSyncFrom = this.chainIndexer.GetHeightAtTime(walletCreationDate);
-            int currentSyncingHeight = this.walletSyncManager.WalletTip.Height;
-
-            if (blockHeightToSyncFrom < currentSyncingHeight)
-            {
-                this.walletSyncManager.SyncFromHeight(blockHeightToSyncFrom);
-            }
-        }
-        async Task<TResult> ExecuteAsync<TResult>(Func<Task<TResult>> func)
-        {
-            try
-            {
-
-                await WalletManager.WalletSemaphore.WaitAsync();
-                return await func();
-            }
-            finally
-            {
-                WalletManager.WalletSemaphore.Release();
-            }
-        }
-        async Task<TResult> ExecuteAsync<T, TResult>(T request, Func<Task<TResult>> func) where T : class
-        {
-            try
-            {
-
-                await WalletManager.WalletSemaphore.WaitAsync();
-                return await func();
-            }
-            finally
-            {
-                WalletManager.WalletSemaphore.Release();
-            }
-        }
-
-        async Task ExecuteAsync<T>(T request, Func<Task> func) where T : class
-        {
-            try
-            {
-
-                await WalletManager.WalletSemaphore.WaitAsync();
-                await func();
-            }
-            finally
-            {
-                WalletManager.WalletSemaphore.Release();
-            }
-        }
-
-
     }
 }

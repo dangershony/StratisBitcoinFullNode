@@ -65,9 +65,9 @@ namespace Obsidian.ObsidianD
                     .UseNodeSettings(nodeSettings)
                     .UseBlockStore()
                     .UsePosConsensus()
-                    .UseMempool()
-                    .AddPowPosMining()
-                    .AddRPC();
+                    .UseMempool();
+                    //.AddPowPosMining();
+                    //.AddRPC();
                 if (useHDWallet)
                 {
                     nodeBuilder.UseColdStakingWallet()

@@ -228,7 +228,7 @@ namespace Stratis.Bitcoin.Features.Miner.Staking
             IStakeValidator stakeValidator,
             MempoolSchedulerLock mempoolLock,
             ITxMempool mempool,
-            IWalletManager walletManager,
+            //IWalletManager walletManager,
             IAsyncProvider asyncProvider,
             ITimeSyncBehaviorState timeSyncBehaviorState,
             ILoggerFactory loggerFactory,
@@ -247,7 +247,7 @@ namespace Stratis.Bitcoin.Features.Miner.Staking
             this.mempoolLock = mempoolLock;
             this.mempool = mempool;
             this.asyncProvider = asyncProvider;
-            this.walletManager = walletManager;
+            //this.walletManager = walletManager;
             this.timeSyncBehaviorState = timeSyncBehaviorState;
             this.loggerFactory = loggerFactory;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
@@ -264,7 +264,7 @@ namespace Stratis.Bitcoin.Features.Miner.Staking
             this.CoinstakeSplitEnabled = minerSettings.EnableCoinStakeSplitting;
             this.MinimumStakingCoinValue = minerSettings.MinimumStakingCoinValue;
             this.MinimumSplitCoinValue = minerSettings.MinimumSplitCoinValue;
-            this.ValidStakingTemplates = walletManager.GetValidStakingTemplates();
+            //this.ValidStakingTemplates = walletManager.GetValidStakingTemplates();
         }
 
         /// <inheritdoc/>

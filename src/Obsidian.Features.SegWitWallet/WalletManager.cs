@@ -16,6 +16,7 @@ using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
+using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
@@ -27,7 +28,7 @@ namespace Obsidian.Features.X1Wallet
         public const string WalletFileExtension = ".keybag.json";
         const string DownloadChainLoop = nameof(DownloadChainLoop);
 
-        public static readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
+        public readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
 
         readonly Network network;
         readonly IScriptAddressReader scriptAddressReader;
@@ -61,7 +62,51 @@ namespace Obsidian.Features.X1Wallet
         }
 
         public string CurrentWalletFilePath { get; }
-        public KeyWallet Wallet { get; }
+        KeyWallet Wallet { get; }
+        public string WalletName
+        {
+            get
+            {
+                Guard.NotNull(this.Wallet, nameof(this.Wallet));
+                return this.Wallet?.Name;
+            }
+        }
+
+        public int WalletLastBlockSyncedHeight
+        {
+            get
+            {
+                Guard.NotNull(this.Wallet, nameof(this.Wallet));
+                return this.Wallet.LastBlockSyncedHeight;
+            }
+        }
+
+        public uint256 WalletLastBlockSyncedHash
+        {
+            get
+            {
+                Guard.NotNull(this.Wallet, nameof(this.Wallet));
+                return this.Wallet.LastBlockSyncedHash;
+            }
+        }
+
+        public ICollection<uint256> WalletBlockLocator
+        {
+            get
+            {
+                Guard.NotNull(this.Wallet, nameof(this.Wallet));
+                return this.Wallet.BlockLocator;
+            }
+        }
+
+        public DateTimeOffset WalletCreationTime
+        {
+            get
+            {
+                Guard.NotNull(this.Wallet, nameof(this.Wallet));
+                return this.Wallet.CreationTime;
+            }
+        }
 
         IAsyncLoop asyncLoop;
 
@@ -176,7 +221,7 @@ namespace Obsidian.Features.X1Wallet
             var test = VCL.DecryptWithPassphrase(importKeysRequest.WalletPassphrase, firstExistingEncryptedKey);
             if (test == null)
                 throw new SegWitWalletException(System.Net.HttpStatusCode.Unauthorized,
-                    "Your passphrase is incorrect.",null);
+                    "Your passphrase is incorrect.", null);
 
             var importedAddresses = new List<string>();
             foreach (var candidate in possibleKeys)
@@ -199,12 +244,12 @@ namespace Obsidian.Features.X1Wallet
                 {
 
                 }
-               
+
             }
 
             SaveWallet();
             var response = new ImportKeysResponse
-                {ImportedAddresses = possibleKeys, Message = $"Imported {importedAddresses.Count} addresses."};
+            { ImportedAddresses = possibleKeys, Message = $"Imported {importedAddresses.Count} addresses." };
             return response;
         }
 
@@ -322,19 +367,19 @@ namespace Obsidian.Features.X1Wallet
             {
                 foreach (var t in a.Transactions)
                 {
-                    var h = new FlatAddressHistory {Address = a, Transaction = t};
+                    var h = new FlatAddressHistory { Address = a, Transaction = t };
                     histories.Add(h);
                 }
             }
-               
+
 
             // Get transactions contained in the account.
-           var check = this.Wallet.Addresses.Values
-                .Where(a => a.Transactions.Any())
-                .SelectMany(s => s.Transactions.Select(t => new FlatAddressHistory { Address = s, Transaction = t })).ToArray();
-           Debug.Assert(histories.Count == check.Length);
+            var check = this.Wallet.Addresses.Values
+                 .Where(a => a.Transactions.Any())
+                 .SelectMany(s => s.Transactions.Select(t => new FlatAddressHistory { Address = s, Transaction = t })).ToArray();
+            Debug.Assert(histories.Count == check.Length);
 
-           return histories;
+            return histories;
         }
 
         internal Script GetUnusedChangeAddress()
@@ -430,7 +475,7 @@ namespace Obsidian.Features.X1Wallet
         public void RemoveBlocks(ChainedHeader chainedHeader)
         {
 
-            foreach (var address in  this.Wallet.Addresses.Values)
+            foreach (var address in this.Wallet.Addresses.Values)
             {
 
                 for (var j = 0; j < address.Transactions.Count; j++)
@@ -610,6 +655,20 @@ namespace Obsidian.Features.X1Wallet
             }
 
             return foundSendingTrx || foundReceivingTrx;
+        }
+
+        internal KeyAddressesModel GetAllAddresses()
+        {
+            return new KeyAddressesModel
+            {
+                Addresses = this.Wallet.Addresses.Values.Select(address => new KeyAddressModel
+                {
+                    Address = address.Bech32,
+                    IsUsed = address.Transactions.Any(),
+                    IsChange = address.IsChange,
+                    EncryptedPrivateKey = address.EncryptedPrivateKey
+                }).ToArray()
+            };
         }
 
         KeyAddress FindAddressByScriptPubKey(Script scriptPubKey)
@@ -867,7 +926,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        
+
 
         public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
         {

@@ -25,7 +25,7 @@ namespace Obsidian.Features.X1Wallet
     public class TransactionHandler : IWalletTransactionHandler
     {
         private readonly ILogger logger;
-        
+
         private readonly Network network;
 
         protected readonly StandardTransactionPolicy TransactionPolicy;
@@ -36,7 +36,7 @@ namespace Obsidian.Features.X1Wallet
 
         public TransactionHandler(
             ILoggerFactory loggerFactory,
-            IWalletManager walletManager,
+            WalletManagerWrapper walletManager,
             IWalletFeePolicy walletFeePolicy,
             Network network,
             StandardTransactionPolicy transactionPolicy)
@@ -45,14 +45,11 @@ namespace Obsidian.Features.X1Wallet
             this.walletManagerWrapper = (WalletManagerWrapper)walletManager;
             this.walletFeePolicy = walletFeePolicy;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
-            
+
             this.TransactionPolicy = transactionPolicy;
         }
 
-        WalletManager GetManager(string walletName)
-        {
-            return this.walletManagerWrapper.GetManager(walletName);
-        }
+
 
         /// <inheritdoc />
         public Transaction BuildTransaction(TransactionBuildContext context)
@@ -129,8 +126,13 @@ namespace Obsidian.Features.X1Wallet
             Guard.NotNull(accountReference, nameof(accountReference));
             Guard.NotEmpty(accountReference.WalletName, nameof(accountReference.WalletName));
 
-            // Get the total value of spendable coins in the account.
-            long maxSpendableAmount = GetManager(accountReference.WalletName).GetSpendableTransactionsInAccount(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
+            long maxSpendableAmount;
+            using (var context = this.walletManagerWrapper.GetWalletContext(accountReference.WalletName))
+            {
+                // Get the total value of spendable coins in the account.
+                maxSpendableAmount = context.WalletManager.GetSpendableTransactionsInAccount(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
+            }
+
 
             // Return 0 if the user has nothing to spend.
             if (maxSpendableAmount == Money.Zero)
@@ -214,13 +216,19 @@ namespace Obsidian.Features.X1Wallet
             if (!context.Sign)
                 return;
 
-            // TODO: only decrypt the keys needed
-            var keys = GetManager(context.AccountReference.WalletName).Wallet.Addresses.Values
-                .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.EncryptedPrivateKey))
-                .Select(privateKeyBytes => new Key(privateKeyBytes))
-                .ToArray();
+            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            {
+                var addresses = context2.WalletManager.GetAllAddresses().Addresses;
+                // TODO: only decrypt the keys needed
+                var keys = addresses
+                    .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.EncryptedPrivateKey))
+                    .Select(privateKeyBytes => new Key(privateKeyBytes))
+                    .ToArray();
 
-            context.TransactionBuilder.AddKeys(keys);
+                context.TransactionBuilder.AddKeys(keys);
+            }
+
+
 
             //Wallet wallet = this.walletManager.GetWalletByName(context.AccountReference.WalletName);
             //ExtKey seedExtKey = this.walletManager.GetExtKey(context.AccountReference, context.WalletPassword, context.CacheSecret);
@@ -248,9 +256,13 @@ namespace Obsidian.Features.X1Wallet
         /// <param name="context">The context associated with the current transaction being built.</param>
         protected void FindChangeAddress(TransactionBuildContext context)
         {
-            // Get an address to send the change to.
-            var unusedChangeAddressScriptPubKey = GetManager(context.AccountReference.WalletName).GetUnusedChangeAddress();
-            context.TransactionBuilder.SetChange(unusedChangeAddressScriptPubKey);
+            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            {
+                // Get an address to send the change to.
+                var unusedChangeAddressScriptPubKey = context2.WalletManager.GetUnusedChangeAddress();
+                context.TransactionBuilder.SetChange(unusedChangeAddressScriptPubKey);
+            }
+           
             //context.ChangeAddress =
             //if (context.UseSegwitChangeAddress)
             //{
@@ -269,7 +281,12 @@ namespace Obsidian.Features.X1Wallet
         /// <param name="context">The context associated with the current transaction being built.</param>
         protected void AddCoins(TransactionBuildContext context)
         {
-            List<UnspentKeyAddressOutput> unspentOutputs = GetManager(context.AccountReference.WalletName).GetSpendableTransactionsInAccount(context.MinConfirmations).ToList();
+            var unspentOutputs = new List<UnspentKeyAddressOutput>();
+            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            {
+                unspentOutputs.AddRange(context2.WalletManager.GetSpendableTransactionsInAccount(context.MinConfirmations));
+            }
+               
             if (unspentOutputs.Count == 0)
             {
                 throw new WalletException("No spendable transactions found.");
@@ -277,12 +294,14 @@ namespace Obsidian.Features.X1Wallet
 
             context.UnspentOutputs = new List<UnspentOutputReference>();  // let's see if we can get away with a local var instead
 
-            foreach(var uo in unspentOutputs)
+            foreach (var uo in unspentOutputs)
             {
                 var ur = new UnspentOutputReference
                 {
-                    Transaction = uo.Transaction, Confirmations = uo.Confirmations, Account = new HdAccount(),
-                    Address = new HdAddress {ScriptPubKey = uo.Address.ScriptPubKey, Address = uo.Address.Bech32}
+                    Transaction = uo.Transaction,
+                    Confirmations = uo.Confirmations,
+                    Account = new HdAccount(),
+                    Address = new HdAddress { ScriptPubKey = uo.Address.ScriptPubKey, Address = uo.Address.Bech32 }
                 };
                 context.UnspentOutputs.Add(ur);
             }
@@ -419,5 +438,5 @@ namespace Obsidian.Features.X1Wallet
         }
     }
 
-    
+
 }

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
+using Obsidian.Features.X1Wallet;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Utilities;
@@ -69,9 +70,11 @@ namespace Obsidian.ObsidianD.Api
                     {
                         return;
                     }
+                    //collection.AddTransient(typeof(WalletController));
+                    //collection.AddSingleton(typeof(WalletManagerWrapper));
+                    //copies all the services defined for the full node to the Api.
 
-                    // copies all the services defined for the full node to the Api.
-                    // also copies over singleton instances already defined
+                    //also copies over singleton instances already defined
                     foreach (ServiceDescriptor service in services)
                     {
                         // open types can't be singletons
@@ -124,6 +127,6 @@ namespace Obsidian.ObsidianD.Api
             ApiSettings.BuildDefaultConfigurationFile(builder, network);
         }
 
-      
+
     }
 }
