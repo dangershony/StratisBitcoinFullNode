@@ -35,11 +35,11 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                 {
 
                     case "createWallet":
-                    {
-                        WalletCreateRequest walletCreateRequest = Deserialize<WalletCreateRequest>(decryptedRequest.Payload);
-                        await this.walletController.CreateKeyWalletAsync(walletCreateRequest);
-                        return CreateOk(request);
-                    }
+                        {
+                            WalletCreateRequest walletCreateRequest = Deserialize<WalletCreateRequest>(decryptedRequest.Payload);
+                            await this.walletController.CreateKeyWalletAsync(walletCreateRequest);
+                            return CreateOk(request);
+                        }
                     case "getWalletFiles":
                         {
                             WalletFileModel walletFileModel = await this.walletController.ListWalletsFilesAsync();
@@ -111,6 +111,13 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             var walletSyncFromDateRequest = Deserialize<WalletSyncFromDateRequest>(decryptedRequest.Payload);
                             await this.walletController.SyncFromDate(walletSyncFromDateRequest);
                             return CreateOk(request);
+                        }
+
+                    case "importKeys":
+                        {
+                            var importKeysRequest = Deserialize<ImportKeysRequest>(decryptedRequest.Payload);
+                            var importKeysResponse = await this.walletController.ImportKeysAsync(decryptedRequest.Target, importKeysRequest);
+                            return CreateOk(importKeysResponse, request);
                         }
                     //case "splitCoins":
                     //case "syncFromHash":

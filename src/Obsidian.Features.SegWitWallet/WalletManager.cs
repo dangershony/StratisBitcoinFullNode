@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
@@ -160,6 +161,52 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
+        internal async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
+        {
+            var delimiters = new HashSet<char>();
+            foreach (var c in importKeysRequest.Keys.Trim().ToCharArray())
+            {
+                if (char.IsWhiteSpace(c))
+                    delimiters.Add(c);
+            }
+
+            var items = importKeysRequest.Keys.Split(delimiters.ToArray());
+            var possibleKeys = items.Where(i => i.Length == 52).Distinct().ToList();
+            var firstExistingEncryptedKey = Wallet.Addresses.Values.First().EncryptedPrivateKey;
+            var test = VCL.DecryptWithPassphrase(importKeysRequest.WalletPassphrase, firstExistingEncryptedKey);
+            if (test == null)
+                throw new SegWitWalletException(System.Net.HttpStatusCode.Unauthorized,
+                    "Your passphrase is incorrect.",null);
+
+            var importedAddresses = new List<string>();
+            foreach (var candidate in possibleKeys)
+            {
+                try
+                {
+                    var secret = new BitcoinSecret(candidate, this.network);
+                    var privateKey = secret.PrivateKey.ToBytes();
+                    var address = KeyAddress.CreateWithPrivateKey(privateKey, importKeysRequest.WalletPassphrase,
+                        VCL.EncryptWithPassphrase, this.network.Consensus.CoinType, 0,
+                        this.network.CoinTicker.ToLowerInvariant());
+                    address.IsChange = false;
+                    address.Label = secret.GetAddress().ToString();
+                    if (!importKeysRequest.Keys.Contains(address.Label))
+                        throw new InvalidOperationException();
+                    this.Wallet.Addresses.Add(address.ScriptPubKey.ToHex(), address);
+                    importedAddresses.Add(address.Label);
+                }
+                catch (Exception e)
+                {
+
+                }
+               
+            }
+
+            SaveWallet();
+            var response = new ImportKeysResponse
+                {ImportedAddresses = possibleKeys, Message = $"Imported {importedAddresses.Count} addresses."};
+            return response;
+        }
 
         public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(int confirmations = 50)
         {

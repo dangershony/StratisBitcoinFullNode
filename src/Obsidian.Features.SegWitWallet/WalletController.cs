@@ -151,7 +151,11 @@ namespace Obsidian.Features.X1Wallet
                 async () => await this.walletManagerWrapper.CreateKeyWallet(walletCreateRequest));
         }
 
-
+        public async Task<ImportKeysResponse> ImportKeysAsync(string walletName, ImportKeysRequest importKeysRequest)
+        {
+            return await ExecuteAsync(importKeysRequest,
+                 async () => await GetManager(walletName).ImportKeysAsync(importKeysRequest));
+        }
 
         public async Task<WalletGeneralInfoModel> GetGeneralInfoAsync(string walletName)
         {
@@ -441,7 +445,7 @@ namespace Obsidian.Features.X1Wallet
 
                 var context = new TransactionBuildContext(this.network)
                 {
-                    AccountReference = new WalletAccountReference(walletName,walletName),
+                    AccountReference = new WalletAccountReference(walletName, walletName),
                     FeeType = FeeParser.Parse(request.FeeType),
                     MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
                     Recipients = recipients,
@@ -459,7 +463,7 @@ namespace Obsidian.Features.X1Wallet
         {
             return await ExecuteAsync(request, async () =>
             {
-                
+
 
                 var recipients = new List<Recipient>();
                 foreach (RecipientModel recipientModel in request.Recipients)

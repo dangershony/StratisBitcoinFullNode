@@ -58,6 +58,7 @@ namespace Obsidian.ObsidianD
                     MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
                 };
 
+
                 var useHDWallet = false;
 
                 var nodeBuilder = new FullNodeBuilder()
@@ -80,6 +81,7 @@ namespace Obsidian.ObsidianD
                 }
 
                 var node = nodeBuilder.Build();
+
                 await node.RunAsync();
             }
             catch (Exception ex)
