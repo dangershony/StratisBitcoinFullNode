@@ -287,21 +287,9 @@ namespace Obsidian.Features.X1Wallet
             throw new NotImplementedException();
         }
 
-        public Wallet RecoverWallet(string password, string name, string mnemonic, DateTime creationTime, string passphrase = null)
-        {
-            throw new NotImplementedException();
-        }
+       
 
-        public Wallet RecoverWallet(string name, ExtPubKey extPubKey, int accountIndex, DateTime creationTime)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void DeleteWallet()
-        {
-            throw new NotImplementedException();
-        }
-
+       
 
 
 
@@ -850,10 +838,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        public Network GetNetwork()
-        {
-            return this.network;
-        }
+       
 
         void SaveWallet()
         {

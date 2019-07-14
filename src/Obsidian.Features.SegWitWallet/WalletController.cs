@@ -152,7 +152,7 @@ namespace Obsidian.Features.X1Wallet
 
                 var model = new WalletGeneralInfoModel
                 {
-                    Network = manager.GetNetwork(),
+                    Network = this.network,
                     CreationTime = manager.WalletCreationTime,
                     LastBlockSyncedHeight = manager.WalletLastBlockSyncedHeight,
                     ConnectedNodes = this.connectionManager.ConnectedPeers.Count(),
@@ -571,7 +571,7 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-        public async Task<KeyAddressesModel> GetAllAddressesAsync(string walletName)
+        public async Task<KeyAddressesModel> GetAllAddressesAsync()
         {
             using (var context = GetWalletContext())
             {
