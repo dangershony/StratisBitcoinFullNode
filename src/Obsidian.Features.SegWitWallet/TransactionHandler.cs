@@ -130,7 +130,7 @@ namespace Obsidian.Features.X1Wallet
             using (var context = this.walletManagerWrapper.GetWalletContext(accountReference.WalletName))
             {
                 // Get the total value of spendable coins in the account.
-                maxSpendableAmount = context.WalletManager.GetSpendableTransactionsInAccount(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
+                maxSpendableAmount = context.WalletManager.GetAllSpendableTransactions(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
             }
 
 
@@ -284,7 +284,7 @@ namespace Obsidian.Features.X1Wallet
             var unspentOutputs = new List<UnspentKeyAddressOutput>();
             using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
             {
-                unspentOutputs.AddRange(context2.WalletManager.GetSpendableTransactionsInAccount(context.MinConfirmations));
+                unspentOutputs.AddRange(context2.WalletManager.GetAllSpendableTransactions(context.MinConfirmations));
             }
                
             if (unspentOutputs.Count == 0)

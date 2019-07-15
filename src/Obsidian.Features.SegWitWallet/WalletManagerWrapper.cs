@@ -11,10 +11,13 @@ using Newtonsoft.Json;
 using Obsidian.Features.X1Wallet.Models;
 using Obsidian.Features.X1Wallet.Temp;
 using Stratis.Bitcoin.AsyncWork;
+using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.EventBus;
 using Stratis.Bitcoin.EventBus.CoreEvents;
 using Stratis.Bitcoin.Features.BlockStore;
+using Stratis.Bitcoin.Features.Miner.Interfaces;
+using Stratis.Bitcoin.Features.Miner.Staking;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
@@ -29,7 +32,7 @@ namespace Obsidian.Features.X1Wallet
         readonly object lockObject = new object();
         readonly DataFolder dataFolder;
         readonly ChainIndexer chainIndexer;
-        readonly Network network;
+        public readonly Network network;
         readonly IBroadcasterManager broadcasterManager;
         readonly ILoggerFactory loggerFactory;
         readonly ILogger logger;
@@ -38,14 +41,21 @@ namespace Obsidian.Features.X1Wallet
         readonly INodeLifetime nodeLifetime;
         readonly IAsyncProvider asyncProvider;
 
+        // for wallet syncing
         readonly ISignals signals;
         readonly IBlockStore blockStore;
         readonly StoreSettings storeSettings;
 
+        // for staking
+        // for staking
+        readonly IPosMinting posMinting;
+        readonly ITimeSyncBehaviorState timeSyncBehaviorState;
+        readonly IWalletManagerStakingAdapter walletManagerStakingAdapter;
+
         WalletManager walletManager;
 
         public WalletManagerWrapper(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
-            IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider, ISignals signals, IBlockStore blockStore, StoreSettings storeSettings)
+            IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider, ISignals signals, IBlockStore blockStore, StoreSettings storeSettings, IPosMinting posMinting, ITimeSyncBehaviorState timeSyncBehaviorState, IWalletManager walletManagerStakingAdapter)
         {
             this.dataFolder = dataFolder;
             this.chainIndexer = chainIndexer;
@@ -61,6 +71,11 @@ namespace Obsidian.Features.X1Wallet
             this.signals = signals;
             this.blockStore = blockStore;
             this.storeSettings = storeSettings;
+
+            this.posMinting = posMinting;
+            this.timeSyncBehaviorState = timeSyncBehaviorState;
+            this.walletManagerStakingAdapter = (IWalletManagerStakingAdapter)walletManagerStakingAdapter;
+
         }
 
         public WalletContext GetWalletContext(string walletName, bool doNotCheck = false)
@@ -88,6 +103,7 @@ namespace Obsidian.Features.X1Wallet
                 LoadWallet(walletName).GetAwaiter().GetResult();
                 Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
                 WalletSyncManagerStart();
+                this.walletManagerStakingAdapter.SetWalletManagerWrapper(this, walletName);
                 return new WalletContext(this.walletManager);
             }
             
@@ -112,7 +128,7 @@ namespace Obsidian.Features.X1Wallet
                     throw new NotSupportedException(
                         "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
-            this.walletManager = new WalletManager(filePath, this.chainIndexer, this.network, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider);
+            this.walletManager = new WalletManager(filePath, this.chainIndexer, this.network, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider, this.posMinting, this.timeSyncBehaviorState);
         }
 
         public async Task CreateKeyWalletAsync(WalletCreateRequest walletCreateRequest)
@@ -230,12 +246,15 @@ namespace Obsidian.Features.X1Wallet
                 this.logger.LogTrace("(-)[NEW_TIP_REORG]");
                 return;
             }
-
+            retry:
             if (this.syncState.WalletTip == null)
             {
                 using (var context = GetWalletContextPrivate())
                 {
                     this.syncState.WalletTip = this.chainIndexer.GetHeader(context.WalletManager.WalletLastBlockSyncedHash);
+                    await Task.Delay(250);
+                    goto retry;
+                    
                 }
             }
            

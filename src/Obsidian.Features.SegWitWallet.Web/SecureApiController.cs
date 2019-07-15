@@ -119,6 +119,13 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             var importKeysResponse = await this.walletController.ImportKeysAsync(importKeysRequest);
                             return CreateOk(importKeysResponse, request);
                         }
+
+                    case "startStaking":
+                        {
+                            var startStakingRequest = Deserialize<StartStakingRequest>(decryptedRequest.Payload);
+                            await this.walletController.StartStaking(startStakingRequest);
+                            return CreateOk(request);
+                        }
                     //case "splitCoins":
                     //case "syncFromHash":
                     //case "removeTransactions":

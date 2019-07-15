@@ -33,7 +33,7 @@ namespace Obsidian.Features.X1Wallet
 {
     public class WalletController : Controller
     {
-        const int MaxHistoryItemsPerAccount = int.MaxValue;
+        const int MaxHistoryItemsPerAccount = 500;
 
         readonly WalletManagerWrapper walletManagerWrapper;
         readonly TransactionHandler walletTransactionHandler;
@@ -88,9 +88,9 @@ namespace Obsidian.Features.X1Wallet
             this.networkDifficulty = networkDifficulty;
 
             // TODO
-            this.posMinting = posMinting;
-            var pos = (PosMinting)posMinting;
-            pos.ValidStakingTemplates = new Dictionary<string, ScriptTemplate>();
+            //this.posMinting = posMinting;
+            //var pos = (PosMinting)posMinting;
+            //pos.ValidStakingTemplates = new Dictionary<string, ScriptTemplate>();
         }
 
 
@@ -172,6 +172,13 @@ namespace Obsidian.Features.X1Wallet
 
         }
 
+        public async Task StartStaking(StartStakingRequest startStakingRequest)
+        {
+            using (var context = GetWalletContext())
+            {
+                context.WalletManager.StartStaking(startStakingRequest.Password);
+            }
+        }
 
         public async Task<WalletHistoryModel> GetHistoryAsync(WalletHistoryRequest request)
         {
@@ -395,7 +402,7 @@ namespace Obsidian.Features.X1Wallet
         {
             using (var context = GetWalletContext())
             {
-                var spendableTransactions = context.WalletManager.GetSpendableTransactionsInAccount(request.MinConfirmations);
+                var spendableTransactions = context.WalletManager.GetAllSpendableTransactions(request.MinConfirmations);
 
                 return new SpendableTransactionsModel
                 {

@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Security;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,12 +15,17 @@ using NBitcoin.BuilderExtensions;
 using Newtonsoft.Json;
 using Obsidian.Features.X1Wallet.Models;
 using Stratis.Bitcoin.AsyncWork;
+using Stratis.Bitcoin.Base;
+using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.Features.Miner.Interfaces;
+using Stratis.Bitcoin.Features.Miner.Staking;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Utilities;
+using Stratis.Bitcoin.Utilities.JsonErrors;
 using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet
@@ -44,6 +51,11 @@ namespace Obsidian.Features.X1Wallet
         readonly ChainIndexer chainIndexer;
         readonly INodeLifetime nodeLifetime;
         readonly IAsyncProvider asyncProvider;
+
+        // for staking
+        readonly IPosMinting posMinting;
+        readonly ITimeSyncBehaviorState timeSyncBehaviorState;
+
         KeyWallet Wallet { get; }
 
         IAsyncLoop asyncLoop;
@@ -51,7 +63,7 @@ namespace Obsidian.Features.X1Wallet
 
         #region c'tor
 
-        public WalletManager(string walletFilePath, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider)
+        public WalletManager(string walletFilePath, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider, IPosMinting posMinting, ITimeSyncBehaviorState timeSyncBehaviorState)
         {
             this.CurrentWalletFilePath = walletFilePath;
             this.Wallet = JsonConvert.DeserializeObject<KeyWallet>(File.ReadAllText(walletFilePath));
@@ -65,6 +77,10 @@ namespace Obsidian.Features.X1Wallet
             this.dateTimeProvider = dateTimeProvider;
             this.nodeLifetime = nodeLifetime;
             this.asyncProvider = asyncProvider;
+
+            this.posMinting = posMinting;
+            this.timeSyncBehaviorState = timeSyncBehaviorState;
+
             this.broadcasterManager = broadcasterManager;
 
             if (this.broadcasterManager != null)
@@ -180,7 +196,7 @@ namespace Obsidian.Features.X1Wallet
             return response;
         }
 
-        public IEnumerable<UnspentKeyAddressOutput> GetSpendableTransactionsInAccount(int confirmations = 50)
+        public List<UnspentKeyAddressOutput> GetAllSpendableTransactions(int confirmations = 50)
         {
             var res = new List<UnspentKeyAddressOutput>();
             foreach (var adr in this.Wallet.Addresses.Values)
@@ -261,13 +277,6 @@ namespace Obsidian.Features.X1Wallet
                     histories.Add(h);
                 }
             }
-
-
-            // Get transactions contained in the account.
-            var check = this.Wallet.Addresses.Values
-                 .Where(a => a.Transactions.Any())
-                 .SelectMany(s => s.Transactions.Select(t => new FlatAddressHistory { Address = s, Transaction = t })).ToArray();
-            Debug.Assert(histories.Count == check.Length);
 
             return histories;
         }
@@ -559,6 +568,57 @@ namespace Obsidian.Features.X1Wallet
             };
         }
 
+
+        public void StartStaking(string passphrase)
+        {
+            Guard.NotNull(passphrase, nameof(passphrase));
+
+
+            if (!this.network.Consensus.IsProofOfStake)
+                throw new SegWitWalletException(HttpStatusCode.BadRequest, "Staking requires a Proof-of-Stake consensus.", null);
+
+            if (this.timeSyncBehaviorState.IsSystemTimeOutOfSync)
+            {
+                string errorMessage = "Staking cannot start, your system time does not match that of other nodes on the network." + Environment.NewLine
+                                                                                                                                  + "Please adjust your system time and restart the node.";
+                this.logger.LogError(errorMessage);
+                throw new SegWitWalletException(HttpStatusCode.InternalServerError, errorMessage, null);
+            }
+
+
+
+
+            // Check the password
+            //try
+            //{
+            //    Key.Parse(wallet.EncryptedSeed, request.Password, wallet.Network);
+            //}
+            //catch (Exception ex)
+            //{
+            //    throw new SecurityException(ex.Message);
+            //}
+
+            
+
+            if (!string.IsNullOrEmpty(passphrase))
+            {
+                this.logger.LogInformation("Staking enabled on wallet '{0}'.", this.WalletName);
+
+                this.posMinting.Stake(new WalletSecret
+                {
+                    WalletPassword = passphrase,
+                    WalletName = this.WalletName
+                });
+            }
+            else
+            {
+                string errorMessage = "Staking not started, wallet name or password were not provided.";
+                this.logger.LogError(errorMessage);
+                throw new ConfigurationException(errorMessage);
+            }
+
+
+        }
         public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
         {
             List<uint256> idsToRemove = transactionsIds.ToList();
@@ -601,7 +661,7 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-        public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
+        public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(int confirmations = 0)
         {
             throw new NotImplementedException();
         }
@@ -792,7 +852,7 @@ namespace Obsidian.Features.X1Wallet
             {
                 this.WalletSemaphore.Release();
             }
-           
+
             this.logger.LogInformation("Auto-saved wallet at {0}.", this.dateTimeProvider.GetUtcNow());
             this.logger.LogTrace("(-)[IN_ASYNC_LOOP]");
         }
