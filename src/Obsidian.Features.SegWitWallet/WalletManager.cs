@@ -23,12 +23,18 @@ using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet
 {
-    public class WalletManager
+    public class WalletManager : IDisposable
     {
         public const string WalletFileExtension = ".keybag.json";
         const string DownloadChainLoop = nameof(DownloadChainLoop);
+        static TimeSpan AutoSaveInterval = new TimeSpan(0, 1, 0);
+        static readonly RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
+        static readonly Func<string, byte[], byte[]> KeyEncryption = VCL.EncryptWithPassphrase;
 
         public readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
+        readonly Dictionary<OutPoint, TransactionData> outpointLookup = new Dictionary<OutPoint, TransactionData>();
+        readonly Dictionary<OutPoint, TransactionData> inputLookup = new Dictionary<OutPoint, TransactionData>();
+
 
         readonly Network network;
         readonly IScriptAddressReader scriptAddressReader;
@@ -38,6 +44,12 @@ namespace Obsidian.Features.X1Wallet
         readonly ChainIndexer chainIndexer;
         readonly INodeLifetime nodeLifetime;
         readonly IAsyncProvider asyncProvider;
+        KeyWallet Wallet { get; }
+
+        IAsyncLoop asyncLoop;
+        readonly IAsyncLoop autoSaveWallet;
+
+        #region c'tor
 
         public WalletManager(string walletFilePath, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider)
         {
@@ -59,10 +71,19 @@ namespace Obsidian.Features.X1Wallet
             {
                 this.broadcasterManager.TransactionStateChanged += this.BroadcasterManager_TransactionStateChanged;
             }
+
+            this.autoSaveWallet = this.asyncProvider.CreateAndRunAsyncLoop(nameof(AutoSaveWalletAsync), AutoSaveWalletAsync, this.nodeLifetime.ApplicationStopping, AutoSaveInterval, AutoSaveInterval);
+
+            RefreshDictionary_OutpointTransactionData();
         }
 
+        #endregion
+
+
+        #region public get-only properties
+
         public string CurrentWalletFilePath { get; }
-        KeyWallet Wallet { get; }
+
         public string WalletName
         {
             get
@@ -108,105 +129,11 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-        IAsyncLoop asyncLoop;
+        #endregion
 
+        #region public methods
 
-
-
-        static readonly RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
-        static readonly Func<string, byte[], byte[]> KeyEncryption = VCL.EncryptWithPassphrase;
-
-
-
-
-
-
-
-
-
-        // In order to allow faster look-ups of transactions affecting the wallets' addresses,
-        // we keep a couple of objects in memory:
-        // 1. the list of unspent outputs for checking whether inputs from a transaction are being spent by our Wallet and
-        // 2. the list of addresses contained in our Wallet for checking whether a transaction is being paid to the Wallet.
-        // 3. a mapping of all inputs with their corresponding transactions, to facilitate rapid lookup
-        readonly Dictionary<OutPoint, TransactionData> outpointLookup = new Dictionary<OutPoint, TransactionData>();
-        readonly Dictionary<OutPoint, TransactionData> inputLookup = new Dictionary<OutPoint, TransactionData>();
-
-
-
-
-
-
-
-
-        #region IWalletManager 
-
-        public void Start()
-        {
-
-            // Find wallets and load them in memory.
-            //IEnumerable<KeyWallet> wallets = this.fileStorage.LoadByFileExtension(WalletFileExtension);
-
-
-
-            // AddAddressesToMaintainBuffer()
-
-            //if (this.walletSettings.IsDefaultWalletEnabled())
-            //{
-            //    // Check if it already exists, if not, create one.
-            //    if (!wallets.Any(w => w.Name == this.walletSettings.DefaultWalletName))
-            //    {
-            //        var mnemonic = new Mnemonic(Wordlist.English, WordCount.Twelve);
-            //        this.CreateWallet(this.walletSettings.DefaultWalletPassword, this.walletSettings.DefaultWalletName, string.Empty, mnemonic);
-            //    }
-
-            //    // Make sure both unlock is specified, and that we actually have a default Wallet name specified.
-            //    if (this.walletSettings.UnlockDefaultWallet)
-            //    {
-            //        this.UnlockWallet(this.walletSettings.DefaultWalletPassword, this.walletSettings.DefaultWalletName, MaxWalletUnlockDurationInSeconds);
-            //    }
-            //}
-
-            // Load data in memory for faster lookups.
-            this.LoadKeysLookupLock();
-            // Find the last chain block received by the Wallet manager.
-
-
-
-        }
-
-        void RefreshInputKeysLookupLock()
-        {
-            this.outpointLookup.Clear();
-
-            foreach (KeyAddress address in this.Wallet.Addresses.Values)
-            {
-                // Get the UTXOs that are unspent or spent but not confirmed.
-                // We only exclude from the list the confirmed spent UTXOs.
-                foreach (TransactionData transaction in address.Transactions.Where(t => t.SpendingDetails?.BlockHeight == null))
-                {
-                    this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
-                }
-            }
-        }
-
-        void LoadKeysLookupLock()
-        {
-            foreach (KeyAddress address in this.Wallet.Addresses.Values)
-            {
-                foreach (TransactionData transaction in address.Transactions)
-                {
-                    // Get the UTXOs that are unspent or spent but not confirmed.
-                    // We only exclude from the list the confirmed spent UTXOs.
-                    if (transaction.SpendingDetails?.BlockHeight == null)
-                    {
-                        this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
-                    }
-                }
-            }
-        }
-
-        internal async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
+        public async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
         {
             var delimiters = new HashSet<char>();
             foreach (var c in importKeysRequest.Keys.Trim().ToCharArray())
@@ -237,7 +164,7 @@ namespace Obsidian.Features.X1Wallet
                     address.Label = secret.GetAddress().ToString();
                     if (!importKeysRequest.Keys.Contains(address.Label))
                         throw new InvalidOperationException();
-                    this.Wallet.Addresses.Add(address.ScriptPubKey.ToHex(), address);
+                    this.Wallet.Addresses.Add(address.Hash160Hex, address);
                     importedAddresses.Add(address.Label);
                 }
                 catch (Exception e)
@@ -264,7 +191,6 @@ namespace Obsidian.Features.X1Wallet
             return res;
         }
 
-
         public string SignMessage(string password, string walletName, string externalAddress, string message)
         {
             throw new NotImplementedException();
@@ -275,8 +201,6 @@ namespace Obsidian.Features.X1Wallet
             throw new NotImplementedException();
         }
 
-
-
         public void UnlockWallet(string password, string name, int timeout)
         {
             throw new NotImplementedException();
@@ -286,13 +210,6 @@ namespace Obsidian.Features.X1Wallet
         {
             throw new NotImplementedException();
         }
-
-       
-
-       
-
-
-
 
         public KeyAddress GetUnusedAddress()
         {
@@ -331,21 +248,6 @@ namespace Obsidian.Features.X1Wallet
             #endregion
         }
 
-        KeyAddress[] CreateNdAddresses(int amountToCreate, bool isChange, KeyWallet wallet)
-        {
-            throw new NotImplementedException("Creating new addresses will require the passphrase.");
-            var newAdresses = new KeyAddress[amountToCreate];
-            for (var i = 0; i < amountToCreate; i++)
-            {
-                var privateKey = new byte[32];
-                rng.GetBytes(privateKey);
-                newAdresses[i] = KeyAddress.CreateWithPrivateKey(privateKey, "password", null, this.network.Consensus.CoinType, 0, "odx");
-            }
-
-            return newAdresses;
-        }
-
-
 
         public List<FlatAddressHistory> GetHistory()// TODO: make sure resyncing also locks the wallet via semaphore, otherwise calls such as getHistory will throw collection modified
         {
@@ -370,7 +272,7 @@ namespace Obsidian.Features.X1Wallet
             return histories;
         }
 
-        internal Script GetUnusedChangeAddress()
+        public Script GetUnusedChangeAddress()
         {
             var unusedChangeAddress = this.Wallet.Addresses.Values.First(a => a.IsChange && a.Transactions.Count == 0);
             return unusedChangeAddress.ScriptPubKey;
@@ -452,13 +354,10 @@ namespace Obsidian.Features.X1Wallet
             return unspendOutputReferences.ToArray();
         }
 
-
-
         public AddressBalance GetAddressBalance(string address)
         {
             throw new NotImplementedException();
         }
-
 
         public void RemoveBlocks(ChainedHeader chainedHeader)
         {
@@ -507,15 +406,14 @@ namespace Obsidian.Features.X1Wallet
             SaveWallet();
         }
 
-
-
-
-
-
         public void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
             var tipHash = this.Wallet.LastBlockSyncedHash;
             var tipHeight = this.Wallet.LastBlockSyncedHeight;
+
+            if (chainedHeader.Height == 890022)
+                ; // I staked!
+
             // Is this the next block.
             if (chainedHeader.Header.HashPrevBlock != tipHash)
             {
@@ -610,7 +508,10 @@ namespace Obsidian.Features.X1Wallet
                 {
                     // If script is empty ignore it.
                     if (o.IsEmpty)
+                    {
                         return false;
+                    }
+
 
                     // Check if the destination script is one of the Wallet's.
                     //bool found = this.scriptToAddressLookup.TryGetValue(o.ScriptPubKey, out KeyAddress addr);
@@ -641,11 +542,10 @@ namespace Obsidian.Features.X1Wallet
                 foundSendingTrx = true;
                 this.logger.LogDebug("Transaction '{0}' contained funds sent by the user's Wallet(s).", hash);
             }
-
             return foundSendingTrx || foundReceivingTrx;
         }
 
-        internal KeyAddressesModel GetAllAddresses()
+        public KeyAddressesModel GetAllAddresses()
         {
             return new KeyAddressesModel
             {
@@ -659,10 +559,120 @@ namespace Obsidian.Features.X1Wallet
             };
         }
 
+        public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
+        {
+            List<uint256> idsToRemove = transactionsIds.ToList();
+            var result = new HashSet<(uint256, DateTimeOffset)>();
+
+            foreach (KeyAddress adr in this.Wallet.Addresses.Values)
+            {
+                for (int i = 0; i < adr.Transactions.Count; i++)
+                {
+                    TransactionData transaction = adr.Transactions.ElementAt(i);
+
+                    // Remove the transaction from the list of transactions affecting an address.
+                    // Only transactions that haven't been confirmed in a block can be removed.
+                    if (!transaction.IsConfirmed() && idsToRemove.Contains(transaction.Id))
+                    {
+                        result.Add((transaction.Id, transaction.CreationTime));
+                        adr.Transactions = adr.Transactions.Except(new[] { transaction }).ToList();
+                        i--;
+                    }
+
+                    // Remove the spending transaction object containing this transaction id.
+                    if (transaction.SpendingDetails != null && !transaction.SpendingDetails.IsSpentConfirmed() && idsToRemove.Contains(transaction.SpendingDetails.TransactionId))
+                    {
+                        result.Add((transaction.SpendingDetails.TransactionId, transaction.SpendingDetails.CreationTime));
+                        adr.Transactions.ElementAt(i).SpendingDetails = null;
+                    }
+                }
+            }
+
+
+            if (result.Any())
+            {
+                // Reload the lookup dictionaries.
+                this.RefreshDictionary_OutpointTransactionData();
+
+                this.SaveWallet();
+            }
+
+            return result;
+        }
+
+
+        public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Dictionary<string, ScriptTemplate> GetValidStakingTemplates()
+        {
+            return new Dictionary<string, ScriptTemplate>();
+        }
+
+        public IEnumerable<BuilderExtension> GetTransactionBuilderExtensionsForStaking()
+        {
+            throw new NotImplementedException();
+        }
+        public void Dispose()
+        {
+            if (this.broadcasterManager != null)
+                this.broadcasterManager.TransactionStateChanged -= this.BroadcasterManager_TransactionStateChanged;
+
+            this.asyncLoop?.Dispose();
+            this.autoSaveWallet?.Dispose();
+        }
+
+        #endregion
+
+        #region private Methods
+
         KeyAddress FindAddressByScriptPubKey(Script scriptPubKey)
         {
-            this.Wallet.Addresses.TryGetValue(scriptPubKey.ToHex(), out KeyAddress keyAddress);
+            byte[] hash160 = null;
+            var pubKey = scriptPubKey.GetDestinationPublicKeys(this.network).SingleOrDefault();
+            if (pubKey != null)
+            {
+                hash160 = pubKey.Hash.ToBytes();
+            }
+            else
+            {
+                hash160 = scriptPubKey.Hash.ToBytes();
+            }
+
+            Debug.Assert(hash160.Length == 20);
+            var key = hash160.ToHexString();
+            this.Wallet.Addresses.TryGetValue(key, out KeyAddress keyAddress);
             return keyAddress;
+        }
+
+        void RefreshDictionary_OutpointTransactionData()
+        {
+            this.outpointLookup.Clear();
+
+            foreach (KeyAddress address in this.Wallet.Addresses.Values)
+            {
+                foreach (TransactionData transaction in address.Transactions)
+                {
+                    // Get the UTXOs that are unspent or spent but not confirmed.
+                    // We only exclude from the list the confirmed spent UTXOs.
+                    if (transaction.SpendingDetails?.BlockHeight == null)
+                    {
+                        this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
+                    }
+                }
+            }
+        }
+
+        internal HashSet<(uint256 transactionId, DateTimeOffset creationTime)> RemoveTransactionsFromDate(string walletName, DateTime fromDate)
+        {
+            throw new NotImplementedException();
+        }
+
+        internal HashSet<(uint256 transactionId, DateTimeOffset creationTime)> RemoveAllTransactions(string walletName)
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -761,93 +771,31 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
-        {
-            List<uint256> idsToRemove = transactionsIds.ToList();
-            var result = new HashSet<(uint256, DateTimeOffset)>();
-
-            foreach (KeyAddress adr in this.Wallet.Addresses.Values)
-            {
-                for (int i = 0; i < adr.Transactions.Count; i++)
-                {
-                    TransactionData transaction = adr.Transactions.ElementAt(i);
-
-                    // Remove the transaction from the list of transactions affecting an address.
-                    // Only transactions that haven't been confirmed in a block can be removed.
-                    if (!transaction.IsConfirmed() && idsToRemove.Contains(transaction.Id))
-                    {
-                        result.Add((transaction.Id, transaction.CreationTime));
-                        adr.Transactions = adr.Transactions.Except(new[] { transaction }).ToList();
-                        i--;
-                    }
-
-                    // Remove the spending transaction object containing this transaction id.
-                    if (transaction.SpendingDetails != null && !transaction.SpendingDetails.IsSpentConfirmed() && idsToRemove.Contains(transaction.SpendingDetails.TransactionId))
-                    {
-                        result.Add((transaction.SpendingDetails.TransactionId, transaction.SpendingDetails.CreationTime));
-                        adr.Transactions.ElementAt(i).SpendingDetails = null;
-                    }
-                }
-            }
-
-
-            if (result.Any())
-            {
-                // Reload the lookup dictionaries.
-                this.RefreshInputKeysLookupLock();
-
-                this.SaveWallet();
-            }
-
-            return result;
-        }
-
-        public HashSet<(uint256, DateTimeOffset)> RemoveAllTransactions(string walletName)
-        {
-            throw new NotImplementedException();
-        }
-
-        public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsFromDate(string walletName, DateTimeOffset fromDate)
-        {
-            throw new NotImplementedException();
-        }
-
-        #endregion
-
-
-
-
-
-       
-
-        void SaveWallet()
+        void SaveWallet(bool isAutoSave = false)
         {
             var serializedWallet = JsonConvert.SerializeObject(this.Wallet, Formatting.Indented);
             File.WriteAllText(this.CurrentWalletFilePath, serializedWallet);
+            if (!isAutoSave)
+                this.logger.LogInformation("Saved on explicit request.");
         }
 
-
-
+        async Task AutoSaveWalletAsync(CancellationToken cancellationToken)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return;
+            try
+            {
+                await this.WalletSemaphore.WaitAsync(cancellationToken);
+                SaveWallet(true);
+            }
+            finally
+            {
+                this.WalletSemaphore.Release();
+            }
+           
+            this.logger.LogInformation("Auto-saved wallet at {0}.", this.dateTimeProvider.GetUtcNow());
+            this.logger.LogTrace("(-)[IN_ASYNC_LOOP]");
+        }
 
         /// <summary>
         /// Updates details of the last block synced in a Wallet when the chain of headers finishes downloading.
@@ -883,20 +831,7 @@ namespace Obsidian.Features.X1Wallet
                 TimeSpans.FiveSeconds);
         }
 
-
-
-
-
-        public void Stop()
-        {
-            if (this.broadcasterManager != null)
-                this.broadcasterManager.TransactionStateChanged -= this.BroadcasterManager_TransactionStateChanged;
-
-            this.asyncLoop?.Dispose();
-            this.SaveWallet();
-        }
-
-        private void BroadcasterManager_TransactionStateChanged(object sender, TransactionBroadcastEntry transactionEntry)
+        void BroadcasterManager_TransactionStateChanged(object sender, TransactionBroadcastEntry transactionEntry)
         {
             if (string.IsNullOrEmpty(transactionEntry.ErrorMessage))
             {
@@ -907,25 +842,6 @@ namespace Obsidian.Features.X1Wallet
                 this.logger.LogTrace("Exception occurred: {0}", transactionEntry.ErrorMessage);
                 this.logger.LogTrace("(-)[EXCEPTION]");
             }
-        }
-
-
-
-
-
-        public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Dictionary<string, ScriptTemplate> GetValidStakingTemplates()
-        {
-            return new Dictionary<string, ScriptTemplate>();
-        }
-
-        public IEnumerable<BuilderExtension> GetTransactionBuilderExtensionsForStaking()
-        {
-            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -939,12 +855,7 @@ namespace Obsidian.Features.X1Wallet
             this.Wallet.BlockLocator = chainedHeader.GetLocator().Blocks;
             this.Wallet.LastBlockSyncedHeight = chainedHeader.Height;
             this.Wallet.LastBlockSyncedHash = chainedHeader.HashBlock;
-            SaveWallet();
         }
-
-
-
-
 
         /// <summary>
         /// Adds a transaction that credits the Wallet with new coins.
@@ -1073,10 +984,7 @@ namespace Obsidian.Features.X1Wallet
 
         }
 
-        private IEnumerable<KeyAddress> AddAddressesToMaintainBuffer(object account, bool isChange)
-        {
-            throw new NotImplementedException();
-        }
+        #endregion
 
 
     }

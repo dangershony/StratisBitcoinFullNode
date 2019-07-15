@@ -26,6 +26,7 @@ namespace Obsidian.Features.X1Wallet
 {
     public class WalletManagerWrapper : IDisposable
     {
+        readonly object lockObject = new object();
         readonly DataFolder dataFolder;
         readonly ChainIndexer chainIndexer;
         readonly Network network;
@@ -65,22 +66,36 @@ namespace Obsidian.Features.X1Wallet
         public WalletContext GetWalletContext(string walletName, bool doNotCheck = false)
         {
             if (doNotCheck)
+            {
+                if (this.walletManager == null)
+                    return null;
                 return new WalletContext(this.walletManager);
+            }
+
 
             if (walletName == null)
                 throw new ArgumentNullException(nameof(walletName));
 
-            if (this.walletManager != null)
+            lock (this.lockObject)
             {
-                if (this.walletManager.WalletName == walletName)
-                    return new WalletContext(this.walletManager);
-                throw new InvalidOperationException($"Invalid request for wallet {walletName} - the current wallet is {this.walletManager.WalletName}");
-            }
+                if (this.walletManager != null)
+                {
+                    if (this.walletManager.WalletName == walletName)
+                        return new WalletContext(this.walletManager);
+                    throw new InvalidOperationException($"Invalid request for wallet {walletName} - the current wallet is {this.walletManager.WalletName}");
+                }
 
-            LoadWallet(walletName).GetAwaiter().GetResult();
-            Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
-            WalletSyncManagerStart();
-            return GetWalletContext(walletName);
+                LoadWallet(walletName).GetAwaiter().GetResult();
+                Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
+                WalletSyncManagerStart();
+                return new WalletContext(this.walletManager);
+            }
+            
+        }
+
+        WalletContext GetWalletContextPrivate()
+        {
+            return GetWalletContext(null, true);
         }
 
         public async Task LoadWallet(string name)
@@ -121,21 +136,21 @@ namespace Obsidian.Features.X1Wallet
                 LastBlockSyncedHeight = 0
             };
             const int witnessVersion = 0;
-            var bech32Prefix = "odx";  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
+            var bech32Prefix = this.network.CoinTicker.ToLowerInvariant();  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
 
 
 
-            int start = 23;
-            int end = 43;
-            for (var i = start; i <= end; i++)
-            {
-                var bytes = new byte[32];
-                StaticWallet.Fill((byte)i, bytes);
-                var isChange = i % 2 == 0;
-                var address = KeyAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, this.network.Consensus.CoinType, witnessVersion, bech32Prefix);
-                address.IsChange = isChange;
-                keyWallet.Addresses.Add(address.ScriptPubKey.ToHex(), address);
-            }
+            //int start = 23;
+            //int end = 43;
+            //for (var i = start; i <= end; i++)
+            //{
+            //    var bytes = new byte[32];
+            //    StaticWallet.Fill((byte)i, bytes);
+            //    var isChange = i % 2 == 0;
+            //    var address = KeyAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, this.network.Consensus.CoinType, witnessVersion, bech32Prefix);
+            //    address.IsChange = isChange;
+            //    keyWallet.Addresses.Add(address.ScriptPubKey.ToHex(), address);
+            //}
 
             var serializedWallet = JsonConvert.SerializeObject(keyWallet, Formatting.Indented);
             File.WriteAllText(filePath, serializedWallet);
@@ -165,26 +180,29 @@ namespace Obsidian.Features.X1Wallet
 
             this.logger.LogInformation("WalletSyncManager initialized. Wallet at block {0}.", this.walletManager.WalletLastBlockSyncedHeight);
 
-            Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
-            this.syncState.WalletTip = this.chainIndexer.GetHeader(this.walletManager.WalletLastBlockSyncedHash);
-            if (this.syncState.WalletTip == null)
-            {
-                // The wallet tip was not found in the main chain.
-                // this can happen if the node crashes unexpectedly.
-                // To recover we need to find the first common fork
-                // with the best chain. As the wallet does not have a
-                // list of chain headers, we use a BlockLocator and persist
-                // that in the wallet. The block locator will help finding
-                // a common fork and bringing the wallet back to a good
-                // state (behind the best chain).
-                ICollection<uint256> locators = this.walletManager.WalletBlockLocator;
-                var blockLocator = new BlockLocator { Blocks = locators.ToList() };
-                ChainedHeader fork = this.chainIndexer.FindFork(blockLocator);
-                this.walletManager.RemoveBlocks(fork);
-                //this.WalletTipHash = fork.HashBlock;
-                //this.WalletTipHeight = fork.Height;
-                this.syncState.WalletTip = fork;
-            }
+            //using (var context = GetWalletContextPrivate())
+            //{
+            //    this.syncState.WalletTip = this.chainIndexer.GetHeader(context.WalletManager.WalletLastBlockSyncedHash);
+            //    if (this.syncState.WalletTip == null)
+            //    {
+            //        // The wallet tip was not found in the main chain.
+            //        // this can happen if the node crashes unexpectedly.
+            //        // To recover we need to find the first common fork
+            //        // with the best chain. As the wallet does not have a
+            //        // list of chain headers, we use a BlockLocator and persist
+            //        // that in the wallet. The block locator will help finding
+            //        // a common fork and bringing the wallet back to a good
+            //        // state (behind the best chain).
+            //        ICollection<uint256> locators = context.WalletManager.WalletBlockLocator;
+            //        var blockLocator = new BlockLocator { Blocks = locators.ToList() };
+            //        ChainedHeader fork = this.chainIndexer.FindFork(blockLocator);
+            //        context.WalletManager.RemoveBlocks(fork);
+            //        //this.WalletTipHash = fork.HashBlock;
+            //        //this.WalletTipHeight = fork.Height;
+            //        this.syncState.WalletTip = fork;
+            //    }
+            //}
+
 
             this.transactionReceivedSubscription = this.signals.Subscribe<TransactionReceived>(async (args) => await OnMemoryPoolNewTransactionFromPeerAvailableAsync(args));
         }
@@ -213,6 +231,14 @@ namespace Obsidian.Features.X1Wallet
                 return;
             }
 
+            if (this.syncState.WalletTip == null)
+            {
+                using (var context = GetWalletContextPrivate())
+                {
+                    this.syncState.WalletTip = this.chainIndexer.GetHeader(context.WalletManager.WalletLastBlockSyncedHash);
+                }
+            }
+           
             // If the new block's previous hash is not the same as the one we have, there might have been a reorg.
             // If the new block follows the previous one, just pass the block to the manager.
             if (block.Header.HashPrevBlock != this.syncState.WalletTip.HashBlock)
@@ -233,14 +259,10 @@ namespace Obsidian.Features.X1Wallet
                     this.logger.LogInformation("Reorg detected, going back from '{0}' to '{1}'.",
                         this.syncState.WalletTip, fork);
 
-                    try
+
+                    using (var context = GetWalletContextPrivate())
                     {
-                        await this.walletManager.WalletSemaphore.WaitAsync(cancellationToken);
-                        this.walletManager.RemoveBlocks(fork);
-                    }
-                    finally
-                    {
-                        this.walletManager.WalletSemaphore.Release();
+                        context.WalletManager.RemoveBlocks(fork);
                     }
 
 
@@ -311,14 +333,9 @@ namespace Obsidian.Features.X1Wallet
 
                         this.syncState.WalletTip = next;
 
-                        try
+                        using (var context = GetWalletContextPrivate())
                         {
-                            await this.walletManager.WalletSemaphore.WaitAsync(cancellationToken);
-                            this.walletManager.ProcessBlock(nextBlock, next);
-                        }
-                        finally
-                        {
-                            this.walletManager.WalletSemaphore.Release();
+                            context.WalletManager.ProcessBlock(nextBlock, next);
                         }
 
                     }
@@ -341,27 +358,18 @@ namespace Obsidian.Features.X1Wallet
                     this.syncState.WalletTip);
 
             this.syncState.WalletTip = newTip;
-            try
+
+            using (var context = GetWalletContextPrivate())
             {
-                await this.walletManager.WalletSemaphore.WaitAsync(cancellationToken);
-                this.walletManager.ProcessBlock(block, newTip);
-            }
-            finally
-            {
-                this.walletManager.WalletSemaphore.Release();
+                context.WalletManager.ProcessBlock(block, newTip);
             }
         }
 
         async Task OnMemoryPoolNewTransactionFromPeerAvailableAsync(TransactionReceived transactionReceived)
         {
-            try
+            using (var context = GetWalletContextPrivate())
             {
-                await this.walletManager.WalletSemaphore.WaitAsync();
-                this.walletManager.ProcessTransaction(transactionReceived.ReceivedTransaction);
-            }
-            finally
-            {
-                this.walletManager.WalletSemaphore.Release();
+                context.WalletManager.ProcessTransaction(transactionReceived.ReceivedTransaction);
             }
         }
 
@@ -377,14 +385,9 @@ namespace Obsidian.Features.X1Wallet
             if (chainedHeader == null)
                 throw new WalletException("Invalid block height");
 
-            try
+            using (var context = GetWalletContextPrivate())
             {
-                await this.walletManager.WalletSemaphore.WaitAsync();
-                this.walletManager.RemoveBlocks(chainedHeader);
-            }
-            finally
-            {
-                this.walletManager.WalletSemaphore.Release();
+                context.WalletManager.RemoveBlocks(chainedHeader);
             }
 
             this.syncState.WalletTip = chainedHeader;

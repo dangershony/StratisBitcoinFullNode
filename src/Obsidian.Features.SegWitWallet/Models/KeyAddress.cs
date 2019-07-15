@@ -6,6 +6,7 @@ using NBitcoin.DataEncoders;
 using Newtonsoft.Json;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Utilities.JsonConverters;
+using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.Models
 {
@@ -16,6 +17,8 @@ namespace Obsidian.Features.X1Wallet.Models
 
         [JsonProperty(PropertyName = "compressedpublickey")]
         public byte[] CompressedPublicKey { get; set; }
+
+        public string Hash160Hex { get; set; }
 
         [JsonProperty(PropertyName = "bech32")]
         public string Bech32 { get; set; }
@@ -50,6 +53,8 @@ namespace Obsidian.Features.X1Wallet.Models
             adr.CompressedPublicKey = k.PubKey.Compress().ToBytes();
 
             var hash160 = Hashes.Hash160(adr.CompressedPublicKey).ToBytes();
+            adr.Hash160Hex = hash160.ToHexString();
+
             var enc = new Bech32Encoder(bech32Prefix);
             adr.Bech32 = enc.Encode(witnessVersion, hash160);
             adr.Label = adr.Bech32;
