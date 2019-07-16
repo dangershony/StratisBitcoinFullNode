@@ -87,10 +87,7 @@ namespace Obsidian.Features.X1Wallet
             this.chainState = chainState;
             this.networkDifficulty = networkDifficulty;
 
-            // TODO
-            //this.posMinting = posMinting;
-            //var pos = (PosMinting)posMinting;
-            //pos.ValidStakingTemplates = new Dictionary<string, ScriptTemplate>();
+            this.posMinting = posMinting;
         }
 
 
@@ -177,6 +174,14 @@ namespace Obsidian.Features.X1Wallet
             using (var context = GetWalletContext())
             {
                 context.WalletManager.StartStaking(startStakingRequest.Password);
+            }
+        }
+
+        public async Task StopStaking()
+        {
+            using (var context = GetWalletContext())
+            {
+                context.WalletManager.StopStaking();
             }
         }
 

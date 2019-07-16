@@ -196,6 +196,8 @@ namespace Obsidian.Features.X1Wallet
             return response;
         }
 
+       
+
         public List<UnspentKeyAddressOutput> GetAllSpendableTransactions(int confirmations = 50)
         {
             var res = new List<UnspentKeyAddressOutput>();
@@ -568,11 +570,12 @@ namespace Obsidian.Features.X1Wallet
             };
         }
 
-
         public void StartStaking(string passphrase)
         {
             Guard.NotNull(passphrase, nameof(passphrase));
 
+            if (VCL.DecryptWithPassphrase(passphrase, Wallet.Addresses.Values.First().EncryptedPrivateKey) == null)
+                throw new SegWitWalletException(HttpStatusCode.Unauthorized, "The passphrase is not correct.", null);
 
             if (!this.network.Consensus.IsProofOfStake)
                 throw new SegWitWalletException(HttpStatusCode.BadRequest, "Staking requires a Proof-of-Stake consensus.", null);
@@ -585,40 +588,20 @@ namespace Obsidian.Features.X1Wallet
                 throw new SegWitWalletException(HttpStatusCode.InternalServerError, errorMessage, null);
             }
 
+            this.logger.LogInformation("Enabling staking on wallet '{0}'.", this.WalletName);
 
-
-
-            // Check the password
-            //try
-            //{
-            //    Key.Parse(wallet.EncryptedSeed, request.Password, wallet.Network);
-            //}
-            //catch (Exception ex)
-            //{
-            //    throw new SecurityException(ex.Message);
-            //}
-
-            
-
-            if (!string.IsNullOrEmpty(passphrase))
+            this.posMinting.Stake(new WalletSecret
             {
-                this.logger.LogInformation("Staking enabled on wallet '{0}'.", this.WalletName);
-
-                this.posMinting.Stake(new WalletSecret
-                {
-                    WalletPassword = passphrase,
-                    WalletName = this.WalletName
-                });
-            }
-            else
-            {
-                string errorMessage = "Staking not started, wallet name or password were not provided.";
-                this.logger.LogError(errorMessage);
-                throw new ConfigurationException(errorMessage);
-            }
-
-
+                WalletPassword = passphrase,
+                WalletName = this.WalletName
+            });
         }
+
+        internal void StopStaking()
+        {
+            this.posMinting.StopStake();
+        }
+
         public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
         {
             List<uint256> idsToRemove = transactionsIds.ToList();
@@ -658,12 +641,6 @@ namespace Obsidian.Features.X1Wallet
             }
 
             return result;
-        }
-
-
-        public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(int confirmations = 0)
-        {
-            throw new NotImplementedException();
         }
 
         public Dictionary<string, ScriptTemplate> GetValidStakingTemplates()

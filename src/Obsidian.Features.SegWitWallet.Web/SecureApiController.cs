@@ -126,6 +126,11 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             await this.walletController.StartStaking(startStakingRequest);
                             return CreateOk(request);
                         }
+                    case "stopStaking":
+                    {
+                        await this.walletController.StopStaking();
+                        return CreateOk(request);
+                    }
                     //case "splitCoins":
                     //case "syncFromHash":
                     //case "removeTransactions":
