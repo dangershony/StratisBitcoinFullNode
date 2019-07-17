@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
@@ -66,9 +67,11 @@ namespace Obsidian.Features.X1Wallet.SecureApi
             string json = decrypted.FromUTF8Bytes();
             DecryptedRequest decryptedRequest = JsonConvert.DeserializeObject<DecryptedRequest>(json);
 
-            if (Array.IndexOf(CommandsWithoutWalletNameCheck, decryptedRequest.Target) == -1)
+            if (((IList) CommandsWithoutWalletNameCheck).Contains(decryptedRequest.Command))
                 return decryptedRequest;
-            walletController.GetManager(decryptedRequest.Target);
+            if (decryptedRequest.Target == null)
+                throw new SegWitWalletException(HttpStatusCode.BadRequest, "No wallet name was supplied.", null);
+            walletController.SetWalletName(decryptedRequest.Target);
             return decryptedRequest;
         }
 

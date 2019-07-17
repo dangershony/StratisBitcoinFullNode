@@ -7,11 +7,15 @@ using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.BlockStore;
 using Stratis.Bitcoin.Features.ColdStaking;
 using Stratis.Bitcoin.Features.MemoryPool;
+using Stratis.Bitcoin.Features.Miner;
+using Stratis.Bitcoin.Features.Miner.Interfaces;
+using Stratis.Bitcoin.Features.Miner.Staking;
 using Stratis.Bitcoin.Features.RPC;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
+using Stratis.Bitcoin.Mining;
 
 namespace Obsidian.Features.X1Wallet
 {
@@ -37,19 +41,26 @@ namespace Obsidian.Features.X1Wallet
                     .AddFeature<WalletFeature>()
                     .DependOn<MempoolFeature>()
                     .DependOn<BlockStoreFeature>()
-                    .DependOn<RPCFeature>()
+                    //.DependOn<RPCFeature>()
                     .FeatureServices(services =>
                     {
                         // WalletManagerWrapper implements 2 interfaces, ensure the same instance is used when resolved.
                         services.AddSingleton<WalletManagerWrapper>();
-                        services.AddSingleton<IWalletManager>(x => x.GetRequiredService<WalletManagerWrapper>());
-                        services.AddSingleton<IWalletSyncManager>(x => x.GetRequiredService<WalletManagerWrapper>());
-
+                        //services.AddSingleton<IWalletManager>(x => x.GetRequiredService<WalletManagerWrapper>());
+                        //services.AddSingleton<IWalletSyncManager>(x => x.GetRequiredService<WalletManagerWrapper>());
+                        services.AddSingleton<IWalletManager, IWalletManagerStakingAdapter>();
+                        services.AddSingleton<IPowMining, PowMining>();
+                        services.AddSingleton<IPosMinting, PosMinting>();
+                        services.AddSingleton<BlockDefinition, PowBlockDefinition>();
+                        services.AddSingleton<BlockDefinition, PosBlockDefinition>();
+                        services.AddSingleton<BlockDefinition, PosPowBlockDefinition>();
+                        services.AddSingleton<IBlockProvider, BlockProvider>();
+                        services.AddSingleton<MinerSettings>();
                         services.AddSingleton<IWalletTransactionHandler, TransactionHandler>();
                         services.AddSingleton<IWalletFeePolicy, WalletFeePolicy>();
                         services.AddSingleton<WalletSettings>();
                         services.AddTransient<WalletController>();
-                        services.AddSingleton<WalletRPCController>();
+                        //services.AddSingleton<WalletRPCController>();
                         services.AddSingleton<IBroadcasterManager, FullNodeBroadcasterManager>();
                         services.AddSingleton<BroadcasterBehavior>();
                         services.AddSingleton<IScriptAddressReader>(new ScriptAddressReader());

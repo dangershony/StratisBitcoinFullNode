@@ -94,7 +94,10 @@ namespace VisualCrypt.VisualCryptLight
             NormalizedPassword normalizedPassword = Instance().NormalizePassword(passphrase).Result;
             KeyMaterial64 passwordDerivedkeyMaterial64 = Instance().HashPassword(normalizedPassword).Result;
             CipherV2 cipherV2 = Instance().BinaryDecodeVisualCrypt(bytesToDecrypt, context).Result;
-            return Instance().BinaryDecrypt(cipherV2, passwordDerivedkeyMaterial64, context).Result.GetBytes();
+            var response = Instance().BinaryDecrypt(cipherV2, passwordDerivedkeyMaterial64, context);
+            if (response.IsSuccess)
+                return response.Result.GetBytes();
+            return null;
         }
 
 

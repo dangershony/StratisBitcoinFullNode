@@ -35,11 +35,11 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                 {
 
                     case "createWallet":
-                    {
-                        WalletCreateRequest walletCreateRequest = Deserialize<WalletCreateRequest>(decryptedRequest.Payload);
-                        await this.walletController.CreateKeyWalletAsync(walletCreateRequest);
-                        return CreateOk(request);
-                    }
+                        {
+                            WalletCreateRequest walletCreateRequest = Deserialize<WalletCreateRequest>(decryptedRequest.Payload);
+                            await this.walletController.CreateKeyWalletAsync(walletCreateRequest);
+                            return CreateOk(request);
+                        }
                     case "getWalletFiles":
                         {
                             WalletFileModel walletFileModel = await this.walletController.ListWalletsFilesAsync();
@@ -47,12 +47,12 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                         }
                     case "loadWallet":
                         {
-                            await this.walletController.LoadAsync(decryptedRequest.Target);
+                            await this.walletController.LoadAsync();
                             return CreateOk(request);
                         }
                     case "generalInfo":
                         {
-                            WalletGeneralInfoModel walletGeneralInfoModel = await this.walletController.GetGeneralInfoAsync(decryptedRequest.Target);
+                            WalletGeneralInfoModel walletGeneralInfoModel = await this.walletController.GetGeneralInfoAsync();
                             return CreateOk(walletGeneralInfoModel, request);
                         }
                     case "nodeStatus":
@@ -82,27 +82,27 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                     case "getReceiveAddresses":
                         {
-                            AddressesModel addressesModel = await this.walletController.GetAllAddressesAsync(decryptedRequest.Target);
+                            var addressesModel = await this.walletController.GetAllAddressesAsync();
                             return CreateOk(addressesModel, request);
                         }
 
                     case "estimateFee":
                         {
                             var txFeeEstimateRequest = Deserialize<TxFeeEstimateRequest>(decryptedRequest.Payload);
-                            Money fee = await this.walletController.GetTransactionFeeEstimateAsync(decryptedRequest.Target, txFeeEstimateRequest);
+                            Money fee = await this.walletController.GetTransactionFeeEstimateAsync(txFeeEstimateRequest);
                             return CreateOk(fee, request);
                         }
                     case "buildTransaction":
                         {
                             var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
-                            WalletBuildTransactionModel walletBuildTransactionModel = await this.walletController.BuildTransactionAsync(decryptedRequest.Target, buildTransactionRequest);
+                            WalletBuildTransactionModel walletBuildTransactionModel = await this.walletController.BuildTransactionAsync(buildTransactionRequest);
                             return CreateOk(walletBuildTransactionModel, request);
                         }
 
                     case "sendTransaction":
                         {
                             SendTransactionRequest sendTransactionRequest = Deserialize<SendTransactionRequest>(decryptedRequest.Payload);
-                            await this.walletController.SendTransactionAsync(decryptedRequest.Target, sendTransactionRequest);
+                            await this.walletController.SendTransactionAsync(sendTransactionRequest);
                             return CreateOk(request);
                         }
 
@@ -112,6 +112,25 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             await this.walletController.SyncFromDate(walletSyncFromDateRequest);
                             return CreateOk(request);
                         }
+
+                    case "importKeys":
+                        {
+                            var importKeysRequest = Deserialize<ImportKeysRequest>(decryptedRequest.Payload);
+                            var importKeysResponse = await this.walletController.ImportKeysAsync(importKeysRequest);
+                            return CreateOk(importKeysResponse, request);
+                        }
+
+                    case "startStaking":
+                        {
+                            var startStakingRequest = Deserialize<StartStakingRequest>(decryptedRequest.Payload);
+                            await this.walletController.StartStaking(startStakingRequest);
+                            return CreateOk(request);
+                        }
+                    case "stopStaking":
+                    {
+                        await this.walletController.StopStaking();
+                        return CreateOk(request);
+                    }
                     //case "splitCoins":
                     //case "syncFromHash":
                     //case "removeTransactions":

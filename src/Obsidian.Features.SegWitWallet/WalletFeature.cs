@@ -1,14 +1,12 @@
-﻿using System.Text;
+﻿using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using NBitcoin;
-using Stratis.Bitcoin.Builder;
-using Stratis.Bitcoin.Configuration;
+using Obsidian.Features.X1Wallet.Models;
 using Stratis.Bitcoin.Configuration.Logging;
 using Stratis.Bitcoin.Connection;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
-using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
 
 namespace Obsidian.Features.X1Wallet
@@ -16,39 +14,27 @@ namespace Obsidian.Features.X1Wallet
     /// <inheritdoc />
     public class WalletFeature : BaseWalletFeature
     {
-        readonly IWalletSyncManager walletSyncManager;
+        readonly KeyAddressBalance[] keyAddressBalancesEmpty = new KeyAddressBalance[0];
         readonly WalletManagerWrapper walletManagerWrapper;
         readonly IConnectionManager connectionManager;
-        readonly IAddressBookManager addressBookManager;
         readonly BroadcasterBehavior broadcasterBehavior;
 
         public WalletFeature(
-            IWalletManager walletManagerFacade,
-            IWalletSyncManager walletSyncManager,
-            IAddressBookManager addressBookManager,
+            WalletManagerWrapper walletManagerWrapper,
             IConnectionManager connectionManager,
             BroadcasterBehavior broadcasterBehavior,
-            NodeSettings nodeSettings,
-            ILoggerFactory loggerFactory,
             INodeStats nodeStats)
         {
-            this.walletManagerWrapper = (WalletManagerWrapper)walletManagerFacade;
-            this.walletSyncManager = walletSyncManager;
-            this.addressBookManager = addressBookManager;
+            this.walletManagerWrapper = walletManagerWrapper;
             this.connectionManager = connectionManager;
             this.broadcasterBehavior = broadcasterBehavior;
 
-            nodeStats.RegisterStats(this.AddComponentStats, StatsType.Component);
-            nodeStats.RegisterStats(this.AddInlineStats, StatsType.Inline, 800);
+            nodeStats.RegisterStats(AddComponentStats, StatsType.Component);
+            nodeStats.RegisterStats(AddInlineStats, StatsType.Inline, 800);
         }
-
 
         public override Task InitializeAsync()
         {
-            //this.walletManagerFacade.Start();
-            // this.walletSyncManager.Start(); Do not call this here!!!!
-            //this.addressBookManager.Initialize();
-
             this.connectionManager.Parameters.TemplateBehaviors.Add(this.broadcasterBehavior);
 
             return Task.CompletedTask;
@@ -56,25 +42,27 @@ namespace Obsidian.Features.X1Wallet
 
         public override void Dispose()
         {
-            //this.walletManagerFacade.Stop();
-            //this.walletSyncManager.Stop();
+            this.walletManagerWrapper.Dispose();
         }
 
-        public override void ValidateDependencies(IFullNodeServiceProvider services)
+        void AddInlineStats(StringBuilder log)
         {
-            base.ValidateDependencies(services);
-        }
+            string height = "n/a";
+            string hash = "n/a";
+            string walletName = null;
 
-        private void AddInlineStats(StringBuilder log)
-        {
-            var manager = this.walletManagerWrapper.GetManager(null, true);
-
-            if (manager != null)
+            using (var context = this.walletManagerWrapper.GetWalletContext(null, true))
             {
-                var height = manager.Wallet.LastBlockSyncedHeight.ToString();
-                var hash = manager.Wallet.LastBlockSyncedHash?.ToString() ?? "n/a";
-
-                log.AppendLine($"Wallet {manager.Wallet.Name}: Height: ".PadRight(LoggingConfiguration.ColumnLength + 1) + height.PadRight(8) +
+                if (context != null)
+                {
+                    height = context.WalletManager.WalletLastBlockSyncedHeight.ToString();
+                    hash = context.WalletManager.WalletLastBlockSyncedHash?.ToString() ?? "n/a";
+                    walletName = context.WalletManager.WalletName;
+                }
+            }
+            if (walletName != null)
+            {
+                log.AppendLine($"Wallet {walletName}: Height: ".PadRight(LoggingConfiguration.ColumnLength + 1) + height.PadRight(8) +
                                (" Wallet.Hash: ".PadRight(LoggingConfiguration.ColumnLength - 1) + hash));
             }
             else
@@ -83,53 +71,48 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-        private void AddComponentStats(StringBuilder log)
+        void AddComponentStats(StringBuilder log)
         {
-            var manager = this.walletManagerWrapper.GetManager(null, true);
+            string walletName = null;
 
-            if (manager == null)
+            IEnumerable<KeyAddressBalance> balancesPerAddress = this.keyAddressBalancesEmpty;
+
+            using (var context = this.walletManagerWrapper.GetWalletContext(null, true))
+            {
+                if (context != null)
+                {
+                    walletName = context.WalletManager.WalletName;
+                    balancesPerAddress = context.WalletManager.GetBalances();
+                }
+            }
+
+            if (walletName == null)
             {
                 log.AppendLine();
-                log.AppendLine("======Nondeterministic Wallets======");
-                log.AppendLine("No wallet loaded.");
+                log.AppendLine("======X1 Wallet======");
+                log.AppendLine("No wallet file loaded.");
                 return;
             }
 
-            var walletNames = new[] { manager.Wallet.Name };
+            log.AppendLine();
+            log.AppendLine("======X1 Wallet======");
 
-            if (walletNames.Length > 0)
+            Money confirmed = Money.Zero;
+            Money unconfirmed = Money.Zero;
+            Money spendable = Money.Zero;
+            foreach (var bal in balancesPerAddress)
             {
-                log.AppendLine();
-                log.AppendLine("======Nondeterministic Wallets======");
-
-                foreach (string walletName in walletNames)
-                {
-                    var balancesPerAddress = manager.GetBalances();
-                    Money confirmed = Money.Zero;
-                    Money unconfirmed = Money.Zero;
-                    Money spendable = Money.Zero;
-                    foreach (var bal in balancesPerAddress)
-                    {
-                        confirmed += bal.AmountConfirmed;
-                        unconfirmed += bal.AmountUnconfirmed;
-                        spendable += bal.SpendableAmount;
-                    }
-
-                    log.AppendLine(($"{walletName}" + ",").PadRight(LoggingConfiguration.ColumnLength + 10)
-                                   + (" Confirmed balance: " + confirmed.ToString()).PadRight(LoggingConfiguration.ColumnLength + 20)
-                                   + " Unconfirmed balance: " + unconfirmed.ToString().PadRight(LoggingConfiguration.ColumnLength + 20)
-                                   + " Spendable balance " + spendable.ToString()
-                                   );
-
-                    //foreach (HdAccount account in this.walletManagerFacade.GetAccounts(walletName))
-                    //{
-                    //    AccountBalance accountBalance = this.walletManagerFacade.GetBalances(walletName, account.Name).Single();
-                    //    log.AppendLine(($"{walletName}/{account.Name}" + ",").PadRight(LoggingConfiguration.ColumnLength + 10)
-                    //                   + (" Confirmed balance: " + accountBalance.AmountConfirmed.ToString()).PadRight(LoggingConfiguration.ColumnLength + 20)
-                    //                   + " Unconfirmed balance: " + accountBalance.AmountUnconfirmed.ToString());
-                    //}
-                }
+                confirmed += bal.AmountConfirmed;
+                unconfirmed += bal.AmountUnconfirmed;
+                spendable += bal.SpendableAmount;
             }
+
+            log.AppendLine(($"{walletName}").PadRight(LoggingConfiguration.ColumnLength + 10)
+                           + (" Confirmed balance: " + confirmed.ToString()).PadRight(LoggingConfiguration.ColumnLength + 20)
+                           + " Unconfirmed balance: " + unconfirmed.ToString().PadRight(LoggingConfiguration.ColumnLength + 20)
+                           + " Spendable balance " + spendable.ToString()
+                           );
+
         }
     }
 }

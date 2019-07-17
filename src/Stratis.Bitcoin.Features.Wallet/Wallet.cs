@@ -256,7 +256,7 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// <param name="address">The address to get the private key for.</param>
         /// <returns>The extended private key.</returns>
         [NoTrace]
-        public ISecret GetExtendedPrivateKeyForAddress(string password, HdAddress address)
+        public virtual ISecret GetExtendedPrivateKeyForAddress(string password, HdAddress address)
         {
             Guard.NotEmpty(password, nameof(password));
             Guard.NotNull(address, nameof(address));

@@ -32,10 +32,11 @@ namespace Obsidian.OxD.Temp
                     var walletName = "blacky";
                     
                     var walletController = fullNode.NodeService<WalletController>();
-                    await walletController.LoadAsync(walletName);
+                    walletController.SetWalletName(walletName);
+                    await walletController.LoadAsync();
 
 
-                    var addressesModel = await walletController.GetAllAddressesAsync(walletName);
+                    var addressesModel = await walletController.GetAllAddressesAsync();
                     var bech32 = addressesModel.Addresses.First(a => a.IsChange == false).Address;
                     var mineToAddress = new BitcoinWitPubKeyAddress(bech32, fullNode.Network);
 

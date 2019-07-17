@@ -14,8 +14,10 @@ using Obsidian.OxD.Temp;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.Features.Api;
 using Stratis.Bitcoin.Features.Apps;
 using Stratis.Bitcoin.Features.BlockStore;
+using Stratis.Bitcoin.Features.ColdStaking;
 using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.MemoryPool;
 using Stratis.Bitcoin.Features.Miner;
@@ -26,8 +28,6 @@ namespace Obsidian.OxD
 {
     public static class Program
     {
-
-
         public static void Main(string[] args)
         {
             if (args != null && args.Length > 0 && args[0] == "cli")
@@ -52,32 +52,38 @@ namespace Obsidian.OxD
         static async Task MainAsync(string[] args)
         {
             PosBlockHeader.CustomPoWHash = ObsidianXHash.GetObsidianXPoWHash;
-            
+
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianXNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, Stratis", args: args)
+                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, Stratis ", args: args)
                 {
                     MinProtocolVersion = ProtocolVersion.PROVEN_HEADER_VERSION
                 };
 
-                IFullNodeBuilder nodeBuilder = new FullNodeBuilder()
-                    .UseNodeSettings(nodeSettings);
+                var useHDWallet = false;
 
-               
+                var builder = new FullNodeBuilder()
+                            .UseNodeSettings(nodeSettings)
+                            .UseBlockStore()
+                            .UsePosConsensus()
+                            .UseMempool()
+                            .AddPowPosMining()
+                            .AddRPC();
 
-                IFullNode node = nodeBuilder.UseBlockStore()
-                    .UsePosConsensus()
-                    .UseMempool()
-                    .UseX1Wallet()
-                    .UseX1WalletApi()
-                    .UseX1WalletApiHost()
-                    .AddPowPosMining()
-                    .UseApps()
-                    .AddRPC()
-                    .Build();
+                if (useHDWallet)
+                {
+                    builder.UseColdStakingWallet()
+                           .UseApi();
+                }
+                else
+                {
+                    builder.UseX1Wallet()
+                        .UseX1WalletApi()
+                        .UseX1WalletApiHost();
+                }
 
-              
+                var node = builder.Build();
 
 #if DEBUG
                 _ = Task.Run(async () =>
@@ -87,9 +93,7 @@ namespace Obsidian.OxD
                   });
 #endif
 
-
-                if (node != null)
-                    await node.RunAsync();
+                await node.RunAsync();
             }
             catch (Exception ex)
             {
