@@ -300,8 +300,8 @@ namespace Obsidian.Features.X1Wallet
                 {
                     Transaction = uo.Transaction,
                     Confirmations = uo.Confirmations,
-                    Account = new HdAccount(),
-                    Address = new HdAddress { ScriptPubKey = uo.Address.ScriptPubKey, Address = uo.Address.Bech32 }
+                    Account = null,
+                    Address = null
                 };
                 context.UnspentOutputs.Add(ur);
             }

@@ -1,11 +1,10 @@
 ﻿using System.Collections.Generic;
-using System.Text;
 
 namespace Obsidian.Features.X1Wallet.Models
 {
-    public class ImportKeysResponse
+    public class ExportKeysResponse
     {
         public string Message { get; set; }
-        public List<string> ImportedAddresses { get; set; }
+        public List<ExportedAddress> ExportedAddresses { get; set; }
     }
 }
