@@ -60,7 +60,8 @@ namespace Obsidian.Networks.Obsidian
 		        maxStandardVersion: 2,
 		        maxStandardTxWeight: 100_000,
 		        maxBlockSigopsCost: 20_000,
-		        maxStandardTxSigopsCost: 20_000 / 5, 4
+		        maxStandardTxSigopsCost: 20_000 / 5, 
+                witnessScaleFactor: 4
 	        );
 
 			this.Consensus = new NBitcoin.Consensus(

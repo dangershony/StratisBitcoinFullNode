@@ -21,7 +21,7 @@ namespace Obsidian.Networks.ObsidianX
             this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX1"), 0);
             this.DefaultPort = 46660;
             this.DefaultRPCPort = 46661;
-            this.DefaultAPIPort = 37221;
+            this.DefaultAPIPort = 47221;
             this.DefaultMaxOutboundConnections = 16;
             this.DefaultMaxInboundConnections = 109;
             this.MaxTimeOffsetSeconds = 25 * 60;
