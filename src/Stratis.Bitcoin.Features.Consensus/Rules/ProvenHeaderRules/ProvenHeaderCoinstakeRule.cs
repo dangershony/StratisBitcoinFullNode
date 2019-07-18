@@ -85,11 +85,11 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.ProvenHeaderRules
 
             this.CheckSignature(header, prevUtxo);
 
-            //this.CheckStakeKernelHash(context, prevUtxo, header, chainedHeader);
+            this.CheckStakeKernelHash(context, prevUtxo, header, chainedHeader);
 
-            //this.CheckCoinstakeMerkleProof(header);
+            this.CheckCoinstakeMerkleProof(header);
 
-            //this.CheckHeaderSignatureWithCoinstakeKernel(header);
+            this.CheckHeaderSignatureWithCoinstakeKernel(header);
         }
 
         /// <summary>
