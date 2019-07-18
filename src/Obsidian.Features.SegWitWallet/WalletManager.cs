@@ -7,13 +7,16 @@ using System.Linq;
 using System.Net;
 using System.Security;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
+using NBitcoin.DataEncoders;
 using Newtonsoft.Json;
 using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Temp;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
@@ -145,6 +148,60 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
+        internal async Task<ExportKeysResponse> ExportKeysAsync(ExportKeysRequest exportKeysRequest)
+        {
+            var header = new StringBuilder();
+            header.AppendLine($"Starting export from wallet {this.Wallet.Name}, network {this.network.Name} on {DateTime.UtcNow} UTC.");
+            var errors = new StringBuilder();
+            errors.AppendLine("Errors");
+            var success = new StringBuilder();
+            success.AppendLine("Exported Private Key (Hex); Unix Time UTC; IsChange; Address; Label:");
+            int errorCount = 0;
+            int successCount = 0;
+            try
+            {
+                var addresses = this.Wallet.Addresses.Values.ToArray();
+                header.AppendLine($"{addresses.Length} found in wallet.");
+
+                var enc = new Bech32Encoder($"{this.network.CoinTicker.ToLowerInvariant()}key");
+
+                foreach (var a in addresses)
+                {
+                    try
+                    {
+                        var decryptedKey = VCL.DecryptWithPassphrase(exportKeysRequest.WalletPassphrase, a.EncryptedPrivateKey);
+                        if (decryptedKey == null)
+                        {
+                            errorCount++;
+                            header.AppendLine(
+                                $"Address '{a.Bech32}' with label '{a.Label}' could not be decrpted with this passphrase.");
+                        }
+                        else
+                        {
+                            var privateKey = enc.Encode(0, decryptedKey);
+                            success.AppendLine($"{privateKey}; {((DateTimeOffset)a.CreatedDateUtc).ToUnixTimeSeconds()}; {a.IsChange}; {a.Bech32}; {a.Label}");
+                            successCount++;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        header.AppendLine($"Exception processing Address '{a.Bech32}' with label '{a.Label}':{e.Message}");
+                    }
+                }
+
+                header.AppendLine($"{errorCount} errors occured.");
+                header.AppendLine($"{successCount} addresses with private keys successfully exported.");
+            }
+            catch (Exception e)
+            {
+                errors.AppendLine(e.Message);
+                return new ExportKeysResponse { Message = $"Export failed because an exception occured: {e.Message}" };
+            }
+
+            return new ExportKeysResponse
+            { Message = $"{header}{Environment.NewLine}{success}{Environment.NewLine}{errors}{Environment.NewLine}" };
+        }
+
         #endregion
 
         #region public methods
@@ -165,8 +222,28 @@ namespace Obsidian.Features.X1Wallet
             if (test == null)
                 throw new SegWitWalletException(System.Net.HttpStatusCode.Unauthorized,
                     "Your passphrase is incorrect.", null);
-
             var importedAddresses = new List<string>();
+
+            if (true)
+            {
+                int start = 23;
+                int end = 43;
+                for (var i = start; i <= end; i++)
+                {
+                    var bytes = new byte[32];
+                    StaticWallet.Fill((byte)i, bytes);
+                    var isChange = i % 2 == 0;
+                    var address = KeyAddress.CreateWithPrivateKey(bytes, importKeysRequest.WalletPassphrase, VCL.EncryptWithPassphrase, this.network.Consensus.CoinType, 0, this.network.CoinTicker.ToLowerInvariant());
+                    address.IsChange = isChange;
+                    address.Label = i.ToString();
+                    if (!this.Wallet.Addresses.ContainsKey(address.Hash160Hex))
+                        this.Wallet.Addresses.Add(address.Hash160Hex, address);
+                }
+            }
+
+
+
+
             foreach (var candidate in possibleKeys)
             {
                 try
@@ -196,14 +273,14 @@ namespace Obsidian.Features.X1Wallet
             return response;
         }
 
-       
 
-        public List<UnspentKeyAddressOutput> GetAllSpendableTransactions(int confirmations = 50)
+
+        public List<UnspentKeyAddressOutput> GetAllSpendableTransactions(int confirmations = 0)
         {
             var res = new List<UnspentKeyAddressOutput>();
             foreach (var adr in this.Wallet.Addresses.Values)
             {
-                UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, 50);
+                UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, confirmations);
                 res.AddRange(unspentKeyAddress);
             }
             return res;
@@ -667,11 +744,16 @@ namespace Obsidian.Features.X1Wallet
 
         KeyAddress FindAddressByScriptPubKey(Script scriptPubKey)
         {
+            byte[] raw = scriptPubKey.ToBytes();
             byte[] hash160 = null;
             var pubKey = scriptPubKey.GetDestinationPublicKeys(this.network).SingleOrDefault();
             if (pubKey != null)
             {
                 hash160 = pubKey.Hash.ToBytes();
+            }
+            else if(raw.Length == 22 && raw[0] == 0 && raw[1] == 20)  // push 20 (x14) bytes
+            {
+                hash160 = raw.Skip(2).Take(20).ToArray();
             }
             else
             {

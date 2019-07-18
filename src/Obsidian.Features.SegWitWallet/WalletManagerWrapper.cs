@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -52,6 +53,8 @@ namespace Obsidian.Features.X1Wallet
         readonly ITimeSyncBehaviorState timeSyncBehaviorState;
         readonly IWalletManagerStakingAdapter walletManagerStakingAdapter;
 
+        static readonly RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
+
         WalletManager walletManager;
 
         public WalletManagerWrapper(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
@@ -87,26 +90,27 @@ namespace Obsidian.Features.X1Wallet
                 return new WalletContext(this.walletManager);
             }
 
-
             if (walletName == null)
                 throw new ArgumentNullException(nameof(walletName));
 
+            if (this.walletManager != null)
+            {
+                if (this.walletManager.WalletName == walletName)
+                    return new WalletContext(this.walletManager);
+                throw new InvalidOperationException($"Invalid request for wallet {walletName} - the current wallet is {this.walletManager.WalletName}");
+            }
             lock (this.lockObject)
             {
-                if (this.walletManager != null)
+                if (this.walletManager == null)
                 {
-                    if (this.walletManager.WalletName == walletName)
-                        return new WalletContext(this.walletManager);
-                    throw new InvalidOperationException($"Invalid request for wallet {walletName} - the current wallet is {this.walletManager.WalletName}");
+                    LoadWallet(walletName).GetAwaiter().GetResult();
+                    Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
+                    WalletSyncManagerStart();
+                    this.walletManagerStakingAdapter.SetWalletManagerWrapper(this, walletName);
                 }
-
-                LoadWallet(walletName).GetAwaiter().GetResult();
-                Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
-                WalletSyncManagerStart();
-                this.walletManagerStakingAdapter.SetWalletManagerWrapper(this, walletName);
-                return new WalletContext(this.walletManager);
             }
-            
+            return new WalletContext(this.walletManager);
+
         }
 
         WalletContext GetWalletContextPrivate()
@@ -154,19 +158,17 @@ namespace Obsidian.Features.X1Wallet
             const int witnessVersion = 0;
             var bech32Prefix = this.network.CoinTicker.ToLowerInvariant();  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
 
-
-
-            //int start = 23;
-            //int end = 43;
-            //for (var i = start; i <= end; i++)
-            //{
-            //    var bytes = new byte[32];
-            //    StaticWallet.Fill((byte)i, bytes);
-            //    var isChange = i % 2 == 0;
-            //    var address = KeyAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, this.network.Consensus.CoinType, witnessVersion, bech32Prefix);
-            //    address.IsChange = isChange;
-            //    keyWallet.Addresses.Add(address.ScriptPubKey.ToHex(), address);
-            //}
+            int start = 0;
+            int end = 99;
+            for (var i = start; i <= end; i++)
+            {
+                var bytes = new byte[32];
+                rng.GetBytes(bytes);
+                var isChange = i % 2 == 0;
+                var address = KeyAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, this.network.Consensus.CoinType, witnessVersion, bech32Prefix);
+                address.IsChange = isChange;
+                keyWallet.Addresses.Add(address.Hash160Hex, address);
+            }
 
             var serializedWallet = JsonConvert.SerializeObject(keyWallet, Formatting.Indented);
             File.WriteAllText(filePath, serializedWallet);
@@ -246,7 +248,7 @@ namespace Obsidian.Features.X1Wallet
                 this.logger.LogTrace("(-)[NEW_TIP_REORG]");
                 return;
             }
-            retry:
+        retry:
             if (this.syncState.WalletTip == null)
             {
                 using (var context = GetWalletContextPrivate())
@@ -254,10 +256,10 @@ namespace Obsidian.Features.X1Wallet
                     this.syncState.WalletTip = this.chainIndexer.GetHeader(context.WalletManager.WalletLastBlockSyncedHash);
                     await Task.Delay(250);
                     goto retry;
-                    
+
                 }
             }
-           
+
             // If the new block's previous hash is not the same as the one we have, there might have been a reorg.
             // If the new block follows the previous one, just pass the block to the manager.
             if (block.Header.HashPrevBlock != this.syncState.WalletTip.HashBlock)

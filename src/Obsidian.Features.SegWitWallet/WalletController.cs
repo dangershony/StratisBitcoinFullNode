@@ -141,6 +141,15 @@ namespace Obsidian.Features.X1Wallet
 
         }
 
+        public async Task<ExportKeysResponse> ExportKeysAsync(ExportKeysRequest importKeysRequest)
+        {
+            using (var context = GetWalletContext())
+            {
+                return await context.WalletManager.ExportKeysAsync(importKeysRequest);
+            }
+
+        }
+
         public async Task<WalletGeneralInfoModel> GetGeneralInfoAsync()
         {
             using (var context = GetWalletContext())
