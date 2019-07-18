@@ -6,12 +6,12 @@ using NBitcoin;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.OxD.Api
+namespace Obsidian.ObsidianD.Api
 {
     /// <summary>
     /// Configuration related to the API interface.
     /// </summary>
-    public class ApiSettings
+    public class SecureApiSettings
     {
         /// <summary>The default port used by the API when the node runs on the Stratis network.</summary>
         public const string DefaultApiHost = "http://0.0.0.0";

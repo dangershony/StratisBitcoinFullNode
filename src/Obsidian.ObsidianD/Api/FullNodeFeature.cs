@@ -17,7 +17,7 @@ namespace Obsidian.ObsidianD.Api
                     .FeatureServices(services =>
                     {
                         services.AddSingleton(fullNodeBuilder);
-                        services.AddSingleton<ApiSettings>();
+                        services.AddSingleton<SecureApiSettings>();
                     });
             });
 

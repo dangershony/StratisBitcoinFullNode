@@ -30,7 +30,9 @@ namespace Obsidian.Features.X1Wallet
         {
             return new Dictionary<string, ScriptTemplate> {
                 { "P2PK", PayToPubkeyTemplate.Instance },
-                { "P2PKH", PayToPubkeyHashTemplate.Instance } };
+                { "P2PKH", PayToPubkeyHashTemplate.Instance },
+                { "P2WPKH", PayToWitPubKeyHashTemplate.Instance }
+            };
         }
 
         public uint256 WalletTipHash

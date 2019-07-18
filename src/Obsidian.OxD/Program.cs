@@ -68,29 +68,31 @@ namespace Obsidian.OxD
                             .UseBlockStore()
                             .UsePosConsensus()
                             .UseMempool();
-                            //.AddPowPosMining()
-                            //.AddRPC();
+
 
                 if (useHDWallet)
                 {
-                    builder.UseColdStakingWallet()
-                           .UseApi();
+                    builder
+                        .AddPowPosMining()
+                        .AddRPC()
+                        .UseColdStakingWallet()
+                        .UseApi();
                 }
                 else
                 {
                     builder.UseX1Wallet()
                         .UseX1WalletApi()
-                        .UseX1WalletApiHost();
+                        .UseSecureApiHost();
                 }
 
                 var node = builder.Build();
 
 #if DEBUG
-                _ = Task.Run(async () =>
-                  {
-                      await Task.Delay(15000);
-                      TestBench.Run((FullNode)node);  // start mining to the wallet
-                  });
+                //_ = Task.Run(async () =>
+                //  {
+                //      await Task.Delay(15000);
+                //      TestBench.Run((FullNode)node);  // start mining to the wallet
+                //  });
 #endif
 
                 await node.RunAsync();

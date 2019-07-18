@@ -114,7 +114,7 @@ namespace Obsidian.ObsidianD.Api
         /// <param Command="network">The network to extract values from.</param>
         public static void PrintHelp(Network network)
         {
-            ApiSettings.PrintHelp(network);
+            SecureApiSettings.PrintHelp(network);
         }
 
         /// <summary>
@@ -124,7 +124,7 @@ namespace Obsidian.ObsidianD.Api
         /// <param Command="network">The network to base the defaults off.</param>
         public static void BuildDefaultConfigurationFile(StringBuilder builder, Network network)
         {
-            ApiSettings.BuildDefaultConfigurationFile(builder, network);
+            SecureApiSettings.BuildDefaultConfigurationFile(builder, network);
         }
 
 

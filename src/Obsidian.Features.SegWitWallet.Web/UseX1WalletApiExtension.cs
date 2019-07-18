@@ -4,7 +4,7 @@ using Stratis.Bitcoin.Configuration.Logging;
 
 namespace Obsidian.Features.X1Wallet.SecureApi
 {
-    public static class FullNodeFeature
+    public static class UseX1WalletApiExtension
     {
         public static IFullNodeBuilder UseX1WalletApi(this IFullNodeBuilder fullNodeBuilder)
         {

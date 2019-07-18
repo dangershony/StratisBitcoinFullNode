@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Obsidian.Features.X1Wallet.SecureApi;
 using Stratis.Bitcoin.Builder;
 
 namespace Obsidian.OxD.Api
@@ -6,18 +7,18 @@ namespace Obsidian.OxD.Api
     /// <summary>
     /// A class providing extension methods for <see cref="IFullNodeBuilder"/>.
     /// </summary>
-    public static class FullNodeFeature
+    public static class UseSecureApiHostExtension
     {
-        public static IFullNodeBuilder UseX1WalletApiHost(this IFullNodeBuilder fullNodeBuilder)
+        public static IFullNodeBuilder UseSecureApiHost(this IFullNodeBuilder fullNodeBuilder)
         {
             fullNodeBuilder.ConfigureFeature(features =>
             {
                 features
-                    .AddFeature<ApiFeature>()
+                    .AddFeature<SecureApiHostFeature>()
                     .FeatureServices(services =>
                     {
                         services.AddSingleton(fullNodeBuilder);
-                        services.AddSingleton<ApiSettings>();
+                        services.AddSingleton<SecureApiSettings>();
                     });
             });
 

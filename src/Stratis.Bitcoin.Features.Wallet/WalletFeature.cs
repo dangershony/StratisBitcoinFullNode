@@ -31,7 +31,7 @@ namespace Stratis.Bitcoin.Features.Wallet
     /// <summary>
     /// Wallet feature for the full node.
     /// </summary>
-    /// <seealso cref="Stratis.Bitcoin.Builder.Feature.FullNodeFeature" />
+    /// <seealso cref="FullNodeFeature" />
     public class WalletFeature : BaseWalletFeature
     {
         private readonly IWalletSyncManager walletSyncManager;

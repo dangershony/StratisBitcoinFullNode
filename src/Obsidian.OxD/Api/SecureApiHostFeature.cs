@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using NBitcoin;
+using Obsidian.Features.X1Wallet.SecureApi;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Utilities;
@@ -14,25 +13,25 @@ using Stratis.Bitcoin.Utilities;
 namespace Obsidian.OxD.Api
 {
     /// <summary>
-    /// Provides an Api to the full node
+    /// Provides an encrypted password-protected endpoint to the node.
     /// </summary>
-    public sealed class ApiFeature : Stratis.Bitcoin.Builder.Feature.FullNodeFeature
+    public sealed class SecureApiHostFeature : Stratis.Bitcoin.Builder.Feature.FullNodeFeature
     {
         readonly IFullNodeBuilder fullNodeBuilder;
         readonly FullNode fullNode;
-        readonly ApiSettings apiSettings;
+        readonly SecureApiSettings secureApiSettings;
         readonly ILogger logger;
 
 
-        public ApiFeature(
+        public SecureApiHostFeature(
             IFullNodeBuilder fullNodeBuilder,
             FullNode fullNode,
-            ApiSettings apiSettings,
+            SecureApiSettings secureApiSettings,
             ILoggerFactory loggerFactory)
         {
             this.fullNodeBuilder = fullNodeBuilder;
             this.fullNode = fullNode;
-            this.apiSettings = apiSettings;
+            this.secureApiSettings = secureApiSettings;
             this.logger = loggerFactory.CreateLogger(GetType().FullName);
 
             this.InitializeBeforeBase = true;
@@ -40,28 +39,41 @@ namespace Obsidian.OxD.Api
 
         public override Task InitializeAsync()
         {
-            this.logger.LogInformation("API starting on URL '{0}'.", this.apiSettings.ApiUri);
-            Initialize(this.fullNodeBuilder.Services, this.fullNode, this.apiSettings, new WebHostBuilder());
+            if (this.secureApiSettings.IsSecureApiEnabled)
+            {
+                string path = $"{nameof(SecureApiController)}/{nameof(SecureApiController.ExecuteAsync)}".Replace("Controller", string.Empty);
+                string message =
+                    $"{nameof(SecureApiHostFeature)} listening at {this.secureApiSettings.SecureApiHostBinding}:{this.secureApiSettings.SecureApiPort}/{path}.";
+                if (!string.IsNullOrWhiteSpace(this.secureApiSettings.SecureApiUser) &&
+                    !string.IsNullOrWhiteSpace(this.secureApiSettings.SecureApiPassword))
+                    message += " Credentials are required.";
+                else message += " No credentials are required.";
+                this.logger.LogInformation(message);
+            }
+            else
+            {
+                this.logger.LogInformation($"{nameof(SecureApiHostFeature)} is initialized but requests are disabled by configuration/arguments.");
+            }
+
+            Initialize(this.fullNodeBuilder.Services, this.fullNode, this.secureApiSettings, new WebHostBuilder());
 
             return Task.CompletedTask;
         }
 
-        static void Initialize(IEnumerable<ServiceDescriptor> services, FullNode fullNode, ApiSettings apiSettings,
-            IWebHostBuilder webHostBuilder)
+        static void Initialize(IEnumerable<ServiceDescriptor> services, FullNode fullNode, SecureApiSettings secureApiSettings, IWebHostBuilder webHostBuilder)
         {
             Guard.NotNull(fullNode, nameof(fullNode));
             Guard.NotNull(webHostBuilder, nameof(webHostBuilder));
 
-            Uri apiUri = apiSettings.ApiUri;
+            string secureApiListening = $"{secureApiSettings.SecureApiHostBinding}:{secureApiSettings.SecureApiPort}";
 
             webHostBuilder
                 .UseKestrel(options =>
                 {
-                    if (apiSettings.UseHttps)
-                        throw new NotSupportedException("Please use Stratis.Bitcoin.Features.Api if HTTPS is required.");
+
 
                 })
-                .UseUrls(apiUri.ToString())
+                .UseUrls(secureApiListening)
                 .UseStartup<Startup>()
                 .ConfigureServices(collection =>
                 {
@@ -104,26 +116,5 @@ namespace Obsidian.OxD.Api
 
             host.Start();
         }
-
-        /// <summary>
-        /// Prints command-line help.
-        /// </summary>
-        /// <param Command="network">The network to extract values from.</param>
-        public static void PrintHelp(Network network)
-        {
-            ApiSettings.PrintHelp(network);
-        }
-
-        /// <summary>
-        /// Get the default configuration.
-        /// </summary>
-        /// <param Command="builder">The string builder to add the settings to.</param>
-        /// <param Command="network">The network to base the defaults off.</param>
-        public static void BuildDefaultConfigurationFile(StringBuilder builder, Network network)
-        {
-            ApiSettings.BuildDefaultConfigurationFile(builder, network);
-        }
-
-      
     }
 }
