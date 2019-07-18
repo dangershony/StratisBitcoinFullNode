@@ -7,35 +7,57 @@ using Newtonsoft.Json.Serialization;
 using Obsidian.Features.X1Wallet.Models;
 using Obsidian.Features.X1Wallet.SecureApi.Models;
 using VisualCrypt.VisualCryptLight;
+using VisualCrypt.VisualCryptLight.VisualCryptLib.ECC;
 
 namespace Obsidian.Features.X1Wallet.SecureApi
 {
     public class SecureApiControllerBase : Controller
     {
+        internal static ECKeyPair AuthKey { get; set; }
+
         protected static string[] CommandsWithoutWalletNameCheck = { };
 
         protected static ECCModel CreateOk(RequestObject request)
         {
+            if (AuthKey == null)
+                throw new X1WalletException(HttpStatusCode.NoContent, "Please retry later.", null);
+
             var responseObject = new ResponseObject<object> { Status = 200, StatusText = "OK" };
             var responseJson = Serialize(responseObject);
             var responseJsonBytes = responseJson.ToUTF8Bytes();
-            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
-            ECCModel eccModel = new ECCModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(), CipherV2Bytes = cipherV2Bytes.ToHexString() };
+            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey, AuthKey.PrivateKey);
+            ECCModel eccModel = new ECCModel
+            {
+                CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(),
+                CipherV2Bytes = cipherV2Bytes.ToHexString(),
+                AuthKey = AuthKey.PublicKey.ToHexString()
+            };
             return eccModel;
         }
 
         protected static ECCModel CreateOk<T>(T data, RequestObject request)
         {
+            if (AuthKey == null)
+                throw new X1WalletException(HttpStatusCode.NoContent, "Please retry later.", null);
+
             var responseObject = new ResponseObject<T> { ResponsePayload = data, Status = 200, StatusText = "OK" };
             var responseJson = Serialize(responseObject);
             var responseJsonBytes = responseJson.ToUTF8Bytes();
-            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
-            ECCModel eccModel = new ECCModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(), CipherV2Bytes = cipherV2Bytes.ToHexString() };
+            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey, AuthKey.PrivateKey);
+            ECCModel eccModel = new ECCModel
+            {
+                CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(),
+                CipherV2Bytes = cipherV2Bytes.ToHexString(),
+                AuthKey = AuthKey.PublicKey.ToHexString()
+            };
             return eccModel;
         }
 
         protected static ECCModel CreateError(Exception e, RequestObject request)
         {
+            if (AuthKey == null)
+                throw new X1WalletException(HttpStatusCode.NoContent, "Please retry later.", null);
+
             var responseObject = new ResponseObject<object>();
             if (e is X1WalletException se)
             {
@@ -49,25 +71,37 @@ namespace Obsidian.Features.X1Wallet.SecureApi
             }
             var responseJson = Serialize(responseObject);
             var responseJsonBytes = responseJson.ToUTF8Bytes();
-            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
-            ECCModel eccModel = new ECCModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(), CipherV2Bytes = cipherV2Bytes.ToHexString() };
+            var cipherV2Bytes = VCL.Encrypt(responseJsonBytes, request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey, AuthKey.PrivateKey);
+            ECCModel eccModel = new ECCModel
+            {
+                CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(),
+                CipherV2Bytes = cipherV2Bytes.ToHexString(),
+                AuthKey = AuthKey.PublicKey.ToHexString()
+            };
             return eccModel;
         }
 
         protected static ECCModel CreatePublicKey()
         {
-            return new ECCModel { CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString() };
+            if (AuthKey == null)
+                throw new X1WalletException(HttpStatusCode.NoContent, "Please retry later.", null);
+
+            return new ECCModel
+            {
+                CurrentPublicKey = VCL.ECKeyPair.PublicKey.ToHexString(),
+                AuthKey = AuthKey.PublicKey.ToHexString()
+            };
         }
 
         protected static DecryptedRequest DecryptRequest(RequestObject request, WalletController walletController)
         {
-            byte[] decrypted = VCL.Decrypt(request.CipherV2Bytes.FromBase64(), request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
+            byte[] decrypted = VCL.Decrypt(request.CipherV2Bytes.FromBase64(), request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey, AuthKey.PrivateKey);
             if (decrypted == null)
                 throw new X1WalletException((HttpStatusCode)427, "Public key changed - please reload", null);
             string json = decrypted.FromUTF8Bytes();
             DecryptedRequest decryptedRequest = JsonConvert.DeserializeObject<DecryptedRequest>(json);
 
-            if (((IList) CommandsWithoutWalletNameCheck).Contains(decryptedRequest.Command))
+            if (((IList)CommandsWithoutWalletNameCheck).Contains(decryptedRequest.Command))
                 return decryptedRequest;
             if (decryptedRequest.Target == null)
                 throw new X1WalletException(HttpStatusCode.BadRequest, "No wallet name was supplied.", null);

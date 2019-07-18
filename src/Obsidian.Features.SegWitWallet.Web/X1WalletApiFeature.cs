@@ -1,26 +1,49 @@
-﻿using System.Text;
+﻿using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
+using Newtonsoft.Json;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Wallet;
+using VisualCrypt.VisualCryptLight;
+using VisualCrypt.VisualCryptLight.VisualCryptLib.ECC;
 
 namespace Obsidian.Features.X1Wallet.SecureApi
 {
     public class X1WalletApiFeature : Stratis.Bitcoin.Builder.Feature.FullNodeFeature
     {
+        const string ServerAuthKeyFilename = "secureapiauthkey.json";
         readonly WalletController walletController;
+        readonly DataFolder dataFolder;
+        readonly ILogger logger;
 
-        public X1WalletApiFeature(WalletController walletController, ILoggerFactory loggerFactory
-          )
+        public X1WalletApiFeature(WalletController walletController, DataFolder dataFolder, ILoggerFactory loggerFactory)
         {
             this.walletController = walletController;
+            this.dataFolder = dataFolder;
+            this.logger = loggerFactory.CreateLogger(typeof(X1WalletApiFeature));
         }
 
 
         public override Task InitializeAsync()
         {
+            var authKeyFile = Path.Combine(this.dataFolder.RootPath, ServerAuthKeyFilename);
+            if (File.Exists(authKeyFile))
+            {
+                var existing = File.ReadAllText(authKeyFile);
+                ECKeyPair existingAuthKey = JsonConvert.DeserializeObject<ECKeyPair>(existing);
+                SecureApiControllerBase.AuthKey = existingAuthKey;
+                this.logger.LogInformation($"Using existing authentication key from {authKeyFile}.");
+                return Task.CompletedTask;
+            }
+                
+            ECKeyPair newAuthKey = VCL.Instance().GenerateECKeyPair().Result;
+            var created = JsonConvert.SerializeObject(newAuthKey);
+            File.WriteAllText(authKeyFile, created);
+            SecureApiControllerBase.AuthKey = newAuthKey;
+            this.logger.LogInformation($"Created authentication key in {authKeyFile}.");
             return Task.CompletedTask;
         }
 

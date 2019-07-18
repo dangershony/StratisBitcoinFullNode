@@ -10,5 +10,8 @@ namespace VisualCrypt.VisualCryptLight
 
 		[DataMember(Name = "currentPublicKey")]
 		public string CurrentPublicKey { get; set; }
-	}
+
+        [DataMember(Name = "authKey")]
+        public string AuthKey { get; set; }
+    }
 }

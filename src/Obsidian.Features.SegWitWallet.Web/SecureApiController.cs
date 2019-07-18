@@ -26,6 +26,12 @@ namespace Obsidian.Features.X1Wallet.SecureApi
         [HttpPost]
         public async Task<ECCModel> ExecuteAsync([FromBody]RequestObject request)
         {
+            if (AuthKey == null)
+            {
+                this.Response.StatusCode = 403;
+                return null;
+            }
+                
             try
             {
                 if (IsRequestForPublicKey(request))

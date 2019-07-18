@@ -48,10 +48,11 @@ namespace VisualCrypt.VisualCryptLight
             }
         }
 
-        public static byte[] Decrypt(byte[] cipherV2Bytes, byte[] publicKey, byte[] privateKey)
+        public static byte[] Decrypt(byte[] cipherV2Bytes, byte[] publicKey, byte[] privateKey, byte[] privateAuthKey)
         {
             var hashedSharedSecretBytes = VCL.Instance().CalculateAndHashSharedSecret(privateKey, publicKey);
-            var keyMaterial64 = ToKeyMaterial64(hashedSharedSecretBytes);
+            var authSecretBytes = VCL.Instance().CalculateAndHashSharedSecret(privateAuthKey, publicKey);
+            var keyMaterial64 = ToKeyMaterial64(hashedSharedSecretBytes, authSecretBytes);
 
             CipherV2 cipherV2FromClient = VCL.Instance().BinaryDecodeVisualCrypt(cipherV2Bytes, VCL.GetContext()).Result;
             var binaryDecryptResponse = VCL.Instance().BinaryDecrypt(cipherV2FromClient, keyMaterial64, VCL.GetContext());
@@ -60,7 +61,7 @@ namespace VisualCrypt.VisualCryptLight
             return binaryDecryptResponse.Result.GetBytes();
         }
 
-        public static byte[] Encrypt(byte[] plaintextBytes, byte[] publicKey, byte[] privateKey)
+        public static byte[] Encrypt(byte[] plaintextBytes, byte[] publicKey, byte[] privateKey, byte[] privateAuthKey)
         {
             if (plaintextBytes == null)
                 throw new ArgumentNullException(nameof(plaintextBytes));
@@ -70,7 +71,8 @@ namespace VisualCrypt.VisualCryptLight
                 throw new ArgumentNullException(nameof(privateKey));
 
             var hashedSharedSecretBytes = VCL.Instance().CalculateAndHashSharedSecret(privateKey, publicKey);
-            var keyMaterial64 = ToKeyMaterial64(hashedSharedSecretBytes);
+            var authSecretBytes = VCL.Instance().CalculateAndHashSharedSecret(privateAuthKey, publicKey);
+            var keyMaterial64 = ToKeyMaterial64(hashedSharedSecretBytes,authSecretBytes);
 
             CipherV2 cipher = VCL.Instance().BinaryEncrypt(new Clearbytes(plaintextBytes), keyMaterial64, new RoundsExponent(RoundsExponent.DontMakeRounds), VCL.GetContext()).Result;
             return VCL.Instance().BinaryEncodeVisualCrypt(cipher, VCL.GetContext()).Result;
@@ -101,10 +103,11 @@ namespace VisualCrypt.VisualCryptLight
         }
 
 
-        static KeyMaterial64 ToKeyMaterial64(byte[] hashedSharedSecretBytes)
+        static KeyMaterial64 ToKeyMaterial64(byte[] hashedSharedSecretBytes, byte[] authSecretBytes)
         {
             byte[] dest = new byte[64];
             Buffer.BlockCopy(hashedSharedSecretBytes, 0, dest, 0, 32);
+            Buffer.BlockCopy(authSecretBytes, 0, dest, 32, 32);
             return new KeyMaterial64(dest);
         }
 
