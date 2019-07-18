@@ -7,5 +7,9 @@
         public string Payload;
 
         public string Target;
+
+        public string User;
+
+        public string Password;
     }
 }

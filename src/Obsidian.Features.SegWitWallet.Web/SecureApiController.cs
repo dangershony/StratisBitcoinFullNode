@@ -14,10 +14,12 @@ namespace Obsidian.Features.X1Wallet.SecureApi
     public class SecureApiController : SecureApiControllerBase
     {
         readonly WalletController walletController;
+        readonly SecureApiSettings secureApiSettings;
 
-        public SecureApiController(WalletController walletController)
+        public SecureApiController(WalletController walletController, SecureApiSettings secureApiSettings)
         {
             this.walletController = walletController;
+            this.secureApiSettings = secureApiSettings;
             CommandsWithoutWalletNameCheck = new[] { "createWallet", "getWalletFiles" };
         }
 
@@ -30,6 +32,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                     return CreatePublicKey();
 
                 DecryptedRequest decryptedRequest = DecryptRequest(request, this.walletController);
+                CheckPermissions(decryptedRequest, this.secureApiSettings);
 
                 switch (decryptedRequest.Command)
                 {
@@ -136,14 +139,6 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                         await this.walletController.StopStaking();
                         return CreateOk(request);
                     }
-                    //case "splitCoins":
-                    //case "syncFromHash":
-                    //case "removeTransactions":
-                    //case "spendableTransactions":
-                    //case "maxBalance":
-                    //case "receivedByAddress":
-                    //case "verifyMessage":
-                    //case "signMessage":
                     default:
                         throw new NotSupportedException($"The command '{decryptedRequest.Command}' is not supported.");
                 }
@@ -153,5 +148,6 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                 return CreateError(e, request);
             }
         }
+        
     }
 }

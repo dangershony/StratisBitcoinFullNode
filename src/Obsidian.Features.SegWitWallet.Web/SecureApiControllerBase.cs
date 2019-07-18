@@ -37,7 +37,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
         protected static ECCModel CreateError(Exception e, RequestObject request)
         {
             var responseObject = new ResponseObject<object>();
-            if (e is SegWitWalletException se)
+            if (e is X1WalletException se)
             {
                 responseObject.Status = (int)se.HttpStatusCode;
                 responseObject.StatusText = se.Message;
@@ -63,14 +63,14 @@ namespace Obsidian.Features.X1Wallet.SecureApi
         {
             byte[] decrypted = VCL.Decrypt(request.CipherV2Bytes.FromBase64(), request.CurrentPublicKey.FromBase64(), VCL.ECKeyPair.PrivateKey);
             if (decrypted == null)
-                throw new SegWitWalletException((HttpStatusCode)427, "Public key changed - please reload", null);
+                throw new X1WalletException((HttpStatusCode)427, "Public key changed - please reload", null);
             string json = decrypted.FromUTF8Bytes();
             DecryptedRequest decryptedRequest = JsonConvert.DeserializeObject<DecryptedRequest>(json);
 
             if (((IList) CommandsWithoutWalletNameCheck).Contains(decryptedRequest.Command))
                 return decryptedRequest;
             if (decryptedRequest.Target == null)
-                throw new SegWitWalletException(HttpStatusCode.BadRequest, "No wallet name was supplied.", null);
+                throw new X1WalletException(HttpStatusCode.BadRequest, "No wallet name was supplied.", null);
             walletController.SetWalletName(decryptedRequest.Target);
             return decryptedRequest;
         }
@@ -81,6 +81,26 @@ namespace Obsidian.Features.X1Wallet.SecureApi
             if (string.IsNullOrEmpty(request.CurrentPublicKey) || string.IsNullOrEmpty(request.CipherV2Bytes))
                 return true;
             return false;
+        }
+
+        protected static void CheckPermissions(DecryptedRequest decryptedRequest, SecureApiSettings secureApiSettings)
+        {
+            if (decryptedRequest == null)
+                throw new ArgumentNullException(nameof(decryptedRequest));
+
+            if (!secureApiSettings.IsSecureApiEnabled)
+                throw new X1WalletException(HttpStatusCode.Unauthorized,
+                    "SecureApi is disabled by configuration/arguments", null);
+
+            if (string.IsNullOrWhiteSpace(secureApiSettings.SecureApiUser) || string.IsNullOrWhiteSpace(secureApiSettings.SecureApiPassword))
+                return;
+
+            var user = secureApiSettings.SecureApiUser.Trim();
+            var password = secureApiSettings.SecureApiPassword.Trim();
+            if (user != decryptedRequest.User || password != decryptedRequest.Password)
+                throw new X1WalletException(HttpStatusCode.Unauthorized,
+                    "Invalid credentials.", null);
+
         }
 
         protected static T Deserialize<T>(string json)

@@ -220,7 +220,7 @@ namespace Obsidian.Features.X1Wallet
             var firstExistingEncryptedKey = Wallet.Addresses.Values.First().EncryptedPrivateKey;
             var test = VCL.DecryptWithPassphrase(importKeysRequest.WalletPassphrase, firstExistingEncryptedKey);
             if (test == null)
-                throw new SegWitWalletException(System.Net.HttpStatusCode.Unauthorized,
+                throw new X1WalletException(System.Net.HttpStatusCode.Unauthorized,
                     "Your passphrase is incorrect.", null);
             var importedAddresses = new List<string>();
 
@@ -652,17 +652,17 @@ namespace Obsidian.Features.X1Wallet
             Guard.NotNull(passphrase, nameof(passphrase));
 
             if (VCL.DecryptWithPassphrase(passphrase, Wallet.Addresses.Values.First().EncryptedPrivateKey) == null)
-                throw new SegWitWalletException(HttpStatusCode.Unauthorized, "The passphrase is not correct.", null);
+                throw new X1WalletException(HttpStatusCode.Unauthorized, "The passphrase is not correct.", null);
 
             if (!this.network.Consensus.IsProofOfStake)
-                throw new SegWitWalletException(HttpStatusCode.BadRequest, "Staking requires a Proof-of-Stake consensus.", null);
+                throw new X1WalletException(HttpStatusCode.BadRequest, "Staking requires a Proof-of-Stake consensus.", null);
 
             if (this.timeSyncBehaviorState.IsSystemTimeOutOfSync)
             {
                 string errorMessage = "Staking cannot start, your system time does not match that of other nodes on the network." + Environment.NewLine
                                                                                                                                   + "Please adjust your system time and restart the node.";
                 this.logger.LogError(errorMessage);
-                throw new SegWitWalletException(HttpStatusCode.InternalServerError, errorMessage, null);
+                throw new X1WalletException(HttpStatusCode.InternalServerError, errorMessage, null);
             }
 
             this.logger.LogInformation("Enabling staking on wallet '{0}'.", this.WalletName);

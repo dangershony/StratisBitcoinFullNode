@@ -513,7 +513,7 @@ namespace Obsidian.Features.X1Wallet
             {
                 if (!this.connectionManager.ConnectedPeers.Any())
                 {
-                    throw new SegWitWalletException(HttpStatusCode.Forbidden, "Can't send transaction: sending transaction requires at least one connection!", new Exception());
+                    throw new X1WalletException(HttpStatusCode.Forbidden, "Can't send transaction: sending transaction requires at least one connection!", new Exception());
                 }
 
                 Transaction transaction = this.network.CreateTransaction(request.Hex);
@@ -541,7 +541,7 @@ namespace Obsidian.Features.X1Wallet
 
                 if (transactionBroadCastEntry.State == State.CantBroadcast)
                 {
-                    throw new SegWitWalletException(HttpStatusCode.BadRequest, transactionBroadCastEntry.ErrorMessage, new Exception("Transaction Exception"));
+                    throw new X1WalletException(HttpStatusCode.BadRequest, transactionBroadCastEntry.ErrorMessage, new Exception("Transaction Exception"));
                 }
 
                 return model;
@@ -655,7 +655,7 @@ namespace Obsidian.Features.X1Wallet
 
                 if (block == null)
                 {
-                    throw new SegWitWalletException(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", new Exception());
+                    throw new X1WalletException(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", new Exception());
                 }
 
                 await this.walletManagerWrapper.WalletSyncManagerSyncFromHeightAsync(block.Height);
@@ -766,7 +766,7 @@ namespace Obsidian.Features.X1Wallet
         public GetStakingInfoModel GetStakingInfo()
         {
             if (!this.fullNode.Network.Consensus.IsProofOfStake)
-                throw new SegWitWalletException(HttpStatusCode.MethodNotAllowed, "Consensus is not Proof-of-Stake.", null);
+                throw new X1WalletException(HttpStatusCode.MethodNotAllowed, "Consensus is not Proof-of-Stake.", null);
 
             GetStakingInfoModel model = this.posMinting != null ? this.posMinting.GetGetStakingInfoModel() : new GetStakingInfoModel();
             return model;
