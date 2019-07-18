@@ -3,7 +3,7 @@ using Obsidian.Features.X1Wallet.SecureApi;
 
 namespace Obsidian.ObsidianD.Api
 {
-    public static class ControllerResistration
+    public static class ControllerRegistration
     {
         public static IMvcBuilder AddSecureApi(this IMvcBuilder builder, IServiceCollection services)
         {

@@ -85,7 +85,7 @@ namespace Obsidian.Features.X1Wallet
 
         public void Dispose()
         {
-            this.blockQueueEnqueuer.Dispose();
+            this.blockQueueEnqueuer?.Dispose();
             this.signals.Unsubscribe(this.blockConnectedSubscription);
             
         }

@@ -8,11 +8,9 @@ using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Networks.Obsidian;
 using Obsidian.ObsidianD.Api;
-using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Api;
-using Stratis.Bitcoin.Features.Apps;
 using Stratis.Bitcoin.Features.BlockStore;
 using Stratis.Bitcoin.Features.ColdStaking;
 using Stratis.Bitcoin.Features.Consensus;
@@ -61,26 +59,29 @@ namespace Obsidian.ObsidianD
 
                 var useHDWallet = false;
 
-                var nodeBuilder = new FullNodeBuilder()
+                var builder = new FullNodeBuilder()
                     .UseNodeSettings(nodeSettings)
                     .UseBlockStore()
                     .UsePosConsensus()
                     .UseMempool();
-                    //.AddPowPosMining();
-                    //.AddRPC();
+
+
                 if (useHDWallet)
                 {
-                    nodeBuilder.UseColdStakingWallet()
+                    builder
+                        .AddPowPosMining()
+                        .AddRPC()
+                        .UseColdStakingWallet()
                         .UseApi();
                 }
                 else
                 {
-                    nodeBuilder.UseX1Wallet()
+                    builder.UseX1Wallet()
                         .UseX1WalletApi()
-                        .UseX1WalletApiHost();
+                        .UseSecureApiHost();
                 }
 
-                var node = nodeBuilder.Build();
+                var node = builder.Build();
 
                 await node.RunAsync();
             }

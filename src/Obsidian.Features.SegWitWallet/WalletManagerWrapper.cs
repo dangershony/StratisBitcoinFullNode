@@ -416,7 +416,7 @@ namespace Obsidian.Features.X1Wallet
 
         public void Dispose()
         {
-            this.syncState.Dispose();
+            this.syncState?.Dispose();
             this.signals.Unsubscribe(this.transactionReceivedSubscription);
 
         }
