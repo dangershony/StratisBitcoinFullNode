@@ -57,7 +57,7 @@ namespace Obsidian.OxD
                     MinProtocolVersion = ProtocolVersion.PROVEN_HEADER_VERSION
                 };
 
-                var useHDWallet = false;
+                var useHDWallet = args.Contains("-hdwallet");
 
                 var builder = new FullNodeBuilder()
                             .UseNodeSettings(nodeSettings)
