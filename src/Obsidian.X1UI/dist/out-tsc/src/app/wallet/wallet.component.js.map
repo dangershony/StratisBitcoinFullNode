@@ -1,0 +1,1 @@
+{"version":3,"file":"wallet.component.js","sourceRoot":"","sources":["../../../../../src/app/wallet/wallet.component.ts"],"names":[],"mappings":";;;AAAA,sCAA0C;AAO1C;IAAA;IAEA,CAAC;IAFY,eAAe;QAL3B,gBAAS,CAAC;YACT,QAAQ,EAAE,kBAAkB;YAC5B,WAAW,EAAE,yBAAyB;YACtC,SAAS,EAAE,CAAC,wBAAwB,CAAC;SACtC,CAAC;OACW,eAAe,CAE3B;IAAD,sBAAC;CAAA,AAFD,IAEC;AAFY,0CAAe"}

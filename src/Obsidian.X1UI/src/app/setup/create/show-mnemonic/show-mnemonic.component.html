@@ -1,0 +1,29 @@
+<section id="GUI" class="container-fluid light">
+  <div class="row">
+    <div class="col-4 left-login d-flex align-items-center">
+      <img  src="./assets/images/stratis/home-stratis-logo.svg" width="160px" height="auto">
+    </div>
+    <!-- /col -->
+    <div class="col-8 right-login d-flex align-content-center flex-wrap">
+      <div class="col-7 mx-auto d-flex align-content-center flex-wrap">
+        <div class="col-12 text-center">
+          <h3 class="display-4 mb-4">Passphrase</h3>
+        </div>
+        <div class="col-12 mnemonics">
+          <div class="alert alert-warning" role="alert">
+            <h4 class="alert-heading">Warning!</h4>
+            <p>Please write down your passphrase. You will need it to decrypt your wallet in the future.</p>
+            <p><b>You must also backup your wallet file!</b></p>
+          </div>
+        </div>
+        <div class="modal-footer col-12">
+          <button type="button" class="btn btn-outline-light" (click)="onCancelClicked()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-block" (click)="onContinueClicked()" [class.btn-stratis-green]="sidechainEnabled">Continue</button>
+        </div>
+      </div>
+    </div>
+    <!-- /col-8 -->
+  </div>
+  <!-- /row -->
+</section>
+<!-- /GUI-->

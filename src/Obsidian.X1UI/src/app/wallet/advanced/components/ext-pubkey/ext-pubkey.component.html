@@ -1,0 +1,24 @@
+<div class="card p-4">
+  <div class="card-header">Import Private Keys</div>
+  <div class="card-body" style="min-height: 400px;">
+    <form class="form-group" [formGroup]="dumpForm">
+      <div class="form-group mt-3">
+        <label for="walletPassword">Passphrase</label>
+        <input type="password" class="form-control form-control-success" [class.is-invalid]="formErrors.walletPassword" [class.is-valid]="!formErrors.walletPassword && dumpForm.get('walletPassword').valid" formControlName="walletPassword" id="walletPassword" placeholder="You wallet passphrase" placement="right" ngbTooltip="The passphrase of the wallet you are importing the keys into." triggers="click:blur">
+        <div *ngIf="formErrors.walletPassword" class="invalid-feedback">{{ formErrors.walletPassword }}</div>
+      </div>
+      <div class="form-group mt-3">
+        <label for="dump">Paste your keys here:</label>
+        <textarea type="text" class="form-control" id="dump" value="" [class.is-invalid]="formErrors.dump" [class.is-valid]="!formErrors.dump && dumpForm.get('dump').valid" formControlName="dump" placeholder="Paste your keys here."></textarea>
+        <div *ngIf="formErrors.dump" class="invalid-feedback">{{ formErrors.dump }}</div>
+      </div>
+    </form>
+    <div>
+      <button type="submit" class="btn btn-primary btn-block" [disabled]="!dumpForm.valid" (click)="onImportClicked()">Import</button>
+      <button type="submit" class="btn btn-primary btn-block" [disabled]="!dumpForm.valid" (click)="onExportClicked()">Export</button>
+    </div>
+    <p class="code-block-base w-100" *ngIf="message">{{ message }}</p>
+    <label for="exp">Export result:</label>
+    <p><textarea id="exp" name="exp" value="{{ export }}"></textarea></p>
+  </div>
+</div>
