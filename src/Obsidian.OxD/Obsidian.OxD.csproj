@@ -15,8 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Obsidian.Features.SegWitWallet.Web\Obsidian.Features.X1Wallet.SecureApi.csproj" />
-    <ProjectReference Include="..\Obsidian.Features.SegWitWallet\Obsidian.Features.X1Wallet.csproj" />
+    <ProjectReference Include="..\Obsidian.Features.X1Wallet.SecureApi\Obsidian.Features.X1Wallet.SecureApi.csproj" />
+    <ProjectReference Include="..\Obsidian.Features.X1Wallet\Obsidian.Features.X1Wallet.csproj" />
     <ProjectReference Include="..\Obsidian.Networks.ObsidianX\Obsidian.Networks.ObsidianX.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.Api\Stratis.Bitcoin.Features.Api.csproj" />
     <ProjectReference Include="..\Stratis.Bitcoin.Features.BlockStore\Stratis.Bitcoin.Features.BlockStore.csproj" />

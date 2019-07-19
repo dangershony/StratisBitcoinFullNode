@@ -10,7 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Obsidian.Features.SegWitWallet\Obsidian.Features.X1Wallet.csproj" />
+    <ProjectReference Include="..\Obsidian.Features.X1Wallet\Obsidian.Features.X1Wallet.csproj" />
     <ProjectReference Include="..\VisualCrypt.VisualCryptLight\VisualCrypt.VisualCryptLight.csproj" />
   </ItemGroup>
 

@@ -11,7 +11,6 @@ using Obsidian.Networks.Obsidian;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
-using Stratis.Bitcoin.Features.Apps;
 using Stratis.Bitcoin.Features.BlockStore;
 using Stratis.Bitcoin.Features.ColdStaking;
 using Stratis.Bitcoin.Features.Consensus;
@@ -51,7 +50,6 @@ namespace Obsidian.DroidD
                 builder = builder.UseColdStakingWallet();
                 builder = builder.AddPowPosMining();
                 //.UseApi()
-                builder = builder.UseApps();
                 builder = builder.AddRPC();
                 _fullNode = (FullNode)builder.Build();
 
