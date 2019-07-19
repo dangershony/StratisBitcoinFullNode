@@ -139,10 +139,6 @@
       <Project>{921d2e58-ae2b-418c-b09d-d8d0ee98c0ea}</Project>
       <Name>Obsidian.Networks.ObsidianX</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Stratis.Bitcoin.Features.Apps\Stratis.Bitcoin.Features.Apps.csproj">
-      <Project>{ff6dde2b-cf33-438f-bcc8-b1e109ab2472}</Project>
-      <Name>Stratis.Bitcoin.Features.Apps</Name>
-    </ProjectReference>
     <ProjectReference Include="..\Stratis.Bitcoin.Features.BlockStore\Stratis.Bitcoin.Features.BlockStore.csproj">
       <Project>{528db00c-f8ae-4703-80e5-ecc37ac56a9e}</Project>
       <Name>Stratis.Bitcoin.Features.BlockStore</Name>
@@ -170,10 +166,6 @@
     <ProjectReference Include="..\Stratis.Bitcoin.Features.Wallet\Stratis.Bitcoin.Features.Wallet.csproj">
       <Project>{6650a6cc-3b56-4d86-8daa-fd0c8830113a}</Project>
       <Name>Stratis.Bitcoin.Features.Wallet</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Stratis.Bitcoin.Networks\Stratis.Bitcoin.Networks.csproj">
-      <Project>{c1d739b1-79cb-4d42-8147-3a31d1b84868}</Project>
-      <Name>Stratis.Bitcoin.Networks</Name>
     </ProjectReference>
     <ProjectReference Include="..\Stratis.Bitcoin\Stratis.Bitcoin.csproj">
       <Project>{094aecd5-e0d8-43a9-a0bd-39b01f51a1f2}</Project>

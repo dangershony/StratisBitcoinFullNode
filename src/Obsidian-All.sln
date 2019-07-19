@@ -176,13 +176,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.FederatedSidechains
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Obsidian", "Obsidian", "{E4693985-DDF7-4CF3-887B-0291135F9499}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Features.X1Wallet", "Obsidian.Features.SegWitWallet\Obsidian.Features.X1Wallet.csproj", "{47E84B90-1577-4131-91CF-6C90B5CD39BB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Features.X1Wallet", "Obsidian.Features.X1Wallet\Obsidian.Features.X1Wallet.csproj", "{47E84B90-1577-4131-91CF-6C90B5CD39BB}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ObsidianX", "ObsidianX", "{4208F272-5766-46B4-8648-B5B5666166C5}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VisualCrypt.VisualCryptLight", "VisualCrypt.VisualCryptLight\VisualCrypt.VisualCryptLight.csproj", "{34BBF5AD-2FF1-4E58-A8DC-9424B427C28C}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Features.X1Wallet.SecureApi", "Obsidian.Features.SegWitWallet.Web\Obsidian.Features.X1Wallet.SecureApi.csproj", "{46E66D04-8869-4861-846A-18600604B974}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Features.X1Wallet.SecureApi", "Obsidian.Features.X1Wallet.SecureApi\Obsidian.Features.X1Wallet.SecureApi.csproj", "{46E66D04-8869-4861-846A-18600604B974}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Networks.ObsidianX", "Obsidian.Networks.ObsidianX\Obsidian.Networks.ObsidianX.csproj", "{921D2E58-AE2B-418C-B09D-D8D0EE98C0EA}"
 EndProject
