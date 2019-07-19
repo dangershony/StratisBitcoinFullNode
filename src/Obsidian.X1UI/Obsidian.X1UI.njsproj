@@ -5,7 +5,7 @@
     <Name>Obsidian.X1UI</Name>
     <RootNamespace>Obsidian.X1UI</RootNamespace>
     <SaveNodeJsSettingsInProjectFile>True</SaveNodeJsSettingsInProjectFile>
-    <NodeExePath>$(ProjectDir)\node_modules\electron\dist\electron.exe</NodeExePath>
+    <NodeExePath>$(SolutionDir)Obsidian.X1UI\node_modules\electron\dist\electron.exe</NodeExePath>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -13,7 +13,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>dca628c8-76ea-41e1-93fc-7f458e515f5c</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>app.ts</StartupFile>
+    <StartupFile>main.ts</StartupFile>
     <StartWebBrowser>False</StartWebBrowser>
     <SearchPath>
     </SearchPath>
@@ -31,9 +31,12 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="app.ts" />
+    <Content Include=".gitignore" />
+    <Content Include="index.html" />
+    <Content Include="main.ts" />
     <Content Include="package.json" />
     <Content Include="README.md" />
+    <Content Include="renderer.js" />
     <Content Include="tsconfig.json" />
   </ItemGroup>
   <Import Project="$(VSToolsPath)\Node.js Tools\Microsoft.NodejsToolsV2.targets" />
