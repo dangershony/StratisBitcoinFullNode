@@ -1,0 +1,25 @@
+{
+  "name": "obsidian.x1-ui",
+  "version": "1.0.0",
+  "description": "Obsidian X1",
+  "main": "app.js",
+  "author": {
+    "name": ""
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/obsidianproject/Obsidian-StratisNode.git"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@types/node": "^8.0.14",
+    "typescript": "^3.2.2"
+  },
+  "dependencies": {
+    "electron": "^5.0.7"
+  }
+}
