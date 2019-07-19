@@ -1,12 +1,12 @@
 FROM microsoft/dotnet:2.2-sdk
 
 RUN git clone https://github.com/obsidianproject/Obsidian-StratisNode.git \
-    && cd /StratisBitcoinFullNode/src/Obsidian.OxD \
+    && cd /Obsidian-StratisNode/src/Obsidian.OxD \
 	&& dotnet build
 	
 VOLUME /root/.stratisbitcoin
 
-WORKDIR /StratisBitcoinFullNode/src/Obsidian.OxD
+WORKDIR /Obsidian-StratisNode/src/Obsidian.OxD
 
 COPY obsidian.conf.docker /root/.stratisnode/obsidianx/ObsidianXMain/obsidianx.conf
 
