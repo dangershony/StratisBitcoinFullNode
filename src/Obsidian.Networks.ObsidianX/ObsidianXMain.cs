@@ -143,7 +143,9 @@ namespace Obsidian.Networks.ObsidianX
             // Do not put gateway nodes in this list.
             string[] seedNodes =
             {
-	            //"104.45.21.229", "23.101.75.57",	// IP addresses of the Obsidian (c++) IP seed nodes
+                "209.97.177.144",
+                "165.22.90.248",
+                "138.68.130.127"
             };
             this.SeedNodes = this.ConvertToNetworkAddresses(seedNodes, this.DefaultPort).ToList();
 
