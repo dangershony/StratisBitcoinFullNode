@@ -1351,7 +1351,7 @@ namespace Stratis.Bitcoin.Features.Wallet.Controllers
 
                 var recipients = new List<Recipient>(request.UtxosCount);
                 for (int i = 0; i < request.UtxosCount; i++)
-                    recipients.Add(new Recipient { ScriptPubKey = address.ScriptPubKey, Amount = singleUtxoAmount });
+                    recipients.Add(new Recipient { ScriptPubKey = new BitcoinWitPubKeyAddress(address.Bech32Address, this.network).ScriptPubKey, Amount = singleUtxoAmount });
 
                 var context = new TransactionBuildContext(this.network)
                 {
@@ -1360,7 +1360,8 @@ namespace Stratis.Bitcoin.Features.Wallet.Controllers
                     Shuffle = true,
                     WalletPassword = request.WalletPassword,
                     Recipients = recipients,
-                    Time = (uint)this.dateTimeProvider.GetAdjustedTimeAsUnixTimestamp()
+                    Time = (uint)this.dateTimeProvider.GetAdjustedTimeAsUnixTimestamp(),
+                    UseSegwitChangeAddress = true
                 };
 
                 Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
