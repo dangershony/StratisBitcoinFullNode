@@ -12,12 +12,6 @@ namespace Stratis.Bitcoin.Networks
 {
     public class SolarisMain : Network
     {
-        /// <summary> Solaris maximal value for the calculated time offset. If the value is over this limit, the time syncing feature will be switched off. </summary>
-        public const int SolarisMaxTimeOffsetSeconds = 25 * 60;
-
-        /// <summary> Solaris default value for the maximum tip age in seconds to consider the node in initial block download (2 hours). </summary>
-        public const int SolarisDefaultMaxTipAgeInSeconds = 2 * 60 * 60;
-
         /// <summary> The name of the root folder containing the different Solaris blockchains (SolarisMain, SolarisTest, SolarisRegTest). </summary>
         public const string SolarisRootFolderName = "solarisplatform";
 
@@ -56,8 +50,8 @@ namespace Stratis.Bitcoin.Networks
             var consensusFactory = new PosConsensusFactory();
 
             // Create the genesis block.
-            this.GenesisTime = 1558551000;
-            this.GenesisNonce = 469044;
+            this.GenesisTime = 1563786843;
+            this.GenesisNonce = 479044;
             this.GenesisBits = 0x1e0fffff;
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
@@ -100,17 +94,15 @@ namespace Stratis.Bitcoin.Networks
                 majorityWindow: 1000,
                 buriedDeployments: buriedDeployments,
                 bip9Deployments: bip9Deployments,
-                bip34Hash: new uint256("0x28781f186b000a18391ebc2224b9fac1cea9518d02e742df85481306c268971e"),
+                bip34Hash: new uint256("0x371938e3812da8e628341403b9d01cdcc95ee8f2d58c6535178aa24e1f905f79"),
                 ruleChangeActivationThreshold: 1916, // 95% of 2016
                 minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
                 maxReorgLength: 500,
-                //TODO Check what this is about
-                //Probably: If this block is in the chain assume that it and its ancestors are valid and potentially skip their script verification (0 to verify all).
-                defaultAssumeValid: new uint256("0x28781f186b000a18391ebc2224b9fac1cea9518d02e742df85481306c268971e"), // 0
+                defaultAssumeValid: new uint256("0x371938e3812da8e628341403b9d01cdcc95ee8f2d58c6535178aa24e1f905f79"), // 0
                 maxMoney: long.MaxValue,
                 coinbaseMaturity: 50,
                 premineHeight: 2,
-                premineReward: Money.Coins(2500000),
+                premineReward: Money.Coins(2187524),
                 proofOfWorkReward: Money.Coins(0.25m),
                 powTargetTimespan: TimeSpan.FromSeconds(14 * 24 * 60 * 60), // two weeks
                 powTargetSpacing: TimeSpan.FromSeconds(10 * 60),
@@ -120,7 +112,7 @@ namespace Stratis.Bitcoin.Networks
                 powLimit: new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
                 minimumChainWork: null,
                 isProofOfStake: true,
-                lastPowBlock: 12500,
+                lastPowBlock: 250,
                 proofOfStakeLimit: new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeLimitV2: new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeReward: Money.Coins(0.25m)
@@ -142,36 +134,35 @@ namespace Stratis.Bitcoin.Networks
 
             this.Checkpoints = new Dictionary<int, CheckpointInfo>
             {
-                { 0, new CheckpointInfo(new uint256("0x28781f186b000a18391ebc2224b9fac1cea9518d02e742df85481306c268971e"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
+                { 0, new CheckpointInfo(new uint256("0x371938e3812da8e628341403b9d01cdcc95ee8f2d58c6535178aa24e1f905f79"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
             };
 
             this.Bech32Encoders = new Bech32Encoder[2];
             this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = null;
             this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = null;
 
-            this.DNSSeeds = new List<DNSSeedData>
+            this.DNSSeeds = new List<DNSSeedData>();
+            
+            for (int i = 1; i < 20; i++)
             {
-                new DNSSeedData("mainnet1.solarisplatform.com", "mainnet1.solarisplatform.com"),
-                new DNSSeedData("mainnet2.solarisplatform.com", "mainnet2.solarisplatform.com"),
-                new DNSSeedData("mainnet3.solarisplatform.com", "mainnet3.solarisplatform.com"),
-                new DNSSeedData("mainnet4.solarisplatform.com", "mainnet4.solarisplatform.com")
-            };
+                this.DNSSeeds.Add(new DNSSeedData($"mainnet{i}.solarisplatform.com", $"mainnet{i}.solarisplatform.com"));
+            }
 
             this.SeedNodes = new List<NetworkAddress>
             {
-                //TODO Set IP based seed nodes
-                //new NetworkAddress(IPAddress.Parse("51.140.231.125"), 16178)
+                new NetworkAddress(IPAddress.Parse("3.221.114.225"), this.DefaultPort), //Official node 1
+                new NetworkAddress(IPAddress.Parse("3.222.184.199"), this.DefaultPort), //Official node 2
             };
 
             this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();
             
-            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x28781f186b000a18391ebc2224b9fac1cea9518d02e742df85481306c268971e"));
-            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0xdb099ac2cd30b7bb2a256a39ea2a0411f2665b4665db5e2e92c8950867c10d1f"));
+            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x371938e3812da8e628341403b9d01cdcc95ee8f2d58c6535178aa24e1f905f79"));
+            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x75fd69908077ef283bda138684a579dab938a65aa9f7f9c856eb93d441f76d24"));
         }
 
         protected static Block CreateSolarisGenesisBlock(ConsensusFactory consensusFactory, uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
         {
-            const string pszTimestamp = "https://www.solariscoin.com/";
+            const string pszTimestamp = "https://www.solarisplatform.com/";
 
             Transaction txNew = consensusFactory.CreateTransaction();
             txNew.Version = 1;
