@@ -141,17 +141,19 @@ namespace Stratis.Bitcoin.Networks
             this.Bech32Encoders[(int)Bech32Type.WITNESS_PUBKEY_ADDRESS] = null;
             this.Bech32Encoders[(int)Bech32Type.WITNESS_SCRIPT_ADDRESS] = null;
 
-            this.DNSSeeds = new List<DNSSeedData>();
-            
-            for (int i = 1; i < 20; i++)
+            this.DNSSeeds = new List<DNSSeedData>
             {
-                this.DNSSeeds.Add(new DNSSeedData($"mainnet{i}.solarisplatform.com", $"mainnet{i}.solarisplatform.com"));
-            }
+                new DNSSeedData("mainnet1.solarisplatform.com", "mainnet1.solarisplatform.com"),
+                new DNSSeedData("mainnet2.solarisplatform.com", "mainnet2.solarisplatform.com"),
+                new DNSSeedData("mainnet3.solarisplatform.com", "mainnet3.solarisplatform.com"),
+                new DNSSeedData("mainnet4.solarisplatform.com", "mainnet4.solarisplatform.com"),
+                new DNSSeedData("mainnet5.solarisplatform.com", "mainnet5.solarisplatform.com")
+            };
 
             this.SeedNodes = new List<NetworkAddress>
             {
                 new NetworkAddress(IPAddress.Parse("3.221.114.225"), this.DefaultPort), //Official node 1
-                new NetworkAddress(IPAddress.Parse("3.222.184.199"), this.DefaultPort), //Official node 2
+                new NetworkAddress(IPAddress.Parse("3.222.184.199"), this.DefaultPort) //Official node 2
             };
 
             this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();
