@@ -164,7 +164,7 @@ namespace Obsidian.Features.X1Wallet
                     ConnectedNodes = this.connectionManager.ConnectedPeers.Count(),
                     ChainTip = this.chainIndexer.Tip.Height,
                     IsChainSynced = this.chainIndexer.IsDownloaded(),
-                    IsDecrypted = true
+                    IsDecrypted = false
                 };
 
                 (string folder, IEnumerable<string> fileNameCollection) = this.walletManagerWrapper.GetWalletsFiles();

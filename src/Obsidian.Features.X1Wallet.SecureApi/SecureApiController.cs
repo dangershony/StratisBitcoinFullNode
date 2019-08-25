@@ -36,7 +36,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
             {
                 if (IsRequestForPublicKey(request))
                     return CreatePublicKey();
-
+                await Task.Delay(1000);
                 DecryptedRequest decryptedRequest = DecryptRequest(request, this.walletController);
                 CheckPermissions(decryptedRequest, this.secureApiSettings);
 
@@ -113,6 +113,15 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             SendTransactionRequest sendTransactionRequest = Deserialize<SendTransactionRequest>(decryptedRequest.Payload);
                             await this.walletController.SendTransactionAsync(sendTransactionRequest);
                             return CreateOk(request);
+                        }
+
+                    case "buildAndSendTransaction":
+                        {
+                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
+                            WalletBuildTransactionModel walletBuildTransactionModel = await this.walletController.BuildTransactionAsync(buildTransactionRequest);
+                            var sendTransactionRequest = new SendTransactionRequest { Hex = walletBuildTransactionModel.Hex };
+                            await this.walletController.SendTransactionAsync(sendTransactionRequest);
+                            return CreateOk(walletBuildTransactionModel, request);
                         }
 
                     case "syncFromDate":

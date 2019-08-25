@@ -32,7 +32,7 @@ namespace Obsidian.OxD.Api
 
                         builder =>
                         {
-                            var allowedDomains = new[] { "http://localhost", "http://localhost:4200" };
+                            var allowedDomains = new[] { "http://localhost", "http://localhost:4200", "http://localhost:3000", "http://localhost:1212" };
 
                             builder.WithOrigins(allowedDomains)
                                 .AllowAnyHeader();
