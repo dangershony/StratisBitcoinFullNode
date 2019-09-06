@@ -29,8 +29,8 @@ namespace Obsidian.Features.X1Wallet
             this.connectionManager = connectionManager;
             this.broadcasterBehavior = broadcasterBehavior;
 
-            nodeStats.RegisterStats(AddComponentStats, StatsType.Component);
-            nodeStats.RegisterStats(AddInlineStats, StatsType.Inline, 800);
+            nodeStats.RegisterStats(AddComponentStats, StatsType.Component, this.GetType().Name);
+            nodeStats.RegisterStats(AddInlineStats, StatsType.Inline, this.GetType().Name, 800);
         }
 
         public override Task InitializeAsync()
