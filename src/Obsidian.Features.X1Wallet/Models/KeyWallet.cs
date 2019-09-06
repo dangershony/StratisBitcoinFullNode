@@ -27,6 +27,12 @@ namespace Obsidian.Features.X1Wallet.Models
         public string Name { get; set; }
 
         /// <summary>
+        /// Encrypted random data that can be used to check the keys' encryption passphrase.
+        /// </summary>
+        [JsonProperty(PropertyName = "passphraseChallenge")]
+        public byte[] PassphraseChallenge { get; set; }
+
+        /// <summary>
         /// Gets or sets the creation time.
         /// </summary>
         [JsonProperty(PropertyName = "creationTime")]

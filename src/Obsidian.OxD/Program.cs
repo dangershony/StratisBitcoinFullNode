@@ -102,7 +102,6 @@ namespace Obsidian.OxD
         static string GetName()
         {
 #if DEBUG
-            return "We, the National Security Agency/Central Security Service (NSA/CSS) is a key member of the Intelligence Community and, by its very nature, requires a high degree of confidentiality. The Agency collects, processes, and disseminates intelligence information from foreign electronic signals for national foreign intelligence and counterintelligence purposes and to support military operations. NSA/CSS is also tasked with preventing foreign adversaries from gaining access to classified national security information. The answers to some of the most common questions about NSA/CSS can be found in the following categories";
             return $"oxd {Assembly.GetEntryAssembly()?.GetName().Version} (d)";
 #else
 			return $"oxd {Assembly.GetEntryAssembly()?.GetName().Version} (r)";

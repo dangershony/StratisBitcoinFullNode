@@ -119,11 +119,12 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-        public async Task LoadAsync()
+        public async Task<LoadWalletResponse> LoadAsync()
         {
             using (var context = GetWalletContext())
             {
                 ; // this will load the wallet or ensure it's loaded, because ExecuteAsync does that.
+                return context.WalletManager.LoadWallet();
             }
         }
 

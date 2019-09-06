@@ -112,6 +112,11 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
+        internal LoadWalletResponse LoadWallet()
+        {
+            return new LoadWalletResponse { PassphraseChallenge = this.Wallet.PassphraseChallenge.ToHexString() };
+        }
+
         public int WalletLastBlockSyncedHeight
         {
             get
