@@ -114,7 +114,7 @@ namespace Obsidian.DroidD
 
                 try
                 {
-                    await node.RunAsync(cts.Token, "Application started. Press Ctrl+C to shut down.", "Application stopped.").ConfigureAwait(false);
+                    await node.RunAsync(cts.Token).ConfigureAwait(false);
                 }
                 finally
                 {
