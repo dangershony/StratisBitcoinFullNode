@@ -5,6 +5,7 @@ using System.Text;
 using NBitcoin;
 using NBitcoin.BouncyCastle.Math;
 using NBitcoin.DataEncoders;
+using Obsidian.Networks.ObsidianX.Rules;
 using Stratis.Bitcoin.Features.Consensus.Rules.CommonRules;
 using Stratis.Bitcoin.Features.Consensus.Rules.ProvenHeaderRules;
 using Stratis.Bitcoin.Features.MemoryPool.Rules;
@@ -53,9 +54,15 @@ namespace Obsidian.Networks.ObsidianX
                 witnessScaleFactor: 4
             );
 
+            var buriedDeployments = new BuriedDeploymentsArray
+            {
+                [BuriedDeployments.BIP34] = 0, // Block v2, Height in Coinbase
+                [BuriedDeployments.BIP65] = 0, // Opcode OP_CHECKLOCKTIMEVERIFY
+                [BuriedDeployments.BIP66] = 0 // Strict DER signatures
+            };
+
             var bip9Deployments = new ObsidianXBIP9DeploymentsArray
             {
-                [ObsidianXBIP9DeploymentsArray.TestDummy] = new BIP9DeploymentsParameters(28, BIP9DeploymentsParameters.AlwaysActive, 999999999),    // BTC main uses bit 28 for CSV
                 [ObsidianXBIP9DeploymentsArray.ColdStaking] = new BIP9DeploymentsParameters(27, BIP9DeploymentsParameters.AlwaysActive, 999999999),  // use a high bit for ColdStaking
                 [ObsidianXBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters(0, BIP9DeploymentsParameters.AlwaysActive, 999999999),           // BTC main uses bit 0 for CSV
                 [ObsidianXBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters(1, BIP9DeploymentsParameters.AlwaysActive, 999999999)         // BTC main uses bit 1 for SegWit
@@ -71,12 +78,7 @@ namespace Obsidian.Networks.ObsidianX
                 majorityEnforceBlockUpgrade: 750,
                 majorityRejectBlockOutdated: 950,
                 majorityWindow: 1000,
-                buriedDeployments: new BuriedDeploymentsArray
-                {
-                    [BuriedDeployments.BIP34] = 0,  // Block v2, Height in Coinbase
-                    [BuriedDeployments.BIP65] = 0,  // Opcode OP_CHECKLOCKTIMEVERIFY
-                    [BuriedDeployments.BIP66] = 0   // Strict DER signatures
-                },
+                buriedDeployments: buriedDeployments,
                 bip9Deployments: bip9Deployments,
                 bip34Hash: this.Genesis.GetHash(), // always active
                 ruleChangeActivationThreshold: 1916, // 95% of 2016
@@ -163,7 +165,7 @@ namespace Obsidian.Networks.ObsidianX
                 .Register<HeaderTimeChecksPosRule>()
                 .Register<PosFutureDriftRule>()
                 .Register<CheckDifficultyPosRule>()
-                //.Register<StratisHeaderVersionRule>()
+                .Register<ObsidianXHeaderVersionRule>()
                 .Register<ProvenHeaderSizeRule>()
                 .Register<ProvenHeaderCoinstakeRule>();
 
