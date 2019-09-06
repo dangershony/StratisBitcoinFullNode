@@ -31,12 +31,12 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                 this.Response.StatusCode = 403;
                 return null;
             }
-                
+
             try
             {
                 if (IsRequestForPublicKey(request))
                     return CreatePublicKey();
-
+                await Task.Delay(1000);
                 DecryptedRequest decryptedRequest = DecryptRequest(request, this.walletController);
                 CheckPermissions(decryptedRequest, this.secureApiSettings);
 
@@ -56,8 +56,8 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                         }
                     case "loadWallet":
                         {
-                            await this.walletController.LoadAsync();
-                            return CreateOk(request);
+                            LoadWalletResponse loadWalletResponse = await this.walletController.LoadAsync();
+                            return CreateOk(loadWalletResponse, request);
                         }
                     case "generalInfo":
                         {
@@ -115,6 +115,15 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             return CreateOk(request);
                         }
 
+                    case "buildAndSendTransaction":
+                        {
+                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
+                            WalletBuildTransactionModel walletBuildTransactionModel = await this.walletController.BuildTransactionAsync(buildTransactionRequest);
+                            var sendTransactionRequest = new SendTransactionRequest { Hex = walletBuildTransactionModel.Hex };
+                            await this.walletController.SendTransactionAsync(sendTransactionRequest);
+                            return CreateOk(walletBuildTransactionModel, request);
+                        }
+
                     case "syncFromDate":
                         {
                             var walletSyncFromDateRequest = Deserialize<WalletSyncFromDateRequest>(decryptedRequest.Payload);
@@ -129,11 +138,11 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             return CreateOk(importKeysResponse, request);
                         }
                     case "exportKeys":
-                    {
-                        var exportKeysRequest = Deserialize<ExportKeysRequest>(decryptedRequest.Payload);
-                        var exportKeysResponse = await this.walletController.ExportKeysAsync(exportKeysRequest);
-                        return CreateOk(exportKeysResponse, request);
-                    }
+                        {
+                            var exportKeysRequest = Deserialize<ExportKeysRequest>(decryptedRequest.Payload);
+                            var exportKeysResponse = await this.walletController.ExportKeysAsync(exportKeysRequest);
+                            return CreateOk(exportKeysResponse, request);
+                        }
                     case "startStaking":
                         {
                             var startStakingRequest = Deserialize<StartStakingRequest>(decryptedRequest.Payload);
@@ -141,10 +150,10 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             return CreateOk(request);
                         }
                     case "stopStaking":
-                    {
-                        await this.walletController.StopStaking();
-                        return CreateOk(request);
-                    }
+                        {
+                            await this.walletController.StopStaking();
+                            return CreateOk(request);
+                        }
                     default:
                         throw new NotSupportedException($"The command '{decryptedRequest.Command}' is not supported.");
                 }
@@ -154,6 +163,6 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                 return CreateError(e, request);
             }
         }
-        
+
     }
 }

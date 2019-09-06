@@ -158,6 +158,11 @@ namespace Obsidian.Features.X1Wallet
             const int witnessVersion = 0;
             var bech32Prefix = this.network.CoinTicker.ToLowerInvariant();  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
 
+            // Create the passphrase challenge
+            var challengePlaintext = new byte[32];
+            rng.GetBytes(challengePlaintext);
+            keyWallet.PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Password, challengePlaintext);
+
             int start = 0;
             int end = 99;
             for (var i = start; i <= end; i++)

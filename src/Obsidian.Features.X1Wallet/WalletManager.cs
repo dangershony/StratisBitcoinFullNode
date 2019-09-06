@@ -112,6 +112,11 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
+        internal LoadWalletResponse LoadWallet()
+        {
+            return new LoadWalletResponse { PassphraseChallenge = this.Wallet.PassphraseChallenge.ToHexString() };
+        }
+
         public int WalletLastBlockSyncedHeight
         {
             get
@@ -208,6 +213,13 @@ namespace Obsidian.Features.X1Wallet
 
         public async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
         {
+            if (importKeysRequest == null)
+                throw new ArgumentNullException(nameof(importKeysRequest));
+            if (importKeysRequest.WalletPassphrase == null)
+                throw new ArgumentNullException(nameof(importKeysRequest.WalletPassphrase));
+            if (importKeysRequest.Keys == null)
+                throw new ArgumentNullException(nameof(importKeysRequest.Keys));
+
             var delimiters = new HashSet<char>();
             foreach (var c in importKeysRequest.Keys.Trim().ToCharArray())
             {
@@ -217,6 +229,9 @@ namespace Obsidian.Features.X1Wallet
 
             var items = importKeysRequest.Keys.Split(delimiters.ToArray());
             var possibleKeys = items.Where(i => i.Length == 52).Distinct().ToList();
+            if (possibleKeys.Count == 0)
+                throw new X1WalletException(HttpStatusCode.BadRequest,"Input material cointained no keys.",null);
+
             var firstExistingEncryptedKey = Wallet.Addresses.Values.First().EncryptedPrivateKey;
             var test = VCL.DecryptWithPassphrase(importKeysRequest.WalletPassphrase, firstExistingEncryptedKey);
             if (test == null)

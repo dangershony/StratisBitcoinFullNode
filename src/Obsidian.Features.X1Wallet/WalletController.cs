@@ -119,11 +119,12 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-        public async Task LoadAsync()
+        public async Task<LoadWalletResponse> LoadAsync()
         {
             using (var context = GetWalletContext())
             {
                 ; // this will load the wallet or ensure it's loaded, because ExecuteAsync does that.
+                return context.WalletManager.LoadWallet();
             }
         }
 
@@ -164,7 +165,7 @@ namespace Obsidian.Features.X1Wallet
                     ConnectedNodes = this.connectionManager.ConnectedPeers.Count(),
                     ChainTip = this.chainIndexer.Tip.Height,
                     IsChainSynced = this.chainIndexer.IsDownloaded(),
-                    IsDecrypted = true
+                    IsDecrypted = false
                 };
 
                 (string folder, IEnumerable<string> fileNameCollection) = this.walletManagerWrapper.GetWalletsFiles();
