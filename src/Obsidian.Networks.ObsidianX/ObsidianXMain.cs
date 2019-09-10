@@ -30,7 +30,7 @@ namespace Obsidian.Networks.ObsidianX
             this.DefaultMaxInboundConnections = 109;
             this.MaxTimeOffsetSeconds = 25 * 60;
 
-            this.MaxTipAge = Convert.ToInt32(TimeSpan.FromDays(30).TotalSeconds);  // Set to 7 days for development to fix IBD, Standard value: 2 * 60 * 60s (120 minutes)
+            this.MaxTipAge = 2 * 60 * 60; // (120 minutes)
             this.MinTxFee = 100;
             this.FallbackFee = 500;
             this.MinRelayTxFee = 100;
