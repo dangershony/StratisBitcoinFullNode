@@ -21,13 +21,13 @@ namespace Stratis.Bitcoin.Features.Airdrop
         /// Initializes an instance of the object from the node configuration.
         /// </summary>
         /// <param name="nodeSettings">The node configuration.</param>
-        public AirdropSettings(NodeSettings nodeSettings)
+        public AirdropSettings(NodeSettings nodeSettings, int? height)
         {
             Guard.NotNull(nodeSettings, nameof(nodeSettings));
             
             this.logger = nodeSettings.LoggerFactory.CreateLogger(typeof(AirdropSettings).FullName);            
             TextFileConfiguration config = nodeSettings.ConfigReader;
-            this.SnapshotHeight = config.GetOrDefault<int?>("snapshotheight", null, this.logger);
+            this.SnapshotHeight = height ?? config.GetOrDefault<int?>("snapshotheight", null, this.logger);
         }
 
         /// <summary>Prints the help information on how to configure the DNS settings to the logger.</summary>
