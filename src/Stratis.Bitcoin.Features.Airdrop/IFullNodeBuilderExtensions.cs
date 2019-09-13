@@ -18,7 +18,7 @@ namespace Stratis.Bitcoin.Features.Dns
         /// </summary>
         /// <param name="fullNodeBuilder">Full node builder used to configure the feature.</param>
         /// <returns>The full node builder with the Dns feature configured.</returns>
-        public static IFullNodeBuilder TakeSnapshot(this IFullNodeBuilder fullNodeBuilder, int? height = null)
+        public static IFullNodeBuilder TakeSnapshot(this IFullNodeBuilder fullNodeBuilder)
         {
             LoggingConfiguration.RegisterFeatureNamespace<AirdropFeature>("airdrop");
 
@@ -30,7 +30,7 @@ namespace Stratis.Bitcoin.Features.Dns
                 .FeatureServices(services =>
                 {
                     services.AddSingleton(fullNodeBuilder);
-                    services.AddSingleton<AirdropSettings>(provider => new AirdropSettings(provider.GetService<NodeSettings>(), height));
+                    services.AddSingleton<AirdropSettings>();
                 });
             });
 
