@@ -27,7 +27,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
             
             this.logger = nodeSettings.LoggerFactory.CreateLogger(typeof(AirdropSettings).FullName);            
             TextFileConfiguration config = nodeSettings.ConfigReader;
-            this.SnapshotHeight = config.GetOrDefault<int?>("snapshotheight", null, this.logger);
+            this.SnapshotHeight = config.GetOrDefault<int>("snapshotheight", 0, this.logger);
         }
 
         /// <summary>Prints the help information on how to configure the DNS settings to the logger.</summary>
@@ -36,7 +36,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
         {
             var builder = new StringBuilder();
 
-            builder.AppendLine($"-snapshotheight=<0-max>   The height of the chain to take the snapshot form");
+            builder.AppendLine($"-snapshotheight=<1-max>   The height of the chain to take the snapshot form");
 
             NodeSettings.Default(network).Logger.LogInformation(builder.ToString());
         }
@@ -49,7 +49,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
         public static void BuildDefaultConfigurationFile(StringBuilder builder, Network network)
         {
             builder.AppendLine("####Airdrop Settings####");
-            builder.AppendLine($"#The SnapshotHeight. Defaults to null disabled");
+            builder.AppendLine($"#The SnapshotHeight. Defaults to 0 (disabled)");
         }
     }
 }
