@@ -80,7 +80,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
                 int count = 0;
                 foreach (var item in this.IterateUtxoSet(dBreezeCoinView))
                 {
-                    if (item.TxOut.Value <= 0) 
+                    if (item.TxOut.IsEmpty) 
                         continue;
 
                     if (count % 100 == 0 && this.nodeLifetime.ApplicationStopping.IsCancellationRequested)
@@ -89,12 +89,16 @@ namespace Stratis.Bitcoin.Features.Airdrop
                     total += item.TxOut.Value;
                     count++;
 
+                    var addressItem = GetAddress(this.network, item.TxOut.ScriptPubKey);
+
                     utxoContext.UnspentOutputs.Add(new UTXO()
                     {
                         Trxid = item.OutPoint.ToString(),
                         Script = item.TxOut.ScriptPubKey.ToString(),
                         Value = item.TxOut.Value,
-
+                        Address = addressItem.address,
+                        ScriptType = addressItem.scriptType.ToString(),
+                        Height = item.Height
                     });
 
                     if (count % 10000 == 0)
@@ -111,7 +115,62 @@ namespace Stratis.Bitcoin.Features.Airdrop
             }
         }
 
-        public IEnumerable<(OutPoint OutPoint, TxOut TxOut)> IterateUtxoSet(DBreezeCoinView dBreezeCoinView)
+        public static (TxOutType scriptType, string address) GetAddress(Network network, Script script)
+        {
+            var template = NBitcoin.StandardScripts.GetTemplateFromScriptPubKey(script);
+
+            if (template == null)
+                return (TxOutType.TX_NONSTANDARD, string.Empty);
+
+            if (template.Type == TxOutType.TX_NONSTANDARD)
+                return (TxOutType.TX_NONSTANDARD, string.Empty);
+
+            if (template.Type == TxOutType.TX_NULL_DATA)
+                return (template.Type, string.Empty);
+
+            if (template.Type == TxOutType.TX_PUBKEY)
+            {
+                var pubkeys = script.GetDestinationPublicKeys(network);
+                return (template.Type, pubkeys[0].GetAddress(network).ToString());
+            }
+
+            if (template.Type == TxOutType.TX_PUBKEYHASH ||
+                template.Type == TxOutType.TX_SCRIPTHASH ||
+                template.Type == TxOutType.TX_SEGWIT)
+            {
+                BitcoinAddress bitcoinAddress = script.GetDestinationAddress(network);
+                if (bitcoinAddress != null)
+                {
+                    return (template.Type, bitcoinAddress.ToString());
+                }
+            }
+
+            if (template.Type == TxOutType.TX_MULTISIG)
+            {
+                // TODO;
+                return (template.Type, string.Empty);
+            }
+
+            if (template.Type == TxOutType.TX_COLDSTAKE)
+            {
+                //if (ColdStakingScriptTemplate.Instance.ExtractScriptPubKeyParameters(script, out KeyId hotPubKeyHash, out KeyId coldPubKeyHash))
+                //{
+                //    // We want to index based on both the cold and hot key
+                //    return new[]
+                //    {
+                //        hotPubKeyHash.GetAddress(network).ToString(),
+                //        coldPubKeyHash.GetAddress(network).ToString(),
+                //    };
+                //}
+
+                return (template.Type, string.Empty);
+            }
+
+            // Fail the node in such cases (all script types must be covered)
+            throw new Exception("Unknown script type");
+        }
+
+        public IEnumerable<(OutPoint OutPoint, TxOut TxOut, int Height)> IterateUtxoSet(DBreezeCoinView dBreezeCoinView)
         {
             using (DBreeze.Transactions.Transaction transaction = dBreezeCoinView.CreateTransaction())
             {
@@ -130,7 +189,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
                         if (coins.Outputs[i] != null)
                         {
                             this.logger.LogDebug("UTXO for '{0}' position {1}.", trxHash, i);
-                            yield return (new OutPoint(trxHash, i), coins.Outputs[i]);
+                            yield return (new OutPoint(trxHash, i), coins.Outputs[i], (int)coins.Height);
                         }
                     }
                 }
@@ -161,6 +220,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
             public string Address { get; set; }
             public string ScriptType { get; set; }
             public long Value { get; set; }
+            public int Height { get; set; }
         }
     }
 }
