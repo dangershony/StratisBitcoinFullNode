@@ -22,8 +22,6 @@ namespace Stratis.Bitcoin.Features.Airdrop
     /// </summary>
     public class AirdropFeature : FullNodeFeature
     {
-        public const string FilenamePrefix = "snapshot-{height}-{count}.json";
-
         private readonly Network network;
         private readonly INodeLifetime nodeLifetime;
         private readonly ISignals signals;

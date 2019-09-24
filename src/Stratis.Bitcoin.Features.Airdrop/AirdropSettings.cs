@@ -14,6 +14,10 @@ namespace Stratis.Bitcoin.Features.Airdrop
         /// <summary>Defines block height at wich to create the airdrop.</summary>
         public int? SnapshotHeight { get; set; }
 
+        public bool SnapshotMode { get; set; }
+
+        public bool DistributeMode { get; set; }
+
         /// <summary>Instance logger.</summary>
         private readonly ILogger logger;
 
@@ -27,7 +31,25 @@ namespace Stratis.Bitcoin.Features.Airdrop
             
             this.logger = nodeSettings.LoggerFactory.CreateLogger(typeof(AirdropSettings).FullName);            
             TextFileConfiguration config = nodeSettings.ConfigReader;
-            this.SnapshotHeight = config.GetOrDefault<int>("snapshotheight", 0, this.logger);
+
+            this.SnapshotMode = config.GetOrDefault<bool>("snapshot", false, this.logger);
+            this.DistributeMode = config.GetOrDefault<bool>("distribute", false, this.logger);
+
+            if (this.SnapshotMode && this.DistributeMode)
+            {
+                throw new ConfigurationException("-distribute and -snapshot can not be both enabled");
+            }
+
+            if (this.SnapshotMode)
+            {
+                this.SnapshotHeight = config.GetOrDefault<int>("snapshotheight", 0, this.logger);
+
+                if (this.SnapshotHeight == 0)
+                {
+                    throw new ConfigurationException("-snapshotheight not found or invalid");
+
+                }
+            }
         }
 
         /// <summary>Prints the help information on how to configure the DNS settings to the logger.</summary>
@@ -36,7 +58,9 @@ namespace Stratis.Bitcoin.Features.Airdrop
         {
             var builder = new StringBuilder();
 
+            builder.AppendLine($"-snapshot                 Put the airdrop tool in snapshot mode");
             builder.AppendLine($"-snapshotheight=<1-max>   The height of the chain to take the snapshot form");
+            builder.AppendLine($"-distribute               Put the airdrop tool in distribution mode");
 
             NodeSettings.Default(network).Logger.LogInformation(builder.ToString());
         }
@@ -49,7 +73,12 @@ namespace Stratis.Bitcoin.Features.Airdrop
         public static void BuildDefaultConfigurationFile(StringBuilder builder, Network network)
         {
             builder.AppendLine("####Airdrop Settings####");
-            builder.AppendLine($"#The SnapshotHeight. Defaults to 0 (disabled)");
+            builder.AppendLine($"#The height of the chain to take the snapshot ");
+            builder.AppendLine($"#-snapshotheight=0");
+            builder.AppendLine($"#Snapshot mode, to enable the snapshot feature. the snapshot will be written to a SQLite file snapshot.db");
+            builder.AppendLine($"#-snapshot");
+            builder.AppendLine($"#Distribute mode, to start distribution. the distribution will read from the db snapshot.db and use the select query in file distribute.sql");
+            builder.AppendLine($"#-distribute");
         }
     }
 }
