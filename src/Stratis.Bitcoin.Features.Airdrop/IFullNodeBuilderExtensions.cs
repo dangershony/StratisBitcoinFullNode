@@ -1,12 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Stratis.Bitcoin.Builder;
-using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Configuration.Logging;
-using Stratis.Bitcoin.Configuration.Settings;
-using Stratis.Bitcoin.Features.Airdrop;
 using Stratis.Bitcoin.Features.Consensus;
 
-namespace Stratis.Bitcoin.Features.Dns
+namespace Stratis.Bitcoin.Features.Airdrop
 {
     /// <summary>
     /// Extension methods for <see cref="IFullNodeBuilder"/>.
@@ -14,11 +11,9 @@ namespace Stratis.Bitcoin.Features.Dns
     public static class IFullNodeBuilderExtensions
     {
         /// <summary>
-        /// Configures the Dns feature.
+        /// Configures the Airdrop feature.
         /// </summary>
-        /// <param name="fullNodeBuilder">Full node builder used to configure the feature.</param>
-        /// <returns>The full node builder with the Dns feature configured.</returns>
-        public static IFullNodeBuilder TakeSnapshot(this IFullNodeBuilder fullNodeBuilder)
+        public static IFullNodeBuilder Airdrop(this IFullNodeBuilder fullNodeBuilder)
         {
             LoggingConfiguration.RegisterFeatureNamespace<AirdropFeature>("airdrop");
 
@@ -31,6 +26,8 @@ namespace Stratis.Bitcoin.Features.Dns
                 {
                     services.AddSingleton(fullNodeBuilder);
                     services.AddSingleton<AirdropSettings>();
+                    services.AddSingleton<Distribute>();
+                    services.AddSingleton<Snapshot>();
                 });
             });
 

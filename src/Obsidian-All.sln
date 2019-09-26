@@ -198,7 +198,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.Features.Diagnostic
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.Features.Collateral", "Stratis.Features.Collateral\Stratis.Features.Collateral.csproj", "{8DB71680-D10C-4DAD-B922-FFCAFF7BE997}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stratis.Bitcoin.Features.Airdrop", "Stratis.Bitcoin.Features.Airdrop\Stratis.Bitcoin.Features.Airdrop.csproj", "{7427DCA2-2AC3-46DC-9B4D-90DE9497DE0E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.Bitcoin.Features.Airdrop", "Stratis.Bitcoin.Features.Airdrop\Stratis.Bitcoin.Features.Airdrop.csproj", "{7427DCA2-2AC3-46DC-9B4D-90DE9497DE0E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
