@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using DBreeze.DataTypes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BitcoinCore;
+using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Builder.Feature;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.EventBus;
@@ -29,11 +31,12 @@ namespace Stratis.Bitcoin.Features.Airdrop
         private readonly AirdropSettings airdropSettings;
         private readonly NodeSettings nodeSettings;
         private readonly DBreezeSerializer dBreezeSerializer;
+        private readonly IAsyncProvider asyncProvider;
         private readonly CachedCoinView cachedCoinView;
         private SubscriptionToken blockConnectedSubscription;
         private readonly ILogger logger;
 
-        public AirdropFeature(Network network, INodeLifetime nodeLifetime, ILoggerFactory loggerFactory, ISignals signals, ChainIndexer chainIndexer, AirdropSettings airdropSettings, NodeSettings nodeSettings, ICoinView cachedCoinView, DBreezeSerializer dBreezeSerializer)
+        public AirdropFeature(Network network, INodeLifetime nodeLifetime, ILoggerFactory loggerFactory, ISignals signals, ChainIndexer chainIndexer, AirdropSettings airdropSettings, NodeSettings nodeSettings, ICoinView cachedCoinView, DBreezeSerializer dBreezeSerializer, IAsyncProvider asyncProvider)
         {
             this.network = network;
             this.nodeLifetime = nodeLifetime;
@@ -42,19 +45,32 @@ namespace Stratis.Bitcoin.Features.Airdrop
             this.airdropSettings = airdropSettings;
             this.nodeSettings = nodeSettings;
             this.dBreezeSerializer = dBreezeSerializer;
+            this.asyncProvider = asyncProvider;
             this.cachedCoinView = (CachedCoinView)cachedCoinView;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
 
-            if (airdropSettings.SnapshotHeight > 0)
-            {
-                this.blockConnectedSubscription = this.signals.Subscribe<BlockConnected>(this.OnBlockConnected);
-            }
         }
 
         public override Task InitializeAsync()
         {
+            if (this.airdropSettings.SnapshotMode && this.airdropSettings.SnapshotHeight > 0)
+            {
+                this.blockConnectedSubscription = this.signals.Subscribe<BlockConnected>(this.OnBlockConnected);
+            }
+
+            if (this.airdropSettings.DistributeMode)
+            {
+                this.asyncProvider.CreateAndRunAsyncLoop("airdrop-distribute", this.Distribute, nodeLifetime.ApplicationStopping);
+            }
+
             return Task.CompletedTask;
         }
+
+        private Task Distribute(CancellationToken arg)
+        {
+            throw new NotImplementedException();
+        }
+
 
         private void OnBlockConnected(BlockConnected blockConnected)
         {
