@@ -6,18 +6,21 @@ namespace Stratis.Bitcoin.Features.Airdrop
     public class UtxoContext : DbContext
     {
         private readonly string path;
+        private readonly int height;
+
         public DbSet<UTXOSnapshot> UnspentOutputs { get; set; }
 
         public DbSet<UTXODistribute> DistributeOutputs { get; set; }
 
-        public UtxoContext(string path)
+        public UtxoContext(string path, int height)
         {
             this.path = path;
+            this.height = height;
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlite($@"Data Source={this.path}\snapshot.db");
+            optionsBuilder.UseSqlite($@"Data Source={this.path}\snapshot-{this.height}.db");
         }
     }
 

@@ -18,6 +18,7 @@ using Stratis.Bitcoin.Features.MemoryPool;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.RPC;
 using Stratis.Bitcoin.Utilities;
+using Stratis.Bitcoin.Features.Airdrop;
 
 namespace Obsidian.ObsidianD
 {
@@ -63,6 +64,7 @@ namespace Obsidian.ObsidianD
                     .UseNodeSettings(nodeSettings)
                     .UseBlockStore()
                     .UsePosConsensus()
+                    .Airdrop()
                     .UseMempool();
 
 

@@ -39,7 +39,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
 
         public void Initialize()
         {
-            this.utxoContext = new UtxoContext(this.nodeSettings.DataDir);
+            this.utxoContext = new UtxoContext(this.nodeSettings.DataDir, this.airdropSettings.SnapshotHeight.Value);
             this.utxoContext.Database.EnsureCreated();
         }
 

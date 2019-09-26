@@ -47,7 +47,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
 
                 DBreezeCoinView dBreezeCoinView = (DBreezeCoinView)this.cachedCoinView.Inner; // ugly hack.
 
-                UtxoContext utxoContext = new UtxoContext(this.nodeSettings.DataDir);
+                UtxoContext utxoContext = new UtxoContext(this.nodeSettings.DataDir, this.airdropSettings.SnapshotHeight.Value);
 
                 utxoContext.Database.EnsureCreated();
 
