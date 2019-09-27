@@ -40,15 +40,12 @@ namespace Stratis.Bitcoin.Features.Airdrop
                 throw new ConfigurationException("-distribute and -snapshot can not be both enabled");
             }
 
-            if (this.SnapshotMode)
+            this.SnapshotHeight = config.GetOrDefault<int>("snapshotheight", 0, this.logger);
+
+            if (this.SnapshotHeight == 0)
             {
-                this.SnapshotHeight = config.GetOrDefault<int>("snapshotheight", 0, this.logger);
+                throw new ConfigurationException("-snapshotheight not found or invalid");
 
-                if (this.SnapshotHeight == 0)
-                {
-                    throw new ConfigurationException("-snapshotheight not found or invalid");
-
-                }
             }
         }
 
@@ -73,7 +70,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
         public static void BuildDefaultConfigurationFile(StringBuilder builder, Network network)
         {
             builder.AppendLine("####Airdrop Settings####");
-            builder.AppendLine($"#The height of the chain to take the snapshot ");
+            builder.AppendLine($"#The height of the chain to take the snapshot this will also be part of the database filename.");
             builder.AppendLine($"#-snapshotheight=0");
             builder.AppendLine($"#Snapshot mode, to enable the snapshot feature. the snapshot will be written to a SQLite file snapshot.db");
             builder.AppendLine($"#-snapshot");

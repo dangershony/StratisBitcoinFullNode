@@ -46,6 +46,9 @@ namespace Stratis.Bitcoin.Features.Airdrop
         public long Value { get; set; }
         public int Height { get; set; }
         public string Status { get; set; }
+        public string Trxid { get; set; }
+        public string Error { get; set; }
+
     }
 
     public class DistributeStatus
