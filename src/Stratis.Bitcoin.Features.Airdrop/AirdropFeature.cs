@@ -64,7 +64,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
             {
                 this.distribute.Initialize();
 
-                this.asyncProvider.CreateAndRunAsyncLoop("airdrop-distribute", this.DistributeCoins, this.nodeLifetime.ApplicationStopping, TimeSpans.Minute, TimeSpans.Minute);
+                this.asyncProvider.CreateAndRunAsyncLoop("airdrop-distribute", this.DistributeCoins, this.nodeLifetime.ApplicationStopping, TimeSpans.Minute, TimeSpans.FiveSeconds);
             }
 
             return Task.CompletedTask;

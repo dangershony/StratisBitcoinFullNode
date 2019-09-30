@@ -85,10 +85,10 @@ namespace Stratis.Bitcoin.Features.Airdrop
                     return Task.CompletedTask;
             }
 
-            // This part must be manual, 
-            var walletName = "";
-            var accountName = "";
-            var password = "";
+            // MANUAL: this part must be manually changed
+            var walletName = "wal";
+            var accountName = "account 0";
+            var password = "123456";
 
             var accountReference = new WalletAccountReference(walletName, accountName);
 
@@ -105,6 +105,9 @@ namespace Stratis.Bitcoin.Features.Airdrop
 
             var outputs = this.utxoContext.DistributeOutputs.Where(d => d.Status == DistributeStatus.NoStarted).Take(10);
 
+            if(!outputs.Any())
+                return Task.CompletedTask;
+
             // mark the database items as started
             foreach (UTXODistribute utxoDistribute in outputs)
                 utxoDistribute.Status = DistributeStatus.Started;
@@ -117,15 +120,34 @@ namespace Stratis.Bitcoin.Features.Airdrop
                 {
                     try
                     {
+                        // MANUAL: this part must be manually changed
+
                         // convert the script to the target address
-                        var address = utxoDistribute.Address;
+                        Script script = BitcoinAddress.Create(utxoDistribute.Address, this.network).ScriptPubKey;
+                        Script target = null;
+
+                        TxDestination destination = script.GetDestination(this.network);
+                        if (destination != null)
+                        {
+                            var wit = new BitcoinWitPubKeyAddress(new WitKeyId(destination.ToBytes()), this.network);
+
+                            target = PayToWitPubKeyHashTemplate.Instance.GenerateScriptPubKey(wit);
+                        }
+                        else
+                        {
+                            var pubkeys = script.GetDestinationPublicKeys(this.network);
+
+                            target = pubkeys[0].GetSegwitAddress(this.network).ScriptPubKey;
+                        }
 
                         // Apply any ratio to the value.
                         var amount = utxoDistribute.Value;
 
+                        amount = amount / 10;
+
                         recipients.Add(new Recipient
                         {
-                            ScriptPubKey = BitcoinAddress.Create(address, this.network).ScriptPubKey,
+                            ScriptPubKey = target,
                             Amount = amount
                         });
                     }
@@ -152,13 +174,18 @@ namespace Stratis.Bitcoin.Features.Airdrop
                 };
 
                 Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
+                uint256 trxHash = transactionResult.GetHash();
 
                 // broadcast to the network
                 this.broadcasterManager.BroadcastTransactionAsync(transactionResult);
 
                 // mark the database items as in progress
                 foreach (UTXODistribute utxoDistribute in outputs)
+                {
                     utxoDistribute.Status = DistributeStatus.InProgress;
+                    utxoDistribute.Trxid = trxHash.ToString();
+                }
+
                 this.utxoContext.SaveChanges(true);
             }
             catch (Exception e)
