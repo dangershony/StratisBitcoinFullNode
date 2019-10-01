@@ -128,6 +128,9 @@ namespace Stratis.Bitcoin.Features.Airdrop
                     {
                         // MANUAL: this part must be manually changed
 
+                        if(string.IsNullOrEmpty(utxoDistribute.Address))
+                            continue;
+
                         // convert the script to the target address
                         Script script = BitcoinAddress.Create(utxoDistribute.Address, this.network).ScriptPubKey;
                         Script target = null;
