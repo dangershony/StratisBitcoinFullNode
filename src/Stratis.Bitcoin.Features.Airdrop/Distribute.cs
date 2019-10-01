@@ -103,20 +103,26 @@ namespace Stratis.Bitcoin.Features.Airdrop
                 return Task.CompletedTask;
             }
 
-            var outputs = this.utxoContext.DistributeOutputs.Where(d => d.Status == DistributeStatus.NoStarted).Take(10);
+            var outputs = this.utxoContext.DistributeOutputs.Where(d => d.Status == null || d.Status == DistributeStatus.NoStarted).Take(100);
 
             if(!outputs.Any())
                 return Task.CompletedTask;
 
+            List<UTXODistribute> dbOutputs = new List<UTXODistribute>();
+
             // mark the database items as started
             foreach (UTXODistribute utxoDistribute in outputs)
+            {
                 utxoDistribute.Status = DistributeStatus.Started;
+                dbOutputs.Add(utxoDistribute);
+            }
+
             this.utxoContext.SaveChanges(true);
 
             try
             {
                 var recipients = new List<Recipient>();
-                foreach (UTXODistribute utxoDistribute in outputs)
+                foreach (UTXODistribute utxoDistribute in dbOutputs)
                 {
                     try
                     {
@@ -180,7 +186,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
                 this.broadcasterManager.BroadcastTransactionAsync(transactionResult);
 
                 // mark the database items as in progress
-                foreach (UTXODistribute utxoDistribute in outputs)
+                foreach (UTXODistribute utxoDistribute in dbOutputs)
                 {
                     utxoDistribute.Status = DistributeStatus.InProgress;
                     utxoDistribute.Trxid = trxHash.ToString();
@@ -190,7 +196,7 @@ namespace Stratis.Bitcoin.Features.Airdrop
             }
             catch (Exception e)
             {
-                foreach (UTXODistribute utxoDistribute in outputs)
+                foreach (UTXODistribute utxoDistribute in dbOutputs)
                 {
                     utxoDistribute.Error = e.Message;
                     utxoDistribute.Status = DistributeStatus.Failed;
