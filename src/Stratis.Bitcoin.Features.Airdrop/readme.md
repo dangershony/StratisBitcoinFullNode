@@ -3,7 +3,7 @@
 The airdrop feature has two modes `snapshot` and `distribute`
 
 The Airdrop is considered to be a manual processes so it can be run in debug mode and some changes are applied directly to the code, such places are marked as `Manual:` in the `distribute` class.
-To enable the feature in the node builder registere the feature itself similar to the bellow example.
+To enable the feature in the node builder register the feature itself similar to the bellow example.
 
 ```
                 var builder = new FullNodeBuilder()
@@ -29,16 +29,16 @@ Once the snapshot is complete a file named `snapshot-[height].db` will appear in
 
 ## Distribute  
 
-Will send coins from the local wallet to addresses that have been predefined in the table `DistributeOutputs` in the db this table needs to be populated in advance and it allowes to prepare the addresses (and or script) that are going to be airdropped.
+Will send coins from the local wallet to addresses that have been predefined in the table `DistributeOutputs` in the db this table needs to be populated in advance and it allows to prepare the addresses (and or script) that are going to be airdropped.
 
 A background worker will start and read the entries from the database then send coins to those entries.
-Currently the code will only create one trx with 500 outputs (this can be easily changed) and wait for that trx to get confimred before processing the next batch.
+Currently the code will only create one trx with 500 outputs (this can be easily changed) and wait for that trx to get confirmed before processing the next batch.
 
 To start the node in snapshot mode pass in the command arguments `-distribute -snapshotheight=[height]` the `snapshotheight` is required to know the db filename.
 
 ## Steps how to start
 
-1. Run the airdrop tool on the srouce node in snapshot mode
+1. Run the airdrop tool on the source node in snapshot mode
 2. Copy the database to the target nodes data folder
 3. Edit the database and populate the table `DistributeOutputs`
 4. Run in airdrop tool on the target node in distribute mode 
@@ -67,7 +67,7 @@ ORDER By Sum(Value) DESC
 )
 ```
 
-Copy entreis to the distribution table, this will conaint all the addresses to airdrop on
+Copy entries to the distribution table, this will contain all the addresses to airdrop on
 ```
 INSERT INTO DistributeOutputs (Address, Script, ScriptType, Height, Value)
 SELECT Address, Script, ScriptType, 0, Sum(Value) as Value
