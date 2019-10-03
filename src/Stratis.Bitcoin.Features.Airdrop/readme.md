@@ -78,5 +78,10 @@ GROUP BY Address
 ORDER By Sum(Value) DESC
 ```
 
+Follow progress of distribution
+```
+select status, count(status) FROM DistributeOutputs 
+GROUP BY status 
+```
 Tool recommended to use is `DB browser for SQLite`
 
