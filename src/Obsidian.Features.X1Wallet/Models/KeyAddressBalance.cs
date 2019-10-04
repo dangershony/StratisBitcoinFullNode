@@ -10,7 +10,7 @@ namespace Obsidian.Features.X1Wallet.Models
         /// <summary>
         /// The address for which the balance is calculated.
         /// </summary>
-        public KeyAddress KeyAddress { get; set; }
+        public P2WPKHAddress KeyAddress { get; set; }
 
         /// <summary>
         /// The balance of confirmed transactions.

@@ -6,7 +6,7 @@ using Stratis.Bitcoin.Utilities.JsonConverters;
 
 namespace Obsidian.Features.X1Wallet.Models
 {
-    public class KeyWallet
+    public class KeyWalletOld
     {
         /// <summary>
         /// The type of this wallet implementation.
@@ -43,7 +43,7 @@ namespace Obsidian.Features.X1Wallet.Models
         /// A collection of addresses contained in the wallet.
         /// </summary>
         [JsonProperty(PropertyName = "addresses")]
-        public Dictionary<string, KeyAddress> Addresses { get; set; }
+        public Dictionary<string, KeyAddressOld> Addresses { get; set; }
 
         /// <summary>
         /// The height of the last block that was synced.

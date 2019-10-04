@@ -118,72 +118,73 @@ namespace Obsidian.Features.X1Wallet
             return GetWalletContext(null, true);
         }
 
-        public async Task LoadWallet(string name)
+        public async Task LoadWallet(string walletName)
         {
+            string x1WalletFilePath = walletName.GetX1WalletFilepath(this.network, this.dataFolder);
+           
+            if (!File.Exists(x1WalletFilePath))
+                throw new FileNotFoundException($"No wallet file found at {x1WalletFilePath}");
 
 
-            var fileName = $"{name}{WalletManager.WalletFileExtension}";
-            string filePath = Path.Combine(this.dataFolder.WalletPath, fileName);
-            if (!File.Exists(filePath))
-                throw new FileNotFoundException($"No wallet file found at {filePath}");
             if (this.walletManager != null)
             {
-                if (this.walletManager.CurrentWalletFilePath != filePath)
+                if (this.walletManager.CurrentX1WalletFilePath != x1WalletFilePath)
                     throw new NotSupportedException(
                         "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
-            this.walletManager = new WalletManager(filePath, this.chainIndexer, this.network, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider, this.posMinting, this.timeSyncBehaviorState);
+            this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, this.dateTimeProvider, this.nodeLifetime, this.asyncProvider, this.posMinting, this.timeSyncBehaviorState);
         }
 
         public async Task CreateKeyWalletAsync(WalletCreateRequest walletCreateRequest)
         {
-            var fileName = $"{walletCreateRequest.Name}{WalletManager.WalletFileExtension}";
-            string filePath = Path.Combine(this.dataFolder.WalletPath, fileName);
+            string walletName = walletCreateRequest.Name;
+            string filePath = walletName.GetX1WalletFilepath(this.network, this.dataFolder);
+
             if (File.Exists(filePath))
-                throw new InvalidOperationException($"A wallet with the name {walletCreateRequest.Name} already exists at {filePath}!");
+                throw new InvalidOperationException($"A wallet with the name {walletName} already exists at {filePath}!");
 
-            if (walletCreateRequest.Password == null || walletCreateRequest.Password.Length < 12)
-                throw new InvalidOperationException("A passphrase with at least 12 characters is required.");
+            if (string.IsNullOrWhiteSpace(walletCreateRequest.Password))
+                throw new InvalidOperationException("A passphrase is required.");
 
-            var keyWallet = new KeyWallet
-            {
-                Name = walletCreateRequest.Name,
-                CreationTime = DateTime.UtcNow,
-                WalletType = nameof(KeyWallet),
-                WalletTypeVersion = 1,
-                Addresses = new Dictionary<string, KeyAddress>(),
-                LastBlockSyncedHash = this.network.Consensus.HashGenesisBlock,
-                LastBlockSyncedHeight = 0
-            };
-            const int witnessVersion = 0;
-            var bech32Prefix = this.network.CoinTicker.ToLowerInvariant();  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
+            var x1WalletFile = new X1WalletFile { P2WPKHAddresses = new Dictionary<string, P2WPKHAddress>() };
+
+            x1WalletFile.WalletGuid = Guid.NewGuid();
+            x1WalletFile.WalletName = walletName;
 
             // Create the passphrase challenge
             var challengePlaintext = new byte[32];
             rng.GetBytes(challengePlaintext);
-            keyWallet.PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Password, challengePlaintext);
+            x1WalletFile.PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Password, challengePlaintext);
 
-            int start = 0;
-            int end = 99;
-            for (var i = start; i <= end; i++)
+            x1WalletFile.Comment = $"Created on {DateTime.UtcNow} with filename {filePath}";
+            x1WalletFile.Version = 1;
+
+            const int witnessVersion = 0;
+            var bech32Prefix = this.network.CoinTicker.ToLowerInvariant();  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
+
+            const int addressPoolSize = 1000;
+            for (var i = 0; i < addressPoolSize; i++)
             {
                 var bytes = new byte[32];
                 rng.GetBytes(bytes);
-                var isChange = i % 2 == 0;
-                var address = KeyAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, this.network.Consensus.CoinType, witnessVersion, bech32Prefix);
-                address.IsChange = isChange;
-                keyWallet.Addresses.Add(address.Hash160Hex, address);
+                var isChange = i % 4 != 0; // 75% change addresses
+                var address = P2WPKHAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, isChange, this.network.Consensus.CoinType, witnessVersion, bech32Prefix, this.network.CoinTicker);
+                x1WalletFile.P2WPKHAddresses.Add(address.HashHex, address);
             }
+            if (x1WalletFile.P2WPKHAddresses.Count != addressPoolSize)
+                throw new Exception("Something is seriously wrong, collision of random numbers detected. Do not use this wallet.");
 
-            var serializedWallet = JsonConvert.SerializeObject(keyWallet, Formatting.Indented);
-            File.WriteAllText(filePath, serializedWallet);
-            await Task.CompletedTask;
+            x1WalletFile.SaveX1WalletFile(filePath);
+
+            X1WalletMetadataFile x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile();
+            var x1WalletMetadataFilename = walletName.GetX1WalletMetaDataFilepath(this.network, this.dataFolder);
+            x1WalletMetadataFile.SaveX1WalletMetadataFile(x1WalletMetadataFilename);
 
         }
 
         public (string folderPath, IEnumerable<string>) GetWalletsFiles()
         {
-            var filePathes = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{WalletManager.WalletFileExtension}", SearchOption.TopDirectoryOnly);
+            var filePathes = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{X1WalletFile.FileExtension}", SearchOption.TopDirectoryOnly);
             var files = filePathes.Select(Path.GetFileName);
             return (this.dataFolder.WalletPath, files);
         }

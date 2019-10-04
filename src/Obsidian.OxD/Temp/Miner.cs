@@ -36,7 +36,7 @@ namespace Obsidian.OxD.Temp
                     await walletController.LoadAsync();
 
 
-                    var addressesModel = await walletController.GetAllAddressesAsync();
+                    var addressesModel = await walletController.GetUnusedReceiveAddresses();
                     var bech32 = addressesModel.Addresses.First(a => a.IsChange == false).Address;
                     var mineToAddress = new BitcoinWitPubKeyAddress(bech32, fullNode.Network);
 

@@ -13,7 +13,7 @@ namespace Obsidian.Features.X1Wallet.Models
         /// <summary>
         /// The address associated with this UTXO.
         /// </summary>
-        public KeyAddress Address { get; set; }
+        public P2WPKHAddress Address { get; set; }
 
         /// <summary>
         /// The transaction representing the UTXO.

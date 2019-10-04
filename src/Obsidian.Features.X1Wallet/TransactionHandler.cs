@@ -258,20 +258,21 @@ namespace Obsidian.Features.X1Wallet
         {
             using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
             {
-                // Get an address to send the change to.
-                var unusedChangeAddressScriptPubKey = context2.WalletManager.GetUnusedChangeAddress();
-                context.TransactionBuilder.SetChange(unusedChangeAddressScriptPubKey);
+                P2WPKHAddress changeAddress = context2.WalletManager.GetUnusedAddresses(1, true).FirstOrDefault();
+                // fall back to an unused address which is not a change address
+                if(changeAddress == null)
+                {
+                    changeAddress = context2.WalletManager.GetUnusedAddresses(1, false).FirstOrDefault();
+                }
+                // if we are really out of unused addresses, we need to take an 'address of last resort'.
+                // TODO: create feature that warns the user when the address pool is running low.
+                if (changeAddress == null)
+                {
+                    changeAddress = context2.WalletManager.GetAddresses(1).Last();
+                }
+                
+                context.TransactionBuilder.SetChange(changeAddress.GetPaymentScript());
             }
-           
-            //context.ChangeAddress =
-            //if (context.UseSegwitChangeAddress)
-            //{
-            //    context.TransactionBuilder.SetChange(new BitcoinWitPubKeyAddress(context.ChangeAddress.Bech32Address, this.network).ScriptPubKey);
-            //}
-            //else
-            //{
-            //    context.TransactionBuilder.SetChange(context.ChangeAddress.ScriptPubKey);
-            //}
         }
 
         /// <summary>

@@ -10,7 +10,7 @@ using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.Models
 {
-    public class KeyAddress
+    public class KeyAddressOld
     {
         [JsonProperty(PropertyName = "encryptedPrivateKey")]
         public byte[] EncryptedPrivateKey { get; set; }
@@ -42,9 +42,9 @@ namespace Obsidian.Features.X1Wallet.Models
         [JsonProperty(PropertyName = "transactions")]
         public List<TransactionData> Transactions { get; set; } = new List<TransactionData>();
 
-        public static KeyAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, int coinType,  byte witnessVersion, string bech32Prefix)
+        public static KeyAddressOld CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, int coinType,  byte witnessVersion, string bech32Prefix)
         {
-            var adr = new KeyAddress();
+            var adr = new KeyAddressOld();
             adr.EncryptedPrivateKey = keyEncryption(keyEncryptionPassphrase, privateKey);
 
             adr.CoinType = coinType;

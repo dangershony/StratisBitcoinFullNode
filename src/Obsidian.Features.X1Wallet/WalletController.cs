@@ -160,23 +160,17 @@ namespace Obsidian.Features.X1Wallet
                 var model = new WalletGeneralInfoModel
                 {
                     Network = this.network,
-                    CreationTime = manager.WalletCreationTime,
+                    CreationTime = Utils.UnixTimeToDateTime(this.network.GenesisTime),
                     LastBlockSyncedHeight = manager.WalletLastBlockSyncedHeight,
                     ConnectedNodes = this.connectionManager.ConnectedPeers.Count(),
                     ChainTip = this.chainIndexer.Tip.Height,
                     IsChainSynced = this.chainIndexer.IsDownloaded(),
-                    IsDecrypted = false
+                    IsDecrypted = this.posMinting.GetGetStakingInfoModel().Enabled,
+                    WalletFilePath = manager.CurrentX1WalletFilePath
                 };
-
-                (string folder, IEnumerable<string> fileNameCollection) = this.walletManagerWrapper.GetWalletsFiles();
-                string searchFile = Path.ChangeExtension(this.walletName, WalletManager.WalletFileExtension);
-                string fileName = fileNameCollection.FirstOrDefault(i => i.Equals(searchFile));
-                if (folder != null && fileName != null)
-                    model.WalletFilePath = Path.Combine(folder, fileName);
+                
                 return model;
             }
-
-
         }
 
         public async Task StartStaking(StartStakingRequest startStakingRequest)
@@ -247,7 +241,7 @@ namespace Obsidian.Features.X1Wallet
                             var stakingItem = new TransactionItemModel
                             {
                                 Type = TransactionItemType.Staked,
-                                ToAddress = address.Bech32,
+                                ToAddress = address.Address,
                                 Amount = relatedOutputs.Sum(o => o.Transaction.Amount) - transaction.Amount,
                                 Id = transaction.SpendingDetails.TransactionId,
                                 Timestamp = transaction.SpendingDetails.CreationTime,
@@ -329,7 +323,7 @@ namespace Obsidian.Features.X1Wallet
                         var receivedItem = new TransactionItemModel
                         {
                             Type = TransactionItemType.Received,
-                            ToAddress = address.Bech32,
+                            ToAddress = address.Address,
                             Amount = transaction.Amount,
                             Id = transaction.Id,
                             Timestamp = transaction.CreationTime,
@@ -425,7 +419,7 @@ namespace Obsidian.Features.X1Wallet
                     {
                         Id = st.Transaction.Id,
                         Amount = st.Transaction.Amount,
-                        Address = st.Address.Bech32,
+                        Address = st.Address.Address,
                         Index = st.Transaction.Index,
                         IsChange = st.Address.IsChange,
                         CreationTime = st.Transaction.CreationTime,
@@ -565,40 +559,21 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        public async Task<string> GetUnusedAddressAsync(GetUnusedAddressModel request)
+       
+
+
+        
+
+
+        public async Task<KeyAddressesModel> GetUnusedReceiveAddresses()
         {
             using (var context = GetWalletContext())
             {
-                var address = "";
-                var result = context.WalletManager.GetUnusedAddress();
+                var model = new KeyAddressesModel { Addresses = new List<KeyAddressModel>() };
 
-                if (result != null)
-                    address = result.Bech32;
-
-                return address;
-            }
-            
-        }
-
-
-        public async Task<string[]> GetUnusedAddresses(GetUnusedAddressesModel request)
-        {
-            using (var context = GetWalletContext())
-            {
-                int count = int.Parse(request.Count);
-                string[] addresses = context.WalletManager.GetUnusedAddresses(count).Select(x => x.Bech32).ToArray();
-                return addresses;
-            }
-           
-        }
-
-
-        public async Task<KeyAddressesModel> GetAllAddressesAsync()
-        {
-            using (var context = GetWalletContext())
-            {
-                var model = context.WalletManager.GetAllAddresses();
-                
+                var unusedReceiveAddresses = context.WalletManager.GetUnusedAddresses(10, false);
+                foreach (var addr in unusedReceiveAddresses)
+                    model.Addresses.Add(new KeyAddressModel { Address = addr.Address, IsChange = addr.IsChange, IsUsed = false });
                 return model;
             }
         }
@@ -668,35 +643,7 @@ namespace Obsidian.Features.X1Wallet
                 await this.walletManagerWrapper.WalletSyncManagerSyncFromDateAsync(request.Date);
         }
 
-        public async Task<WalletSendTransactionModel> SplitCoinsAsync(SplitCoinsRequest request)
-        {
-            using (var context = GetWalletContext())
-            {
-                KeyAddress address = context.WalletManager.GetUnusedAddress();
-
-                Money totalAmount = request.TotalAmountToSplit;
-                Money singleUtxoAmount = totalAmount / request.UtxosCount;
-
-                var recipients = new List<Recipient>(request.UtxosCount);
-                for (int i = 0; i < request.UtxosCount; i++)
-                    recipients.Add(new Recipient { ScriptPubKey = address.GetPaymentScript(), Amount = singleUtxoAmount });
-
-                var transactionBuildContext = new TransactionBuildContext(this.network)
-                {
-                    AccountReference = new WalletAccountReference { WalletName = request.WalletName, AccountName = request.AccountName },
-                    MinConfirmations = 1,
-                    Shuffle = true,
-                    WalletPassword = request.WalletPassword,
-                    Recipients = recipients,
-                    Time = (uint)this.dateTimeProvider.GetAdjustedTimeAsUnixTimestamp()
-                };
-
-                Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(transactionBuildContext);
-
-                WalletSendTransactionModel model = await SendTransactionAsync(new SendTransactionRequest(transactionResult.ToHex()));
-                return model;
-            }
-        }
+       
 
 
         public StatusModel GetNodeStatus()

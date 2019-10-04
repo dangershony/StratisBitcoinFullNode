@@ -91,7 +91,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                     case "getReceiveAddresses":
                         {
-                            var addressesModel = await this.walletController.GetAllAddressesAsync();
+                            var addressesModel = await this.walletController.GetUnusedReceiveAddresses();
                             return CreateOk(addressesModel, request);
                         }
 
