@@ -7,6 +7,7 @@ using Newtonsoft.Json.Serialization;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Utilities.JsonConverters;
+using System.Linq;
 
 namespace Obsidian.Features.X1Wallet.Models
 {
@@ -17,17 +18,17 @@ namespace Obsidian.Features.X1Wallet.Models
         /// <summary>
         /// The key is the HashHex of an address. The value contains the transaction data for that address.
         /// </summary>
-        public Dictionary<string, P2WPKHAddress> P2WPKHAddresses { get; internal set; }
+        public Dictionary<string, P2WPKHAddress> P2WPKHAddresses { get; set; }
 
-        public byte[] PassphraseChallenge { get; internal set; }
+        public byte[] PassphraseChallenge { get; set; }
 
         /// <summary>
         /// The WalletGuid correlates the X1WalletFile and the X1WalletMetadataFile.
         /// </summary>
-        public Guid WalletGuid { get; internal set; }
-        public string WalletName { get; internal set; }
-        public string Comment { get; internal set; }
-        public int Version { get; internal set; }
+        public Guid WalletGuid { get; set; }
+        public string WalletName { get; set; }
+        public string Comment { get; set; }
+        public int Version { get; set; }
     }
 
     public static class WalletHelper
@@ -64,8 +65,9 @@ namespace Obsidian.Features.X1Wallet.Models
 
         public static X1WalletFile LoadX1WalletFile(string filePath)
         {
-            var x1WalletFile = JsonConvert.DeserializeObject<X1WalletFile>(File.ReadAllText(filePath), jsonSettings);
-            if (Path.GetFileName(filePath.Replace(X1WalletFile.FileExtension, string.Empty)) != x1WalletFile.WalletName)
+            var file = File.ReadAllText(filePath);
+            var x1WalletFile = JsonConvert.DeserializeObject<X1WalletFile>(file, jsonSettings);
+            if (Path.GetFileName(filePath.Replace(X1WalletFile.FileExtension, string.Empty).Replace($".{x1WalletFile.P2WPKHAddresses.Values.First().CoinTicker}", string.Empty)) != x1WalletFile.WalletName)
                 throw new InvalidOperationException($"The wallet name {x1WalletFile.WalletName} inside of file {filePath} doesn't match the naming convention for {X1WalletFile.FileExtension}-files. Please correct this.");
             return x1WalletFile;
         }
@@ -81,7 +83,7 @@ namespace Obsidian.Features.X1Wallet.Models
             };
         }
 
-        internal static X1WalletMetadataFile LoadOrCreateX1WalletMetadataFile(string x1WalletMetadataFilePath, X1WalletFile x1WalletFile)
+        public static X1WalletMetadataFile LoadOrCreateX1WalletMetadataFile(string x1WalletMetadataFilePath, X1WalletFile x1WalletFile)
         {
             X1WalletMetadataFile x1WalletMetadataFile;
             if (File.Exists(x1WalletMetadataFilePath))
@@ -102,7 +104,7 @@ namespace Obsidian.Features.X1Wallet.Models
             File.WriteAllText(filePath, serializedWallet);
         }
 
-        
+
 
 
     }
@@ -111,10 +113,12 @@ namespace Obsidian.Features.X1Wallet.Models
     {
         public const string FileExtension = ".x1wallet.metadata.json";
 
+        public int MetadataVersion { get; set; }
+
         /// <summary>
         /// The WalletGuid correlates the X1WalletFile and the X1WalletMetadataFile.
         /// </summary>
-        public Guid WalletGuid { get; internal set; }
+        public Guid WalletGuid { get; set; }
 
         /// <summary>
         /// The height of the last block that was synced.
@@ -131,7 +135,7 @@ namespace Obsidian.Features.X1Wallet.Models
         /// <summary>
         /// Contains the HashHex of all used addresses.
         /// </summary>
-        public HashSet<string> UsedAddresses { get; internal set; }
+        public HashSet<string> UsedAddresses { get; set; }
 
         /// <summary>
         /// Gets or sets the Merkle path.
@@ -142,7 +146,7 @@ namespace Obsidian.Features.X1Wallet.Models
         /// <summary>
         /// The key is the HashHex of an address. The value contains the transaction data for that address.
         /// </summary>
-        public Dictionary<string, List<TransactionData>> Transactions { get; internal set; }
+        public Dictionary<string, List<TransactionData>> Transactions { get; set; }
 
 
     }

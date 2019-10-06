@@ -204,28 +204,28 @@ namespace Obsidian.Features.X1Wallet
 
             this.logger.LogInformation("WalletSyncManager initialized. Wallet at block {0}.", this.walletManager.WalletLastBlockSyncedHeight);
 
-            //using (var context = GetWalletContextPrivate())
-            //{
-            //    this.syncState.WalletTip = this.chainIndexer.GetHeader(context.WalletManager.WalletLastBlockSyncedHash);
-            //    if (this.syncState.WalletTip == null)
-            //    {
-            //        // The wallet tip was not found in the main chain.
-            //        // this can happen if the node crashes unexpectedly.
-            //        // To recover we need to find the first common fork
-            //        // with the best chain. As the wallet does not have a
-            //        // list of chain headers, we use a BlockLocator and persist
-            //        // that in the wallet. The block locator will help finding
-            //        // a common fork and bringing the wallet back to a good
-            //        // state (behind the best chain).
-            //        ICollection<uint256> locators = context.WalletManager.WalletBlockLocator;
-            //        var blockLocator = new BlockLocator { Blocks = locators.ToList() };
-            //        ChainedHeader fork = this.chainIndexer.FindFork(blockLocator);
-            //        context.WalletManager.RemoveBlocks(fork);
-            //        //this.WalletTipHash = fork.HashBlock;
-            //        //this.WalletTipHeight = fork.Height;
-            //        this.syncState.WalletTip = fork;
-            //    }
-            //}
+            using (var context = GetWalletContextPrivate())
+            {
+                this.syncState.WalletTip = this.chainIndexer.GetHeader(context.WalletManager.WalletLastBlockSyncedHash);
+                if (this.syncState.WalletTip == null)
+                {
+                    // The wallet tip was not found in the main chain.
+                    // this can happen if the node crashes unexpectedly.
+                    // To recover we need to find the first common fork
+                    // with the best chain. As the wallet does not have a
+                    // list of chain headers, we use a BlockLocator and persist
+                    // that in the wallet. The block locator will help finding
+                    // a common fork and bringing the wallet back to a good
+                    // state (behind the best chain).
+                    ICollection<uint256> locators = context.WalletManager.WalletBlockLocator;
+                    var blockLocator = new BlockLocator { Blocks = locators.ToList() };
+                    ChainedHeader fork = this.chainIndexer.FindFork(blockLocator);
+                    context.WalletManager.RemoveBlocks(fork);
+                    //this.WalletTipHash = fork.HashBlock;
+                    //this.WalletTipHeight = fork.Height;
+                    this.syncState.WalletTip = fork;
+                }
+            }
 
 
             this.transactionReceivedSubscription = this.signals.Subscribe<TransactionReceived>(async (args) => await OnMemoryPoolNewTransactionFromPeerAvailableAsync(args));
@@ -259,7 +259,8 @@ namespace Obsidian.Features.X1Wallet
             {
                 using (var context = GetWalletContextPrivate())
                 {
-                    this.syncState.WalletTip = this.chainIndexer.GetHeader(context.WalletManager.WalletLastBlockSyncedHash);
+                    uint256 walletLastBlockHash = context.WalletManager.WalletLastBlockSyncedHash ?? this.network.GenesisHash;
+                    this.syncState.WalletTip = this.chainIndexer.GetHeader(walletLastBlockHash);
                     await Task.Delay(250);
                     goto retry;
 

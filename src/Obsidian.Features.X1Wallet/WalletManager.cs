@@ -74,7 +74,7 @@ namespace Obsidian.Features.X1Wallet
             this.CurrentX1WalletFilePath = x1WalletFilePath;
 
             this.X1WalletFile = WalletHelper.LoadX1WalletFile(x1WalletFilePath);
-            this.CurrentX1WalletMetadataFilePath = this.X1WalletFile.WalletName.GetX1WalletMetaDataFilepath(this.network, this.dataFolder);
+            this.CurrentX1WalletMetadataFilePath = this.X1WalletFile.WalletName.GetX1WalletMetaDataFilepath(network, dataFolder);
             this.Metadata = WalletHelper.LoadOrCreateX1WalletMetadataFile(this.CurrentX1WalletMetadataFilePath, this.X1WalletFile);
             P2WPKHAddressExtensions.Metadata = this.Metadata;
 
