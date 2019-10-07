@@ -2,11 +2,15 @@
   "profiles": {
     "Obsidian.ObsidianD": {
       "commandName": "Project",
-      "commandLineArgs": "-gateway=1 -addnode=98.243.166.117 -whitelist=98.243.166.117 -addnode=23.101.75.57 -whitelist=23.101.75.57 -snapshotheight=984900 -snapshot=true",
+      "commandLineArgs": "",
       "environmentVariables": {
         "deleteme2": "cli getinfo",
         "deleteme": "-port=56666 -addnode=165.22.90.248"
       }
+    },
+    "Obsidian.ObsidianD-Gateway": {
+      "commandName": "Project",
+      "commandLineArgs": "-gateway=1 -addnode=98.243.166.117 -whitelist=98.243.166.117 -addnode=23.101.75.57 -whitelist=23.101.75.57 -snapshotheight=984900 -snapshot=true",
     }
   }
 }

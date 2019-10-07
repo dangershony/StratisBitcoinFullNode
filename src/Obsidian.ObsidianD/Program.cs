@@ -64,7 +64,6 @@ namespace Obsidian.ObsidianD
                     .UseNodeSettings(nodeSettings)
                     .UseBlockStore()
                     .UsePosConsensus()
-                    .Airdrop()
                     .UseMempool();
 
 
