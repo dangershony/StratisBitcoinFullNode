@@ -1,4 +1,5 @@
 ﻿using NBitcoin;
+using Obsidian.Features.X1Wallet.Storage;
 
 namespace Obsidian.Features.X1Wallet.Models
 {
@@ -10,7 +11,7 @@ namespace Obsidian.Features.X1Wallet.Models
         /// <summary>
         /// The address for which the balance is calculated.
         /// </summary>
-        public P2WPKHAddress KeyAddress { get; set; }
+        public P2WpkhAddress KeyAddress { get; set; }
 
         /// <summary>
         /// The balance of confirmed transactions.

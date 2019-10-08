@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
@@ -78,9 +79,9 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                     case "history":
                         {
+                            // Deprecated
                             var walletHistoryRequest = Deserialize<WalletHistoryRequest>(decryptedRequest.Payload);
-                            WalletHistoryModel walletHistoryModel = await this.walletController.GetHistoryAsync(walletHistoryRequest);
-                            return CreateOk(walletHistoryModel, request);
+                            return CreateOk(new WalletHistoryModel(), request);
                         }
 
                     case "stakingInfo":
@@ -91,6 +92,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                     case "getReceiveAddresses":
                         {
+                            // this command will only return one unused address or throw if the wallet is out of unused addresses
                             var addressesModel = await this.walletController.GetUnusedReceiveAddresses();
                             return CreateOk(addressesModel, request);
                         }

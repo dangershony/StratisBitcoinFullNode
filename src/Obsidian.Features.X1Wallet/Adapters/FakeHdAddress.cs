@@ -1,11 +1,12 @@
 ﻿using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin.Features.Wallet;
 
 namespace Obsidian.Features.X1Wallet.Adapters
 {
     public static class FakeHdAddress
     {
-        public static HdAddress ToFakeHdAddress(this P2WPKHAddress keyAddress)
+        public static HdAddress ToFakeHdAddress(this P2WpkhAddress keyAddress)
         {
             var hd = new HdAddress
             {

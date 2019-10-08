@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin.Features.Wallet;
 
 namespace Obsidian.Features.X1Wallet.Models
@@ -13,7 +14,7 @@ namespace Obsidian.Features.X1Wallet.Models
         /// <summary>
         /// The address associated with this UTXO.
         /// </summary>
-        public P2WPKHAddress Address { get; set; }
+        public P2WpkhAddress Address { get; set; }
 
         /// <summary>
         /// The transaction representing the UTXO.

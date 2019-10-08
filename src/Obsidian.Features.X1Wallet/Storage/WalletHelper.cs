@@ -1,36 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using NBitcoin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using Obsidian.Features.X1Wallet.Models;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Wallet;
-using Stratis.Bitcoin.Utilities.JsonConverters;
-using System.Linq;
 
-namespace Obsidian.Features.X1Wallet.Models
+namespace Obsidian.Features.X1Wallet.Storage
 {
-    public class X1WalletFile
-    {
-        public const string FileExtension = ".x1wallet.json";
-
-        /// <summary>
-        /// The key is the HashHex of an address. The value contains the transaction data for that address.
-        /// </summary>
-        public Dictionary<string, P2WPKHAddress> P2WPKHAddresses { get; set; }
-
-        public byte[] PassphraseChallenge { get; set; }
-
-        /// <summary>
-        /// The WalletGuid correlates the X1WalletFile and the X1WalletMetadataFile.
-        /// </summary>
-        public Guid WalletGuid { get; set; }
-        public string WalletName { get; set; }
-        public string Comment { get; set; }
-        public int Version { get; set; }
-    }
-
     public static class WalletHelper
     {
         static readonly JsonSerializerSettings jsonSettings = new JsonSerializerSettings()
@@ -72,29 +53,35 @@ namespace Obsidian.Features.X1Wallet.Models
             return x1WalletFile;
         }
 
-        public static X1WalletMetadataFile CreateX1WalletMetadataFile(this X1WalletFile x1WalletFile)
+        public static X1WalletMetadataFile CreateX1WalletMetadataFile(this X1WalletFile x1WalletFile, int metadataVersion, string genesisHash)
         {
             return new X1WalletMetadataFile
             {
-                BlockLocator = new HashSet<uint256>(),
-                Transactions = new Dictionary<string, List<TransactionData>>(),
-                UsedAddresses = new HashSet<string>(),
-                WalletGuid = x1WalletFile.WalletGuid
+                MetadataVersion = metadataVersion,
+                WalletGuid = x1WalletFile.WalletGuid,
+                CheckpointHash = genesisHash,
+                SyncedHash = genesisHash,
+                Blocks = new Dictionary<int, BlockMetadata>()
             };
         }
 
-        public static X1WalletMetadataFile LoadOrCreateX1WalletMetadataFile(string x1WalletMetadataFilePath, X1WalletFile x1WalletFile)
+        public static X1WalletMetadataFile LoadOrCreateX1WalletMetadataFile(string x1WalletMetadataFilePath, X1WalletFile x1WalletFile, int expectedMetadataVersion, string genesisHash)
         {
             X1WalletMetadataFile x1WalletMetadataFile;
             if (File.Exists(x1WalletMetadataFilePath))
             {
                 x1WalletMetadataFile = JsonConvert.DeserializeObject<X1WalletMetadataFile>(File.ReadAllText(x1WalletMetadataFilePath), jsonSettings);
+                if (x1WalletMetadataFile.MetadataVersion != expectedMetadataVersion)
+                    throw new Exception($"The program expects Metadata version {expectedMetadataVersion}, but the file {x1WalletMetadataFilePath} has Metadata version {x1WalletMetadataFile.MetadataVersion}. If you backup and delete the current Metadata file, a new file with the new version will be created.");
                 if (x1WalletMetadataFile.WalletGuid != x1WalletFile.WalletGuid)
                     throw new InvalidOperationException($"The WalletGuid in the {X1WalletFile.FileExtension}-file and the {X1WalletMetadataFile.FileExtension}-file for wallet name {x1WalletFile.WalletName} do not match. Please fix this.");
 
             }
-            x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile();
-            x1WalletMetadataFile.SaveX1WalletMetadataFile(x1WalletMetadataFilePath);
+            else
+            {
+                x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile(expectedMetadataVersion, genesisHash);
+                x1WalletMetadataFile.SaveX1WalletMetadataFile(x1WalletMetadataFilePath);
+            }
             return x1WalletMetadataFile;
         }
 
@@ -105,48 +92,6 @@ namespace Obsidian.Features.X1Wallet.Models
         }
 
 
-
-
-    }
-
-    public class X1WalletMetadataFile
-    {
-        public const string FileExtension = ".x1wallet.metadata.json";
-
-        public int MetadataVersion { get; set; }
-
-        /// <summary>
-        /// The WalletGuid correlates the X1WalletFile and the X1WalletMetadataFile.
-        /// </summary>
-        public Guid WalletGuid { get; set; }
-
-        /// <summary>
-        /// The height of the last block that was synced.
-        /// </summary>
-        public int LastBlockSyncedHeight { get; set; }
-
-        /// <summary>
-        /// The hash of the last block that was synced.
-        /// </summary>
-        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
-        [JsonConverter(typeof(UInt256JsonConverter))]
-        public uint256 LastBlockSyncedHash { get; set; }
-
-        /// <summary>
-        /// Contains the HashHex of all used addresses.
-        /// </summary>
-        public HashSet<string> UsedAddresses { get; set; }
-
-        /// <summary>
-        /// Gets or sets the Merkle path.
-        /// </summary>
-        [JsonProperty(ItemConverterType = typeof(UInt256JsonConverter))]
-        public HashSet<uint256> BlockLocator { get; set; }
-
-        /// <summary>
-        /// The key is the HashHex of an address. The value contains the transaction data for that address.
-        /// </summary>
-        public Dictionary<string, List<TransactionData>> Transactions { get; set; }
 
 
     }

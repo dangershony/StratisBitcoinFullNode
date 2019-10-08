@@ -27,7 +27,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
             byte[] epk;
             using (var context2 = this.walletManagerWrapper.GetWalletContext(this.walletName))
             {
-                epk = context2.WalletManager.GetAllAddresses().Addresses.Single(a => a.Address == hdAddress.Address).EncryptedPrivateKey;
+                epk = context2.WalletManager.GetAddress(hdAddress.Address).EncryptedPrivateKey;
             }
             var privateKeyBytes = VCL.DecryptWithPassphrase(password, epk);
             var key = new Key(privateKeyBytes);

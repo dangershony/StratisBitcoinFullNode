@@ -14,20 +14,21 @@ namespace Obsidian.Features.X1Wallet
     /// <inheritdoc />
     public class WalletFeature : BaseWalletFeature
     {
-        readonly KeyAddressBalance[] keyAddressBalancesEmpty = new KeyAddressBalance[0];
         readonly WalletManagerWrapper walletManagerWrapper;
         readonly IConnectionManager connectionManager;
         readonly BroadcasterBehavior broadcasterBehavior;
+        readonly Network network;
 
         public WalletFeature(
             WalletManagerWrapper walletManagerWrapper,
             IConnectionManager connectionManager,
             BroadcasterBehavior broadcasterBehavior,
-            INodeStats nodeStats)
+            INodeStats nodeStats, Network network)
         {
             this.walletManagerWrapper = walletManagerWrapper;
             this.connectionManager = connectionManager;
             this.broadcasterBehavior = broadcasterBehavior;
+            this.network = network;
 
             nodeStats.RegisterStats(AddComponentStats, StatsType.Component, this.GetType().Name);
             nodeStats.RegisterStats(AddInlineStats, StatsType.Inline, this.GetType().Name, 800);
@@ -35,6 +36,8 @@ namespace Obsidian.Features.X1Wallet
 
         public override Task InitializeAsync()
         {
+            HashStringExtensions.Init(this.network);
+
             this.connectionManager.Parameters.TemplateBehaviors.Add(this.broadcasterBehavior);
 
             return Task.CompletedTask;
@@ -56,7 +59,7 @@ namespace Obsidian.Features.X1Wallet
                 if (context != null)
                 {
                     height = context.WalletManager.WalletLastBlockSyncedHeight.ToString();
-                    hash = context.WalletManager.WalletLastBlockSyncedHash?.ToString() ?? "n/a";
+                    hash = context.WalletManager.WalletLastBlockSyncedHash ?? "n/a";
                     walletName = context.WalletManager.WalletName;
                 }
             }
@@ -74,15 +77,14 @@ namespace Obsidian.Features.X1Wallet
         void AddComponentStats(StringBuilder log)
         {
             string walletName = null;
-
-            IEnumerable<KeyAddressBalance> balancesPerAddress = this.keyAddressBalancesEmpty;
+            var balance = new Balance { AmountConfirmed = Money.Zero, AmountUnconfirmed = Money.Zero, SpendableAmount = Money.Zero };
 
             using (var context = this.walletManagerWrapper.GetWalletContext(null, true))
             {
                 if (context != null)
                 {
                     walletName = context.WalletManager.WalletName;
-                    balancesPerAddress = context.WalletManager.GetBalances();
+                    balance = context.WalletManager.GetConfirmedWalletBalance();
                 }
             }
 
@@ -97,20 +99,12 @@ namespace Obsidian.Features.X1Wallet
             log.AppendLine();
             log.AppendLine("======X1 Wallet======");
 
-            Money confirmed = Money.Zero;
-            Money unconfirmed = Money.Zero;
-            Money spendable = Money.Zero;
-            foreach (var bal in balancesPerAddress)
-            {
-                confirmed += bal.AmountConfirmed;
-                unconfirmed += bal.AmountUnconfirmed;
-                spendable += bal.SpendableAmount;
-            }
+            
 
             log.AppendLine(($"{walletName}").PadRight(LoggingConfiguration.ColumnLength + 10)
-                           + (" Confirmed balance: " + confirmed.ToString()).PadRight(LoggingConfiguration.ColumnLength + 20)
-                           + " Unconfirmed balance: " + unconfirmed.ToString().PadRight(LoggingConfiguration.ColumnLength + 20)
-                           + " Spendable balance " + spendable.ToString()
+                           + (" Confirmed balance: " + balance.AmountConfirmed.ToString()).PadRight(LoggingConfiguration.ColumnLength + 20)
+                           + " Unconfirmed balance: " + balance.AmountUnconfirmed.ToString().PadRight(LoggingConfiguration.ColumnLength + 20)
+                           + " Spendable balance " + balance.SpendableAmount.ToString()
                            );
 
         }

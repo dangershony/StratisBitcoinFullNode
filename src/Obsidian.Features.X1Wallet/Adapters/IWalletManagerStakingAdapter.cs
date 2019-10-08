@@ -41,7 +41,7 @@ namespace Obsidian.Features.X1Wallet
             {
                 using (var context = this.walletManagerWrapper.GetWalletContext(this.walletName))
                 {
-                    return context.WalletManager.WalletLastBlockSyncedHash;
+                    return new uint256(context.WalletManager.WalletLastBlockSyncedHash);
                 }
             }
             set { throw new NotImplementedException(); }

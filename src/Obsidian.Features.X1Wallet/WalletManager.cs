@@ -1,11 +1,8 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Net;
-using System.Security;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -14,38 +11,31 @@ using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
 using NBitcoin.DataEncoders;
-using Newtonsoft.Json;
 using Obsidian.Features.X1Wallet.Models;
-using Obsidian.Features.X1Wallet.Temp;
+using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.EventBus;
+using Stratis.Bitcoin.EventBus.CoreEvents;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Features.Miner.Staking;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
-using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Interfaces;
+using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
-using Stratis.Bitcoin.Utilities.JsonErrors;
 using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet
 {
     public class WalletManager : IDisposable
     {
-
-
-        const string DownloadChainLoop = nameof(DownloadChainLoop);
-        static TimeSpan AutoSaveInterval = new TimeSpan(0, 1, 0);
-        static readonly RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
-        static readonly Func<string, byte[], byte[]> KeyEncryption = VCL.EncryptWithPassphrase;
-
+        public const int ExpectedMetadataVersion = 1;
         public readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
-        readonly Dictionary<OutPoint, TransactionData> outpointLookup = new Dictionary<OutPoint, TransactionData>();
-        readonly Dictionary<OutPoint, TransactionData> inputLookup = new Dictionary<OutPoint, TransactionData>();
 
+        static readonly TimeSpan AutoSaveInterval = new TimeSpan(0, 1, 0);
 
         readonly Network network;
         readonly DataFolder dataFolder;
@@ -56,6 +46,9 @@ namespace Obsidian.Features.X1Wallet
         readonly ChainIndexer chainIndexer;
         readonly INodeLifetime nodeLifetime;
         readonly IAsyncProvider asyncProvider;
+        readonly ISignals signals;
+        readonly IInitialBlockDownloadState initialBlockDownloadState;
+        readonly IBlockStore blockStore;
 
         // for staking
         readonly IPosMinting posMinting;
@@ -64,18 +57,29 @@ namespace Obsidian.Features.X1Wallet
         X1WalletFile X1WalletFile { get; }
         X1WalletMetadataFile Metadata { get; }
 
-        IAsyncLoop asyncLoop;
-        readonly IAsyncLoop autoSaveWallet;
+        SubscriptionToken blockConnectedSubscription;
+        SubscriptionToken transactionReceivedSubscription;
 
-        #region c'tor
+        bool isStartingUp;
+        Stopwatch startupStopwatch;
+        long startupDuration;
+        Timer startupTimer;
 
-        public WalletManager(string x1WalletFilePath, ChainIndexer chainIndexer, Network network, DataFolder dataFolder, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory, IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider, IPosMinting posMinting, ITimeSyncBehaviorState timeSyncBehaviorState)
+        #region c'tor and initialisation
+
+        public WalletManager(string x1WalletFilePath, ChainIndexer chainIndexer, Network network, DataFolder dataFolder,
+            IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
+            IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime,
+            IAsyncProvider asyncProvider, IPosMinting posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
+            ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore)
         {
             this.CurrentX1WalletFilePath = x1WalletFilePath;
 
             this.X1WalletFile = WalletHelper.LoadX1WalletFile(x1WalletFilePath);
-            this.CurrentX1WalletMetadataFilePath = this.X1WalletFile.WalletName.GetX1WalletMetaDataFilepath(network, dataFolder);
-            this.Metadata = WalletHelper.LoadOrCreateX1WalletMetadataFile(this.CurrentX1WalletMetadataFilePath, this.X1WalletFile);
+            this.CurrentX1WalletMetadataFilePath =
+                this.X1WalletFile.WalletName.GetX1WalletMetaDataFilepath(network, dataFolder);
+            this.Metadata = WalletHelper.LoadOrCreateX1WalletMetadataFile(this.CurrentX1WalletMetadataFilePath,
+                this.X1WalletFile, ExpectedMetadataVersion, network.GenesisHash.ToString());
             P2WPKHAddressExtensions.Metadata = this.Metadata;
 
             this.chainIndexer = chainIndexer;
@@ -91,15 +95,57 @@ namespace Obsidian.Features.X1Wallet
             this.timeSyncBehaviorState = timeSyncBehaviorState;
 
             this.broadcasterManager = broadcasterManager;
+            this.signals = signals;
+            this.initialBlockDownloadState = initialBlockDownloadState;
+            this.blockStore = blockStore;
+
+            ScheduleSyncing();
+        }
+
+        void ScheduleSyncing()
+        {
+            this.isStartingUp = true;
+
+            if (this.startupStopwatch == null)
+                this.startupStopwatch = new Stopwatch();
+
+            this.startupTimer = new Timer(_ =>
+            {
+                this.startupTimer.Dispose();
+                SyncWallet();
+
+            }, null, 500, Timeout.Infinite);
+        }
+
+        void CompleteStart()
+        {
+            this.isStartingUp = false;
+            this.startupStopwatch.Start();
+            this.startupStopwatch = null;
+            this.startupTimer = null;
 
             if (this.broadcasterManager != null)
-            {
-                this.broadcasterManager.TransactionStateChanged += this.BroadcasterManager_TransactionStateChanged;
-            }
+                this.broadcasterManager.TransactionStateChanged += OnTransactionStateChanged;
+            this.blockConnectedSubscription = this.signals.Subscribe<BlockConnected>(OnBlockConnected);
+            this.transactionReceivedSubscription = this.signals.Subscribe<TransactionReceived>(OnTransactionReceived);
 
-            this.autoSaveWallet = this.asyncProvider.CreateAndRunAsyncLoop(nameof(AutoSaveWalletAsync), AutoSaveWalletAsync, this.nodeLifetime.ApplicationStopping, AutoSaveInterval, AutoSaveInterval);
+        }
 
-            RefreshDictionary_OutpointTransactionData(this.Metadata);
+        public void Dispose()
+        {
+            if (this.broadcasterManager != null)
+                this.broadcasterManager.TransactionStateChanged -= OnTransactionStateChanged;
+
+            if (this.transactionReceivedSubscription != null)
+                this.signals.Unsubscribe(this.transactionReceivedSubscription);
+
+            if (this.blockConnectedSubscription != null)
+                this.signals.Unsubscribe(this.blockConnectedSubscription);
+        }
+
+        internal LoadWalletResponse LoadWallet()
+        {
+            return new LoadWalletResponse { PassphraseChallenge = this.X1WalletFile.PassphraseChallenge.ToHexString() };
         }
 
         #endregion
@@ -110,44 +156,164 @@ namespace Obsidian.Features.X1Wallet
         public string CurrentX1WalletFilePath { get; }
         public string CurrentX1WalletMetadataFilePath { get; }
 
-        public string WalletName
+        public string WalletName => this.X1WalletFile.WalletName;
+
+        public int WalletLastBlockSyncedHeight => this.Metadata.SyncedHeight;
+
+        public string WalletLastBlockSyncedHash => this.Metadata.SyncedHash;
+
+        #endregion
+
+        #region syncing
+
+        void SyncWallet() // semaphore?
         {
-            get
+            if (this.initialBlockDownloadState.IsInitialBlockDownload())
             {
-                Guard.NotNull(this.X1WalletFile, nameof(this.X1WalletFile));
-                return this.X1WalletFile?.WalletName;
+                this.logger.LogInformation("Wallet is waiting for IBD to complete.");
+                return;
+            }
+
+            this.startupStopwatch?.Restart();
+
+            try
+            {
+                this.WalletSemaphore.Wait();
+
+                // a) check if the wallet is on the right chain
+                if (!IsOnBestChain())
+                {
+                    MoveToBestChain();
+                }
+
+                // if we are here, we are on the best chain and the information about the tip in the Metadata file is correct.
+
+                // b) now let the wallet catch up
+
+
+                this.logger.LogInformation(
+                    $"Wallet {this.WalletName} is at block {this.Metadata.SyncedHeight}, catching up, {TimeSpan.FromMilliseconds(this.startupDuration).Duration()} elapsed.");
+
+                while (this.chainIndexer.Tip.Height > this.Metadata.SyncedHeight)
+                {
+                    // this can take a long time, so watch for cancellation
+                    if (this.nodeLifetime.ApplicationStopping.IsCancellationRequested)
+                    {
+                        SaveMetadata();
+                        return;
+                    }
+
+                    if (this.isStartingUp && this.startupStopwatch.ElapsedMilliseconds >= 5000)
+                    {
+                        SaveMetadata();
+                        this.startupDuration += this.startupStopwatch.ElapsedMilliseconds;
+                        ScheduleSyncing();
+                        return;
+                    }
+
+                    var nextBlockForWalletHeight = this.Metadata.SyncedHeight + 1;
+                    ChainedHeader nextBlockForWalletHeader = this.chainIndexer.GetHeader(nextBlockForWalletHeight);
+                    Block nextBlockForWallet = this.blockStore.GetBlock(nextBlockForWalletHeader.HashBlock);
+                    ProcessBlock(nextBlockForWallet, nextBlockForWalletHeader);
+                }
+            }
+            catch (Exception e)
+            {
+                this.logger.LogError($"{nameof(SyncWallet)}: {e.Message}");
+            }
+            finally
+            {
+                this.WalletSemaphore.Release();
+            }
+
+            if (this.isStartingUp)
+                CompleteStart();
+        }
+
+        /// <summary>
+        /// Checks if the wallet is on the right chain.
+        /// </summary>
+        /// <returns>true, if on the right chain.</returns>
+        bool IsOnBestChain()
+        {
+            bool isOnBestChain;
+            if (this.Metadata.SyncedHeight == 0 || this.Metadata.SyncedHash.IsDefault())
+            {
+                // if the height is 0, we cannot be on the wrong chain
+                ResetMetadata();
+                isOnBestChain = true;
+
+            }
+            else
+            {
+                // check if the wallet tip hash is in the current consensus chain
+                isOnBestChain = this.chainIndexer.GetHeader(this.Metadata.SyncedHash.ToUInt256()) != null;
+            }
+
+            return isOnBestChain;
+        }
+
+        /// <summary>
+        /// If IsOnBestChain returns false, we need to fix this by removing the fork blocks from the wallet.
+        /// </summary>
+        void MoveToBestChain()
+        {
+            ChainedHeader checkpointHeader = null;
+            if (!this.Metadata.CheckpointHash.IsDefault())
+            {
+                var header = this.chainIndexer.GetHeader(this.Metadata.CheckpointHash.ToUInt256());
+                if (header != null && this.Metadata.CheckpointHeight == header.Height)
+                    checkpointHeader = header;  // the checkpoint header is in the correct chain and the the checkpoint height in the wallet is consistent
+            }
+            if (checkpointHeader != null && this.chainIndexer.Tip.Height - checkpointHeader.Height > this.network.Consensus.MaxReorgLength)  // also check the checkpoint is not newer than it should be
+            {
+                // we have a valid checkpoint, remove all later blocks
+                RemoveBlocks(checkpointHeader);
+            }
+            else
+            {
+                // we do not have a usable checkpoint, sync from start by resetting everything
+                ResetMetadata();
             }
         }
 
-        internal LoadWalletResponse LoadWallet()
+        /// <summary>
+        /// It is assumed that the argument contains the header of the highest block (inclusive) where the wallet data is
+        /// consistent with the right chain.
+        /// This method removes all block and the transactions in them of later blocks.
+        /// </summary>
+        /// <param name="checkpointHeader">ChainedHeader of the checkpoint</param>
+        public void RemoveBlocks(ChainedHeader checkpointHeader)
         {
-            return new LoadWalletResponse { PassphraseChallenge = this.X1WalletFile.PassphraseChallenge.ToHexString() };
+            var blocksAfterCheckpoint = this.Metadata.Blocks.Keys.Where(x => x > checkpointHeader.Height).ToArray();
+            foreach (var height in blocksAfterCheckpoint)
+                this.Metadata.Blocks.Remove(height);
+
+            // Update outpointLookup
+            //RefreshDictionary_OutpointTransactionData();
+
+            // Update last block synced height
+            this.Metadata.SyncedHeight = checkpointHeader.Height;
+            this.Metadata.SyncedHash = checkpointHeader.HashBlock.ToString();
+            this.Metadata.CheckpointHeight = checkpointHeader.Height;
+            this.Metadata.CheckpointHash = checkpointHeader.HashBlock.ToString();
+            SaveMetadata();
         }
 
-        public int WalletLastBlockSyncedHeight
+        #endregion
+
+        void OnTransactionReceived(TransactionReceived transactionReceived)
         {
-            get
-            {
-                return this.Metadata.LastBlockSyncedHeight;
-            }
+            // semaphore
+            this.logger.LogInformation($"WalletManager.OnTransactionReceived: Transaction {transactionReceived.ReceivedTransaction.GetHash()} received.");
+            // ProcessTransaction(transactionReceived.ReceivedTransaction);
         }
 
-        public uint256 WalletLastBlockSyncedHash
+        void OnBlockConnected(BlockConnected blockConnected)
         {
-            get
-            {
-                return this.Metadata.LastBlockSyncedHash;
-            }
+            this.logger.LogInformation($"WalletManager.OnBlockConnected: Block {blockConnected.ConnectedBlock.ChainedHeader.Height} connected.");
+            SyncWallet();
         }
-
-        public ICollection<uint256> WalletBlockLocator
-        {
-            get
-            {
-                return this.Metadata.BlockLocator;
-            }
-        }
-
 
         internal async Task<ExportKeysResponse> ExportKeysAsync(ExportKeysRequest exportKeysRequest)
         {
@@ -203,7 +369,7 @@ namespace Obsidian.Features.X1Wallet
             { Message = $"{header}{Environment.NewLine}{success}{Environment.NewLine}{errors}{Environment.NewLine}" };
         }
 
-        #endregion
+      
 
         #region public methods
 
@@ -242,8 +408,8 @@ namespace Obsidian.Features.X1Wallet
                 {
                     var secret = new BitcoinSecret(candidate, obsidianNetwork);
                     var privateKey = secret.PrivateKey.ToBytes();
-                    var address = P2WPKHAddress.CreateWithPrivateKey(privateKey, importKeysRequest.WalletPassphrase,
-                        VCL.EncryptWithPassphrase, false, this.network.Consensus.CoinType, 0, this.network.CoinTicker.ToLowerInvariant(), "");
+                    var address = P2WpkhAddress.CreateWithPrivateKey(privateKey, importKeysRequest.WalletPassphrase,
+                        VCL.EncryptWithPassphrase, false, this.network.Consensus.CoinType, 0, this.network.CoinTicker.ToLowerInvariant(), this.network.CoinTicker);
 
                     this.X1WalletFile.P2WPKHAddresses.Add(address.HashHex, address);
                     secret.GetAddress().ToString();
@@ -263,220 +429,127 @@ namespace Obsidian.Features.X1Wallet
             return response;
         }
 
+        internal Dictionary<string, P2WpkhAddress> GetAllAddresses()
+        {
+            return this.X1WalletFile.P2WPKHAddresses;
+        }
 
+        /// <summary>
+        /// Clears and initializes the wallet Metadata file, and sets heights to 0 and the hashes to null,
+        /// and saves the Metadata file, effectively updating it to the latest version.
+        /// </summary>
+        internal void ResetMetadata()
+        {
+            this.Metadata.MetadataVersion = ExpectedMetadataVersion;
+            this.Metadata.SyncedHash = this.network.GenesisHash.ToString();
+            this.Metadata.SyncedHeight = 0;
+            this.Metadata.CheckpointHash = this.Metadata.SyncedHash;
+            this.Metadata.CheckpointHeight = 0;
+            this.Metadata.Blocks = new Dictionary<int, BlockMetadata>();
+            this.Metadata.WalletGuid = this.X1WalletFile.WalletGuid;
+
+            SaveMetadata();
+        }
 
         public List<UnspentKeyAddressOutput> GetAllSpendableTransactions(int confirmations = 0)
         {
             var res = new List<UnspentKeyAddressOutput>();
             foreach (var adr in this.X1WalletFile.P2WPKHAddresses.Values)
             {
-                UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, confirmations);
-                res.AddRange(unspentKeyAddress);
+                // UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, confirmations);
+                // res.AddRange(unspentKeyAddress);
             }
             return res;
         }
 
-        public string SignMessage(string password, string walletName, string externalAddress, string message)
-        {
-            throw new NotImplementedException();
-        }
+        
 
-        public bool VerifySignedMessage(string externalAddress, string message, string signature)
+        public P2WpkhAddress GetUnusedAddress()
         {
-            throw new NotImplementedException();
-        }
-
-        public void UnlockWallet(string password, string name, int timeout)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void LockWallet(string name)
-        {
-            throw new NotImplementedException();
-        }
-
-        public List<P2WPKHAddress> GetUnusedAddresses(int count, bool isChange)
-        {
-            var result = new List<P2WPKHAddress>();
-            int found = 0;
-
-            foreach (var addr in this.X1WalletFile.P2WPKHAddresses.Values)
+            foreach (P2WpkhAddress address in this.X1WalletFile.P2WPKHAddresses.Values)
             {
-                if (addr.IsChange == isChange && !this.Metadata.UsedAddresses.Contains(addr.HashHex))
-                {
-                    result.Add(addr);
-                    found++;
-                    if (found < count)
-                        continue;
-                }
-            }
-            return result;
-        }
-
-        public List<P2WPKHAddress> GetAddresses(int take)
-        {
-            return this.X1WalletFile.P2WPKHAddresses.Values.Take(take).ToList();
-        }
-
-        public List<FlatAddressHistory> GetHistory()// TODO: make sure resyncing also locks the wallet via semaphore, otherwise calls such as getHistory will throw collection modified
-        {
-            var histories = new List<FlatAddressHistory>();
-
-            foreach (var a in this.X1WalletFile.P2WPKHAddresses.Values)
-            {
-                if (a.IsUsed())
-                {
-                    foreach (var t in a.GetTransactions())
-                    {
-                        var h = new FlatAddressHistory { Address = a, Transaction = t };
-                        histories.Add(h);
-                    }
-                }
-
-            }
-            return histories;
-        }
-
-
-
-        public IEnumerable<KeyAddressBalance> GetBalances()
-        {
-            var balances = new List<KeyAddressBalance>();
-
-
-
-            foreach (P2WPKHAddress address in this.X1WalletFile.P2WPKHAddresses.Values)
-            {
-                // Calculates the amount of spendable coins.
-                UnspentKeyAddressOutput[] spendableBalance = GetSpendableTransactions(address, 0);
-                Money spendableAmount = Money.Zero;
-                foreach (UnspentKeyAddressOutput bal in spendableBalance)
-                {
-                    spendableAmount += bal.Transaction.Amount;
-                }
-
-                // Get the total balances.
-                (Money amountConfirmed, Money amountUnconfirmed) result = P2WPKHAddressExtensions.GetBalances(address);
-
-
-
-
-                balances.Add(new KeyAddressBalance
-                {
-                    AmountConfirmed = result.amountConfirmed,
-                    AmountUnconfirmed = result.amountUnconfirmed,
-                    SpendableAmount = spendableAmount,
-                    KeyAddress = address
-                });
-            }
-
-            return balances;
-        }
-
-        UnspentKeyAddressOutput[] GetSpendableTransactions(P2WPKHAddress address, int confirmations = 0)
-        {
-            if (!address.IsUsed())
-                return new UnspentKeyAddressOutput[0];
-
-            var height = this.chainIndexer.Tip.Height;
-            var coinbaseMaturity = this.network.Consensus.CoinbaseMaturity;
-            var unspendOutputReferences = new List<UnspentKeyAddressOutput>();
-
-            // A block that is at the tip has 1 confirmation.
-            // When calculating the confirmations the tip must be advanced by one.
-            int countFrom = height + 1;
-            var unspentTransActions = address.GetUnspentTransactions();
-
-            foreach (TransactionData transactionData in unspentTransActions)
-            {
-                int? confirmationCount = 0;
-                if (transactionData.BlockHeight != null)
-                    confirmationCount = countFrom >= transactionData.BlockHeight ? countFrom - transactionData.BlockHeight : 0;
-
-                if (confirmationCount < confirmations)
+                if (IsAddressUsedInConfirmedTransactions(address))
                     continue;
+                return address;
+            }
+            return null;
+        }
 
-                bool isCoinBase = transactionData.IsCoinBase ?? false;
-                bool isCoinStake = transactionData.IsCoinStake ?? false;
-
-                // This output can unconditionally be included in the results.
-                // Or this output is a CoinBase or CoinStake and has reached maturity.
-                if ((!isCoinBase && !isCoinStake) || (confirmationCount > coinbaseMaturity))
+        bool IsAddressUsedInConfirmedTransactions(P2WpkhAddress address)
+        {
+            // slow version
+            foreach (BlockMetadata block in this.Metadata.Blocks.Values)
+            {
+                foreach (TransactionMetadata tx in block.ConfirmedTransactions.Values)
                 {
-                    unspendOutputReferences.Add(new UnspentKeyAddressOutput
+                    foreach (var utxo in tx.ReceivedUtxos)
                     {
-                        Address = address,
-                        Transaction = transactionData,
-                        Confirmations = confirmationCount.Value
-                    });
+                        if (utxo.HashHex == address.HashHex)
+                            return true;
+                    }
+
                 }
             }
-
-            return unspendOutputReferences.ToArray();
+            return false;
         }
 
-        public AddressBalance GetAddressBalance(string address)
-        {
-            throw new NotImplementedException();
-        }
 
-        public void RemoveBlocks(ChainedHeader chainedHeader)
-        {
 
-            foreach (var address in this.X1WalletFile.P2WPKHAddresses.Values)
+        public Balance GetConfirmedWalletBalance()
+        {
+            Dictionary<string, TransactionMetadata> confirmedTransactions = new Dictionary<string, TransactionMetadata>();
+
+            foreach (BlockMetadata block in this.Metadata.Blocks.Values)
             {
-                List<TransactionData> txs = address.GetTransactions();
-
-                for (var j = 0; j < txs.Count; j++)
+                foreach (TransactionMetadata tx in block.ConfirmedTransactions.Values)
                 {
-                    var tx = txs[j];
-
-                    //  Remove tx later than height                 
-                    if (tx.BlockHeight > chainedHeader.Height)
-                        txs.Remove(tx);
-                }
-
-                for (var j = 0; j < txs.Count; j++)
-                {
-                    var tx = txs[j];
-
-                    //  Bring back all the UTXO that are now spendable again after the rewind          
-                    if ((tx.SpendingDetails != null) && (tx.SpendingDetails.BlockHeight > chainedHeader.Height))
-                        tx.SpendingDetails = null;
-                }
-
-                // Update outpointLookup
-                this.outpointLookup.Clear();
-                for (var j = 0; j < txs.Count; j++)
-                {
-                    // Get the UTXOs that are unspent or spent but not confirmed.
-                    // We only exclude from the list the confirmed spent UTXOs.
-                    var tx = txs[j];
-                    if (tx.SpendingDetails?.BlockHeight == null)
+                    foreach (UtxoMetadata utxo in tx.ReceivedUtxos)
                     {
-                        this.outpointLookup[new OutPoint(tx.Id, tx.Index)] = tx;
+                        if (this.X1WalletFile.P2WPKHAddresses.ContainsKey(utxo.HashHex))
+                        {
+                            confirmedTransactions.Add(tx.HashTx, tx);
+                            break;
+                        }
                     }
 
                 }
             }
 
-            // Update last block synced height
-            this.Metadata.BlockLocator = new HashSet<uint256>(chainedHeader.GetLocator().Blocks);
-            this.Metadata.LastBlockSyncedHeight = chainedHeader.Height;
-            this.Metadata.LastBlockSyncedHash = chainedHeader.HashBlock;
+            long totalReceived = 0;
 
-            SaveMatadata();
+            foreach (var tx in confirmedTransactions.Values)
+            {
+                foreach (var utxo in tx.ReceivedUtxos)
+                {
+                    if (this.X1WalletFile.P2WPKHAddresses.ContainsKey(utxo.HashHex))
+                    {
+                        totalReceived += utxo.Satoshis;
+                        break;
+                    }
+                }
+
+            }
+
+            var balance = new Balance
+            {
+                AmountConfirmed = Money.Satoshis(totalReceived),
+                AmountUnconfirmed = Money.Zero,
+                SpendableAmount = totalReceived / 10
+            };
+            return balance;
         }
+
+
+      
 
         public void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
-            var tipHash = this.Metadata.LastBlockSyncedHash;
-            var tipHeight = this.Metadata.LastBlockSyncedHeight;
+            var tipHash = this.Metadata.SyncedHash;
+            var tipHeight = this.Metadata.SyncedHeight;
 
 
             // Is this the next block.
-            if (chainedHeader.Header.HashPrevBlock != tipHash)
+            if (chainedHeader.Header.HashPrevBlock.ToString() != tipHash)
             {
                 this.logger.LogTrace("New block's previous hash '{0}' does not match current Wallet's tip hash '{1}'.", chainedHeader.Header.HashPrevBlock, tipHash);
 
@@ -501,7 +574,7 @@ namespace Obsidian.Features.X1Wallet
             // Update the wallets with the last processed block height.
             // It's important that updating the height happens after the block processing is complete,
             // as if the node is stopped, on re-opening it will start updating from the previous height.
-            this.UpdateLastBlockSyncedHeight(chainedHeader);
+            this.UpdateLastBlockSyncedAndCheckpoint(chainedHeader);
 
             if (trxFoundInBlock)
             {
@@ -510,8 +583,70 @@ namespace Obsidian.Features.X1Wallet
 
         }
 
+        TransactionMetadata ExtractWalletTransaction(Transaction transaction)
+        {
+            List<UtxoMetadata> receivedUtxos = null;
+            int index = 0;
+            foreach (var output in transaction.Outputs)
+            {
+                P2WpkhAddress ownAddress = FindAddressByScriptPubKey(output.ScriptPubKey);
+                if (ownAddress != null)
+                {
+                    if (receivedUtxos == null)
+                        receivedUtxos = new List<UtxoMetadata>();
+                    receivedUtxos.Add(new UtxoMetadata { HashHex = ownAddress.HashHex, HashTx = transaction.GetHash().ToString(), Satoshis = output.Value.Satoshi, Index = index });
+                }
+                index++;
+            }
+            if (receivedUtxos != null)
+            {
+                // so this transaction funds this wallet, we could also save information about the other outputs, so that we can provide a better display, but not now...
+                var tx = new TransactionMetadata
+                {
+                    HashTx = transaction.GetHash().ToString(),
+                    IsCoinbase = transaction.IsCoinBase,
+                    IsCoinstake = transaction.IsCoinStake,
+                    ReceivedUtxos = receivedUtxos
+                };
+                return tx;
+            }
+            return null;
+        }
+
+        bool AreInputsInWallet(Transaction transaction)
+        {
+            return false;
+        }
+
+        bool AreOutputsInWallet(Transaction transaction)
+        {
+            return false;
+        }
+
         public bool ProcessTransaction(Transaction transaction, int? blockHeight = null, Block block = null, bool isPropagated = true)
         {
+            if (blockHeight == null || block == null)
+            {
+                // TODO: process unconfirmed tx separately, do not put them in the wallet file
+                throw new NotImplementedException("This is probably an unconfirmed tx from the mempool.");
+            }
+            else
+            {
+                var tx = ExtractWalletTransaction(transaction);
+                if (tx != null)
+                {
+                    if (!this.Metadata.Blocks.ContainsKey(blockHeight.Value))
+                        this.Metadata.Blocks.Add(blockHeight.Value, new BlockMetadata { HashBlock = block.GetHash().ToString(), ConfirmedTransactions = new Dictionary<string, TransactionMetadata>() });
+
+                    this.Metadata.Blocks[blockHeight.Value].ConfirmedTransactions.Add(tx.HashTx, tx);
+                    return true;
+                }
+
+            }
+
+            return false;
+
+
             Guard.NotNull(transaction, nameof(transaction));
             uint256 hash = transaction.GetHash();
 
@@ -524,23 +659,23 @@ namespace Obsidian.Features.X1Wallet
                 {
                     // See if this input is being used by another Wallet transaction present in the index.
                     // The inputs themselves may not belong to the Wallet, but the transaction data in the index has to be for a Wallet transaction.
-                    if (this.inputLookup.TryGetValue(input.PrevOut, out TransactionData indexData))
-                    {
-                        // It's the same transaction, which can occur if the transaction had been added to the Wallet previously. Ignore.
-                        if (indexData.Id == hash)
-                            continue;
+                    //if (this.inputLookup.TryGetValue(input.PrevOut, out TransactionData indexData))
+                    //{
+                    //    // It's the same transaction, which can occur if the transaction had been added to the Wallet previously. Ignore.
+                    //    if (indexData.Id == hash)
+                    //        continue;
 
-                        if (indexData.BlockHash != null)
-                        {
-                            // This should not happen as pre checks are done in mempool and consensus.
-                            throw new WalletException("The same inputs were found in two different confirmed transactions");
-                        }
+                    //    if (indexData.BlockHash != null)
+                    //    {
+                    //        // This should not happen as pre checks are done in mempool and consensus.
+                    //        throw new WalletException("The same inputs were found in two different confirmed transactions");
+                    //    }
 
-                        // This is a double spend we remove the unconfirmed trx
-                        this.RemoveTransactionsByIds(new[] { indexData.Id });
+                    //    // This is a double spend we remove the unconfirmed trx
+                    //    //this.RemoveTransactionsByIds(new[] { indexData.Id });
 
-                        this.inputLookup.Remove(input.PrevOut);
-                    }
+                    //    this.inputLookup.Remove(input.PrevOut);
+                    //}
                 }
             }
 
@@ -550,7 +685,7 @@ namespace Obsidian.Features.X1Wallet
                 var address = FindAddressByScriptPubKey(utxo.ScriptPubKey);
                 if (address != null)
                 {
-                    AddTransactionToWallet(transaction, utxo, address, this.Metadata, blockHeight, block, isPropagated);
+                    //AddTransactionToWallet(transaction, utxo, address, this.Metadata, blockHeight, block, isPropagated);
                     foundReceivingTrx = true;
                     this.logger.LogDebug("Transaction '{0}' contained funds received by the user's Wallet(s).", hash);
                 }
@@ -559,10 +694,10 @@ namespace Obsidian.Features.X1Wallet
             // Check the inputs - include those that have a reference to a transaction containing one of our scripts and the same index.
             foreach (TxIn input in transaction.Inputs)
             {
-                if (!this.outpointLookup.TryGetValue(input.PrevOut, out TransactionData tTx))
-                {
-                    continue;
-                }
+                //if (!this.outpointLookup.TryGetValue(input.PrevOut, out TransactionData tTx))
+                //{
+                //    continue;
+                //}
 
                 // Get the details of the outputs paid out.
                 IEnumerable<TxOut> paidOutTo = transaction.Outputs.Where(o =>
@@ -580,7 +715,7 @@ namespace Obsidian.Features.X1Wallet
                     var address = FindAddressByScriptPubKey(o.ScriptPubKey);
                     if (address != null)
                     {
-                        AddTransactionToWallet(transaction, o, address, this.Metadata, blockHeight, block, isPropagated);
+                        //AddTransactionToWallet(transaction, o, address, this.Metadata, blockHeight, block, isPropagated);
                         foundReceivingTrx = true;
                         this.logger.LogDebug("Transaction '{0}' contained funds received by the user's Wallet(s).", hash);
                         found = true;
@@ -599,26 +734,14 @@ namespace Obsidian.Features.X1Wallet
                     return !address.IsChange && !transaction.IsCoinStake;
                 });
 
-                this.AddSpendingTransactionToWallet(transaction, paidOutTo, tTx.Id, tTx.Index, blockHeight, block);
+                //this.AddSpendingTransactionToWallet(transaction, paidOutTo, tTx.Id, tTx.Index, blockHeight, block);
                 foundSendingTrx = true;
                 this.logger.LogDebug("Transaction '{0}' contained funds sent by the user's Wallet(s).", hash);
             }
             return foundSendingTrx || foundReceivingTrx;
         }
 
-        public KeyAddressesModel GetAllAddresses()
-        {
-            return new KeyAddressesModel
-            {
-                Addresses = this.X1WalletFile.P2WPKHAddresses.Values.Select(address => new KeyAddressModel
-                {
-                    Address = address.Address,
-                    IsUsed = address.IsUsed(),
-                    IsChange = address.IsChange,
-                    EncryptedPrivateKey = address.EncryptedPrivateKey
-                }).ToList()
-            };
-        }
+
 
         public void StartStaking(string passphrase)
         {
@@ -652,48 +775,48 @@ namespace Obsidian.Features.X1Wallet
             this.posMinting.StopStake();
         }
 
-        public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
-        {
-            List<uint256> idsToRemove = transactionsIds.ToList();
-            var result = new HashSet<(uint256, DateTimeOffset)>();
+        //public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
+        //{
+        //    List<uint256> idsToRemove = transactionsIds.ToList();
+        //    var result = new HashSet<(uint256, DateTimeOffset)>();
 
-            foreach (P2WPKHAddress addr in this.X1WalletFile.P2WPKHAddresses.Values)
-            {
-                var txs = addr.GetTransactions();
+        //    foreach (P2WpkhAddress addr in this.X1WalletFile.P2WPKHAddresses.Values)
+        //    {
+        //        var txs = addr.GetTransactionsByAddress();
 
-                for (int i = 0; i < txs.Count; i++)
-                {
-                    TransactionData transaction = txs.ElementAt(i);
+        //        for (int i = 0; i < txs.Count; i++)
+        //        {
+        //            TransactionData transaction = txs.ElementAt(i);
 
-                    // Remove the transaction from the list of transactions affecting an address.
-                    // Only transactions that haven't been confirmed in a block can be removed.
-                    if (!transaction.IsConfirmed() && idsToRemove.Contains(transaction.Id))
-                    {
-                        result.Add((transaction.Id, transaction.CreationTime));
-                        txs = txs.Except(new[] { transaction }).ToList();
-                        i--;
-                    }
+        //            // Remove the transaction from the list of transactions affecting an address.
+        //            // Only transactions that haven't been confirmed in a block can be removed.
+        //            if (!transaction.IsConfirmed() && idsToRemove.Contains(transaction.Id))
+        //            {
+        //                result.Add((transaction.Id, transaction.CreationTime));
+        //                txs = txs.Except(new[] { transaction }).ToList();
+        //                i--;
+        //            }
 
-                    // Remove the spending transaction object containing this transaction id.
-                    if (transaction.SpendingDetails != null && !transaction.SpendingDetails.IsSpentConfirmed() && idsToRemove.Contains(transaction.SpendingDetails.TransactionId))
-                    {
-                        result.Add((transaction.SpendingDetails.TransactionId, transaction.SpendingDetails.CreationTime));
-                        txs.ElementAt(i).SpendingDetails = null;
-                    }
-                }
-            }
+        //            // Remove the spending transaction object containing this transaction id.
+        //            if (transaction.SpendingDetails != null && !transaction.SpendingDetails.IsSpentConfirmed() && idsToRemove.Contains(transaction.SpendingDetails.TransactionId))
+        //            {
+        //                result.Add((transaction.SpendingDetails.TransactionId, transaction.SpendingDetails.CreationTime));
+        //                txs.ElementAt(i).SpendingDetails = null;
+        //            }
+        //        }
+        //    }
 
 
-            if (result.Any())
-            {
-                // Reload the lookup dictionaries.
-                this.RefreshDictionary_OutpointTransactionData(this.Metadata);
+        //    if (result.Any())
+        //    {
+        //        // Reload the lookup dictionaries.
+        //        this.RefreshDictionary_OutpointTransactionData();
 
-                this.SaveMatadata();
-            }
+        //        this.SaveMetadata();
+        //    }
 
-            return result;
-        }
+        //    return result;
+        //}
 
         public Dictionary<string, ScriptTemplate> GetValidStakingTemplates()
         {
@@ -704,20 +827,13 @@ namespace Obsidian.Features.X1Wallet
         {
             throw new NotImplementedException();
         }
-        public void Dispose()
-        {
-            if (this.broadcasterManager != null)
-                this.broadcasterManager.TransactionStateChanged -= this.BroadcasterManager_TransactionStateChanged;
-
-            this.asyncLoop?.Dispose();
-            this.autoSaveWallet?.Dispose();
-        }
+       
 
         #endregion
 
         #region private Methods
 
-        P2WPKHAddress FindAddressByScriptPubKey(Script scriptPubKey)
+        P2WpkhAddress FindAddressByScriptPubKey(Script scriptPubKey)
         {
             byte[] raw = scriptPubKey.ToBytes();
             var pubKey = scriptPubKey.GetDestinationPublicKeys(this.network).SingleOrDefault();
@@ -738,41 +854,12 @@ namespace Obsidian.Features.X1Wallet
 
             Debug.Assert(hash160.Length == 20);
             var key = hash160.ToHexString();
-            this.X1WalletFile.P2WPKHAddresses.TryGetValue(key, out P2WPKHAddress keyAddress);
-            return keyAddress;
+            this.X1WalletFile.P2WPKHAddresses.TryGetValue(key, out P2WpkhAddress address);
+            return address;
         }
 
-        void RefreshDictionary_OutpointTransactionData(X1WalletMetadataFile x1WalletMetadataFile)
-        {
-            this.outpointLookup.Clear();
 
-            foreach (P2WPKHAddress address in this.X1WalletFile.P2WPKHAddresses.Values)
-            {
-                if (x1WalletMetadataFile.Transactions.TryGetValue(address.HashHex, out List<TransactionData> txs))
-                {
-                    foreach (TransactionData transaction in txs)
-                    {
-                        // Get the UTXOs that are unspent or spent but not confirmed.
-                        // We only exclude from the list the confirmed spent UTXOs.
-                        if (transaction.SpendingDetails?.BlockHeight == null)
-                        {
-                            this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
-                        }
-                    }
-                }
 
-            }
-        }
-
-        internal HashSet<(uint256 transactionId, DateTimeOffset creationTime)> RemoveTransactionsFromDate(string walletName, DateTime fromDate)
-        {
-            throw new NotImplementedException();
-        }
-
-        internal HashSet<(uint256 transactionId, DateTimeOffset creationTime)> RemoveAllTransactions(string walletName)
-        {
-            throw new NotImplementedException();
-        }
 
         /// <summary>
         /// Mark an output as spent, the credit of the output will not be used to calculate the balance.
@@ -784,153 +871,102 @@ namespace Obsidian.Features.X1Wallet
         /// <param name="spendingTransactionIndex">The index of the output in the transaction being referenced, if this is a spending transaction.</param>
         /// <param name="blockHeight">Height of the block.</param>
         /// <param name="block">The block containing the transaction to add.</param>
-        void AddSpendingTransactionToWallet(Transaction transaction, IEnumerable<TxOut> paidToOutputs,
-            uint256 spendingTransactionId, int? spendingTransactionIndex, int? blockHeight = null, Block block = null)
-        {
-            Guard.NotNull(transaction, nameof(transaction));
-            Guard.NotNull(paidToOutputs, nameof(paidToOutputs));
+        //void AddSpendingTransactionToWallet(Transaction transaction, IEnumerable<TxOut> paidToOutputs,
+        //    uint256 spendingTransactionId, int? spendingTransactionIndex, int? blockHeight = null, Block block = null)
+        //{
+        //    Guard.NotNull(transaction, nameof(transaction));
+        //    Guard.NotNull(paidToOutputs, nameof(paidToOutputs));
 
-            uint256 transactionHash = transaction.GetHash();
+        //    uint256 transactionHash = transaction.GetHash();
 
-            IEnumerable<TransactionData> allTransactionData = this.X1WalletFile.P2WPKHAddresses.Values.SelectMany(v => v.GetTransactions());
-            var spentTransaction = allTransactionData.SingleOrDefault(t => (t.Id == spendingTransactionId) && (t.Index == spendingTransactionIndex));
+        //    IEnumerable<TransactionData> allTransactionData = this.X1WalletFile.P2WPKHAddresses.Values.SelectMany(v => v.GetTransactionsByAddress());
+        //    var spentTransaction = allTransactionData.SingleOrDefault(t => (t.Id == spendingTransactionId) && (t.Index == spendingTransactionIndex));
 
-            if (spentTransaction == null)
-            {
-                // Strange, why would it be null?
-                this.logger.LogTrace("(-)[TX_NULL]");
-                return;
-            }
+        //    if (spentTransaction == null)
+        //    {
+        //        // Strange, why would it be null?
+        //        this.logger.LogTrace("(-)[TX_NULL]");
+        //        return;
+        //    }
 
-            // If the details of this spending transaction are seen for the first time.
-            if (spentTransaction.SpendingDetails == null)
-            {
-                this.logger.LogTrace("Spending UTXO '{0}-{1}' is new.", spendingTransactionId, spendingTransactionIndex);
+        //    // If the details of this spending transaction are seen for the first time.
+        //    if (spentTransaction.SpendingDetails == null)
+        //    {
+        //        this.logger.LogTrace("Spending UTXO '{0}-{1}' is new.", spendingTransactionId, spendingTransactionIndex);
 
-                var payments = new List<PaymentDetails>();
-                foreach (TxOut paidToOutput in paidToOutputs)
-                {
-                    // Figure out how to retrieve the destination address.
-                    string destinationAddress = this.scriptAddressReader.GetAddressFromScriptPubKey(this.network, paidToOutput.ScriptPubKey);
-                    if (string.IsNullOrEmpty(destinationAddress))
-                    {
-                        var destination = FindAddressByScriptPubKey(paidToOutput.ScriptPubKey);
-                        if (destination != null)
-                        {
-                            destinationAddress = destination.Address;
-                        }
-                    }
+        //        var payments = new List<PaymentDetails>();
+        //        foreach (TxOut paidToOutput in paidToOutputs)
+        //        {
+        //            // Figure out how to retrieve the destination address.
+        //            string destinationAddress = this.scriptAddressReader.GetAddressFromScriptPubKey(this.network, paidToOutput.ScriptPubKey);
+        //            if (string.IsNullOrEmpty(destinationAddress))
+        //            {
+        //                var destination = FindAddressByScriptPubKey(paidToOutput.ScriptPubKey);
+        //                if (destination != null)
+        //                {
+        //                    destinationAddress = destination.Address;
+        //                }
+        //            }
 
 
-                    payments.Add(new PaymentDetails
-                    {
-                        DestinationScriptPubKey = paidToOutput.ScriptPubKey,
-                        DestinationAddress = destinationAddress,
-                        Amount = paidToOutput.Value,
-                        OutputIndex = transaction.Outputs.IndexOf(paidToOutput)
-                    });
-                }
+        //            payments.Add(new PaymentDetails
+        //            {
+        //                DestinationScriptPubKey = paidToOutput.ScriptPubKey,
+        //                DestinationAddress = destinationAddress,
+        //                Amount = paidToOutput.Value,
+        //                OutputIndex = transaction.Outputs.IndexOf(paidToOutput)
+        //            });
+        //        }
 
-                var spendingDetails = new SpendingDetails
-                {
-                    TransactionId = transactionHash,
-                    Payments = payments,
-                    CreationTime = DateTimeOffset.FromUnixTimeSeconds(block?.Header.Time ?? transaction.Time),
-                    BlockHeight = blockHeight,
-                    BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash),
-                    Hex = transaction.ToHex(),
-                    IsCoinStake = transaction.IsCoinStake == false ? (bool?)null : true
-                };
+        //        var spendingDetails = new SpendingDetails
+        //        {
+        //            TransactionId = transactionHash,
+        //            Payments = payments,
+        //            CreationTime = DateTimeOffset.FromUnixTimeSeconds(block?.Header.Time ?? transaction.Time),
+        //            BlockHeight = blockHeight,
+        //            BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash),
+        //            Hex = transaction.ToHex(),
+        //            IsCoinStake = transaction.IsCoinStake == false ? (bool?)null : true
+        //        };
 
-                spentTransaction.SpendingDetails = spendingDetails;
-                spentTransaction.MerkleProof = null;
-            }
-            else // If this spending transaction is being confirmed in a block.
-            {
-                this.logger.LogTrace("Spending transaction ID '{0}' is being confirmed, updating.", spendingTransactionId);
+        //        spentTransaction.SpendingDetails = spendingDetails;
+        //        spentTransaction.MerkleProof = null;
+        //    }
+        //    else // If this spending transaction is being confirmed in a block.
+        //    {
+        //        this.logger.LogTrace("Spending transaction ID '{0}' is being confirmed, updating.", spendingTransactionId);
 
-                // Update the block height.
-                if (spentTransaction.SpendingDetails.BlockHeight == null && blockHeight != null)
-                {
-                    spentTransaction.SpendingDetails.BlockHeight = blockHeight;
-                }
+        //        // Update the block height.
+        //        if (spentTransaction.SpendingDetails.BlockHeight == null && blockHeight != null)
+        //        {
+        //            spentTransaction.SpendingDetails.BlockHeight = blockHeight;
+        //        }
 
-                // Update the block time to be that of the block in which the transaction is confirmed.
-                if (block != null)
-                {
-                    spentTransaction.SpendingDetails.CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time);
-                    spentTransaction.BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash);
-                }
-            }
+        //        // Update the block time to be that of the block in which the transaction is confirmed.
+        //        if (block != null)
+        //        {
+        //            spentTransaction.SpendingDetails.CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time);
+        //            spentTransaction.BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash);
+        //        }
+        //    }
 
-            // If the transaction is spent and confirmed, we remove the UTXO from the lookup dictionary.
-            if (spentTransaction.SpendingDetails.BlockHeight != null)
-            {
-                this.outpointLookup.Remove(new OutPoint(spentTransaction.Id, spentTransaction.Index));
-            }
-        }
+        //    // If the transaction is spent and confirmed, we remove the UTXO from the lookup dictionary.
+        //    if (spentTransaction.SpendingDetails.BlockHeight != null)
+        //    {
+        //        this.outpointLookup.Remove(new OutPoint(spentTransaction.Id, spentTransaction.Index));
+        //    }
+        //}
 
-        void SaveMatadata(bool isAutoSave = false)
+        void SaveMetadata()
         {
             this.Metadata.SaveX1WalletMetadataFile(this.CurrentX1WalletMetadataFilePath);
-
-            if (!isAutoSave)
-                this.logger.LogInformation("Saved on explicit request.");
+            this.logger.LogInformation("Wallet saved.");
         }
 
-        async Task AutoSaveWalletAsync(CancellationToken cancellationToken)
-        {
-            if (cancellationToken.IsCancellationRequested)
-                return;
-            try
-            {
-                await this.WalletSemaphore.WaitAsync(cancellationToken);
-                SaveMatadata(true);
-            }
-            finally
-            {
-                this.WalletSemaphore.Release();
-            }
-
-            this.logger.LogInformation("Auto-saved wallet at {0}.", this.dateTimeProvider.GetUtcNow());
-            this.logger.LogTrace("(-)[IN_ASYNC_LOOP]");
-        }
-
-        /// <summary>
-        /// Updates details of the last block synced in a Wallet when the chain of headers finishes downloading.
-        /// </summary>
-        /// <param name="wallets">The wallets to update when the chain has downloaded.</param>
-        /// <param name="date">The creation date of the block with which to update the Wallet.</param>
-        void UpdateWhenChainDownloaded(DateTime date)
-        {
-            if (this.asyncProvider.IsAsyncLoopRunning(DownloadChainLoop))
-            {
-                return;
-            }
-
-            this.asyncLoop = this.asyncProvider.CreateAndRunAsyncLoopUntil(DownloadChainLoop, this.nodeLifetime.ApplicationStopping,
-                () => this.chainIndexer.IsDownloaded(),
-                () =>
-                {
-                    int heightAtDate = this.chainIndexer.GetHeightAtTime(date);
 
 
-                    this.logger.LogTrace("The chain of headers has finished downloading, updating Wallet '{0}' with height {1}", this.X1WalletFile.WalletName, heightAtDate);
-                    this.UpdateLastBlockSyncedHeight(this.chainIndexer.GetHeader(heightAtDate));
-                    this.SaveMatadata();
-                },
-                (ex) =>
-                {
-                    // In case of an exception while waiting for the chain to be at a certain height, we just cut our losses and
-                    // sync from the current height.
-                    this.logger.LogError($"Exception occurred while waiting for chain to download: {ex.Message}");
 
-                    this.UpdateLastBlockSyncedHeight(this.chainIndexer.Tip);
-                },
-                TimeSpans.FiveSeconds);
-        }
-
-        void BroadcasterManager_TransactionStateChanged(object sender, TransactionBroadcastEntry transactionEntry)
+        void OnTransactionStateChanged(object sender, TransactionBroadcastEntry transactionEntry)
         {
             if (string.IsNullOrEmpty(transactionEntry.ErrorMessage))
             {
@@ -944,16 +980,31 @@ namespace Obsidian.Features.X1Wallet
         }
 
         /// <summary>
-        /// Saves the tip and BlockLocator from chainedHeader to the wallet file.
+        /// Saves the tip and checkpoint from chainedHeader to the wallet file.
         /// </summary>
-        void UpdateLastBlockSyncedHeight(ChainedHeader chainedHeader)
+        /// <param name="lastBlockSynced">ChainedHeader of the last block synced.</param>
+        void UpdateLastBlockSyncedAndCheckpoint(ChainedHeader lastBlockSynced)
         {
+            this.Metadata.SyncedHeight = lastBlockSynced.Height;
+            this.Metadata.SyncedHash = lastBlockSynced.HashBlock.ToString();
 
-            // The block locator will help when the Wallet
-            // needs to rewind this will be used to find the fork.
-            this.Metadata.BlockLocator = new HashSet<uint256>(chainedHeader.GetLocator().Blocks);
-            this.Metadata.LastBlockSyncedHeight = chainedHeader.Height;
-            this.Metadata.LastBlockSyncedHash = chainedHeader.HashBlock;
+            const int minCheckpointHeight = 500;
+            if (lastBlockSynced.Height > minCheckpointHeight)
+            {
+                var checkPoint = this.chainIndexer.GetHeader(lastBlockSynced.Height - minCheckpointHeight);
+                this.Metadata.CheckpointHash = checkPoint.HashBlock.ToString();
+                this.Metadata.CheckpointHeight = checkPoint.Height;
+            }
+            else
+            {
+                this.Metadata.CheckpointHash = this.network.GenesisHash.ToString();
+                this.Metadata.CheckpointHeight = 0;
+            }
+        }
+
+        internal P2WpkhAddress GetAddress(string address)
+        {
+            return this.X1WalletFile.P2WPKHAddresses.Values.Single(x => x.Address == address);
         }
 
         /// <summary>
@@ -965,100 +1016,100 @@ namespace Obsidian.Features.X1Wallet
         /// <param name="blockHeight">Height of the block.</param>
         /// <param name="block">The block containing the transaction to add.</param>
         /// <param name="isPropagated">Propagation state of the transaction.</param>
-        void AddTransactionToWallet(Transaction transaction, TxOut utxo, P2WPKHAddress address, X1WalletMetadataFile x1WalletMetadataFile, int? blockHeight = null, Block block = null, bool isPropagated = true)
-        {
+        //void AddTransactionToWallet(Transaction transaction, TxOut utxo, P2WpkhAddress address,  int? blockHeight = null, Block block = null, bool isPropagated = true)
+        //{
 
-            uint256 transactionHash = transaction.GetHash();
+        //    uint256 transactionHash = transaction.GetHash();
 
-            // Get the collection of transactions to add to.
-            Script script = utxo.ScriptPubKey;
-            if (x1WalletMetadataFile.Transactions.TryGetValue(address.HashHex, out List<TransactionData> txs))
-            {
-                // Check if a similar UTXO exists or not (same transaction ID and same index).
-                // New UTXOs are added, existing ones are updated.
-                int index = transaction.Outputs.IndexOf(utxo);
-                Money amount = utxo.Value;
-                TransactionData foundTransaction = txs.FirstOrDefault(t => (t.Id == transactionHash) && (t.Index == index));
-                if (foundTransaction == null)
-                {
-                    this.logger.LogTrace("UTXO '{0}-{1}' not found, creating.", transactionHash, index);
-                    var newTransaction = new TransactionData
-                    {
-                        Amount = amount,
-                        IsCoinBase = transaction.IsCoinBase == false ? (bool?)null : true,
-                        IsCoinStake = transaction.IsCoinStake == false ? (bool?)null : true,
-                        BlockHeight = blockHeight,
-                        BlockHash = block?.GetHash(),
-                        BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash),
-                        Id = transactionHash,
-                        CreationTime = DateTimeOffset.FromUnixTimeSeconds(block?.Header.Time ?? transaction.Time),
-                        Index = index,
-                        ScriptPubKey = script,
-                        Hex = transaction.ToHex(),
-                        IsPropagated = isPropagated,
-                    };
+        //    // Get the collection of transactions to add to.
+        //    Script script = utxo.ScriptPubKey;
+        //    if (Metadata.Transactions.TryGetValue(address.HashHex, out List<TransactionData> txs))
+        //    {
+        //        // Check if a similar UTXO exists or not (same transaction ID and same index).
+        //        // New UTXOs are added, existing ones are updated.
+        //        int index = transaction.Outputs.IndexOf(utxo);
+        //        Money amount = utxo.Value;
+        //        TransactionData foundTransaction = txs.FirstOrDefault(t => (t.Id == transactionHash) && (t.Index == index));
+        //        if (foundTransaction == null)
+        //        {
+        //            this.logger.LogTrace("UTXO '{0}-{1}' not found, creating.", transactionHash, index);
+        //            var newTransaction = new TransactionData
+        //            {
+        //                Amount = amount,
+        //                IsCoinBase = transaction.IsCoinBase == false ? (bool?)null : true,
+        //                IsCoinStake = transaction.IsCoinStake == false ? (bool?)null : true,
+        //                BlockHeight = blockHeight,
+        //                BlockHash = block?.GetHash(),
+        //                BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash),
+        //                Id = transactionHash,
+        //                CreationTime = DateTimeOffset.FromUnixTimeSeconds(block?.Header.Time ?? transaction.Time),
+        //                Index = index,
+        //                ScriptPubKey = script,
+        //                Hex = transaction.ToHex(),
+        //                IsPropagated = isPropagated,
+        //            };
 
-                    // Add the Merkle proof to the (non-spending) transaction.
-                    if (block != null)
-                    {
-                        newTransaction.MerkleProof = new MerkleBlock(block, new[] { transactionHash }).PartialMerkleTree;
-                    }
+        //            // Add the Merkle proof to the (non-spending) transaction.
+        //            if (block != null)
+        //            {
+        //                newTransaction.MerkleProof = new MerkleBlock(block, new[] { transactionHash }).PartialMerkleTree;
+        //            }
 
-                    txs.Add(newTransaction);
-                    this.outpointLookup[new OutPoint(newTransaction.Id, newTransaction.Index)] = newTransaction;
+        //            txs.Add(newTransaction);
+        //            this.outpointLookup[new OutPoint(newTransaction.Id, newTransaction.Index)] = newTransaction;
 
-                    if (block == null)
-                    {
-                        // Unconfirmed inputs track for double spends.
-                        foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
-                        {
-                            this.inputLookup[input] = newTransaction;
-                        }
-                    }
-                }
-                else
-                {
-                    this.logger.LogTrace("Transaction ID '{0}' found, updating.", transactionHash);
+        //            if (block == null)
+        //            {
+        //                // Unconfirmed inputs track for double spends.
+        //                foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
+        //                {
+        //                    this.inputLookup[input] = newTransaction;
+        //                }
+        //            }
+        //        }
+        //        else
+        //        {
+        //            this.logger.LogTrace("Transaction ID '{0}' found, updating.", transactionHash);
 
-                    // Update the block height and block hash.
-                    if ((foundTransaction.BlockHeight == null) && (blockHeight != null))
-                    {
-                        foundTransaction.BlockHeight = blockHeight;
-                        foundTransaction.BlockHash = block?.GetHash();
-                        foundTransaction.BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash);
-                    }
+        //            // Update the block height and block hash.
+        //            if ((foundTransaction.BlockHeight == null) && (blockHeight != null))
+        //            {
+        //                foundTransaction.BlockHeight = blockHeight;
+        //                foundTransaction.BlockHash = block?.GetHash();
+        //                foundTransaction.BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash);
+        //            }
 
-                    // Update the block time.
-                    if (block != null)
-                    {
-                        foundTransaction.CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time);
-                    }
+        //            // Update the block time.
+        //            if (block != null)
+        //            {
+        //                foundTransaction.CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time);
+        //            }
 
-                    // Add the Merkle proof now that the transaction is confirmed in a block.
-                    if ((block != null) && (foundTransaction.MerkleProof == null))
-                    {
-                        foundTransaction.MerkleProof = new MerkleBlock(block, new[] { transactionHash }).PartialMerkleTree;
-                    }
+        //            // Add the Merkle proof now that the transaction is confirmed in a block.
+        //            if ((block != null) && (foundTransaction.MerkleProof == null))
+        //            {
+        //                foundTransaction.MerkleProof = new MerkleBlock(block, new[] { transactionHash }).PartialMerkleTree;
+        //            }
 
-                    if (isPropagated)
-                        foundTransaction.IsPropagated = true;
+        //            if (isPropagated)
+        //                foundTransaction.IsPropagated = true;
 
-                    if (block != null)
-                    {
-                        // Inputs are in a block no need to track them anymore.
-                        foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
-                        {
-                            this.inputLookup.Remove(input);
-                        }
-                    }
-                }
-
-
-            }
+        //            if (block != null)
+        //            {
+        //                // Inputs are in a block no need to track them anymore.
+        //                foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
+        //                {
+        //                    this.inputLookup.Remove(input);
+        //                }
+        //            }
+        //        }
 
 
+        //    }
 
-        }
+
+
+        //}
 
 
 

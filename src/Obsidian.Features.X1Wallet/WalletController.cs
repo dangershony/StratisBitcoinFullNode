@@ -94,14 +94,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        public async Task<string> SignMessageAsync(SignMessageRequest request)
-        {
-            using (var context = GetWalletContext())
-            {
-                return context.WalletManager.SignMessage(request.Password, request.WalletName,
-                    request.ExternalAddress, request.Message);
-            }
-        }
+        
 
         public void SetWalletName(string target)
         {
@@ -110,14 +103,7 @@ namespace Obsidian.Features.X1Wallet
             this.walletName = target;
         }
 
-        public async Task<bool> VerifyMessageAsync(VerifyRequest request)
-        {
-            using (var context = GetWalletContext())
-            {
-                return context.WalletManager.VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
-            }
-        }
-
+        
 
         public async Task<LoadWalletResponse> LoadAsync()
         {
@@ -168,7 +154,7 @@ namespace Obsidian.Features.X1Wallet
                     IsDecrypted = this.posMinting.GetGetStakingInfoModel().Enabled,
                     WalletFilePath = manager.CurrentX1WalletFilePath
                 };
-                
+
                 return model;
             }
         }
@@ -189,211 +175,19 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-        public async Task<WalletHistoryModel> GetHistoryAsync(WalletHistoryRequest request)
-        {
-            using (var context = GetWalletContext())
-            {
-                var model = new WalletHistoryModel();
-
-                // Get a list of all the transactions found in an account (or in a wallet if no account is specified), with the addresses associated with them.
-                var histories = context.WalletManager.GetHistory();
-
-
-                var transactionItems = new List<TransactionItemModel>();
-
-                // Sorting the history items by descending dates. That includes received and sent dates.
-                var items = histories.OrderBy(o => o.Transaction.IsConfirmed() ? 1 : 0)
-                                                        .ThenByDescending(o => o.Transaction.SpendingDetails?.CreationTime ?? o.Transaction.CreationTime)
-                                                        .ToList();
-
-                // Represents a sublist containing only the transactions that have already been spent.
-                var spendingDetails = items.Where(t => t.Transaction.SpendingDetails != null).ToList();
-
-                // Represents a sublist of transactions associated with receive addresses + a sublist of already spent transactions associated with change addresses.
-                // In effect, we filter out 'change' transactions that are not spent, as we don't want to show these in the history.
-                var history = items.Where(t => !t.Address.IsChange || (t.Address.IsChange && t.Transaction.IsSpent())).ToList();
-
-                // Represents a sublist of 'change' transactions.
-                var allchange = items.Where(t => t.Address.IsChange).ToList();
-
-                int itemsCount = 0;
-                foreach (FlatAddressHistory item in history)
-                {
-
-                    if (itemsCount == MaxHistoryItemsPerAccount)
-                    {
-                        break;
-                    }
-
-                    TransactionData transaction = item.Transaction;
-                    var address = item.Address;
-
-                    // First we look for staking transaction as they require special attention.
-                    // A staking transaction spends one of our inputs into 2 outputs or more, paid to the same address.
-                    if (transaction.SpendingDetails?.IsCoinStake != null && transaction.SpendingDetails.IsCoinStake.Value)
-                    {
-                        // We look for the output(s) related to our spending input.
-                        var relatedOutputs = items.Where(h => h.Transaction.Id == transaction.SpendingDetails.TransactionId && h.Transaction.IsCoinStake != null && h.Transaction.IsCoinStake.Value).ToList();
-                        if (relatedOutputs.Any())
-                        {
-                            // Add staking transaction details.
-                            // The staked amount is calculated as the difference between the sum of the outputs and the input and should normally be equal to 1.
-                            var stakingItem = new TransactionItemModel
-                            {
-                                Type = TransactionItemType.Staked,
-                                ToAddress = address.Address,
-                                Amount = relatedOutputs.Sum(o => o.Transaction.Amount) - transaction.Amount,
-                                Id = transaction.SpendingDetails.TransactionId,
-                                Timestamp = transaction.SpendingDetails.CreationTime,
-                                ConfirmedInBlock = transaction.SpendingDetails.BlockHeight,
-                                BlockIndex = transaction.SpendingDetails.BlockIndex
-                            };
-
-                            transactionItems.Add(stakingItem);
-                            itemsCount++;
-                        }
-
-                        // No need for further processing if the transaction itself is the output of a staking transaction.
-                        if (transaction.IsCoinStake != null)
-                        {
-                            continue;
-                        }
-                    }
-
-                    // If this is a normal transaction (not staking) that has been spent, add outgoing fund transaction details.
-                    if (transaction.SpendingDetails != null && transaction.SpendingDetails.IsCoinStake == null)
-                    {
-                        // Create a record for a 'send' transaction.
-                        uint256 spendingTransactionId = transaction.SpendingDetails.TransactionId;
-                        var sentItem = new TransactionItemModel
-                        {
-                            Type = TransactionItemType.Send,
-                            Id = spendingTransactionId,
-                            Timestamp = transaction.SpendingDetails.CreationTime,
-                            ConfirmedInBlock = transaction.SpendingDetails.BlockHeight,
-                            BlockIndex = transaction.SpendingDetails.BlockIndex,
-                            Amount = Money.Zero
-                        };
-
-                        // If this 'send' transaction has made some external payments, i.e the funds were not sent to another address in the wallet.
-                        if (transaction.SpendingDetails.Payments != null)
-                        {
-                            sentItem.Payments = new List<PaymentDetailModel>();
-                            foreach (PaymentDetails payment in transaction.SpendingDetails.Payments)
-                            {
-                                sentItem.Payments.Add(new PaymentDetailModel
-                                {
-                                    DestinationAddress = payment.DestinationAddress,
-                                    Amount = payment.Amount
-                                });
-
-                                sentItem.Amount += payment.Amount;
-                            }
-                        }
-
-                        // Get the change address for this spending transaction.
-                        var changeAddress = allchange.FirstOrDefault(a => a.Transaction.Id == spendingTransactionId);
-
-                        // Find all the spending details containing the spending transaction id and aggregate the sums.
-                        // This is our best shot at finding the total value of inputs for this transaction.
-                        var inputsAmount = new Money(spendingDetails.Where(t => t.Transaction.SpendingDetails.TransactionId == spendingTransactionId).Sum(t => t.Transaction.Amount));
-
-                        // The fee is calculated as follows: funds in utxo - amount spent - amount sent as change.
-                        sentItem.Fee = inputsAmount - sentItem.Amount - (changeAddress == null ? 0 : changeAddress.Transaction.Amount);
-
-                        // Mined/staked coins add more coins to the total out.
-                        // That makes the fee negative. If that's the case ignore the fee.
-                        if (sentItem.Fee < 0)
-                            sentItem.Fee = 0;
-
-                        transactionItems.Add(sentItem);
-                        itemsCount++;
-                    }
-
-                    // We don't show in history transactions that are outputs of staking transactions.
-                    if (transaction.IsCoinStake != null && transaction.IsCoinStake.Value && transaction.SpendingDetails == null)
-                    {
-                        continue;
-                    }
-
-                    // Create a record for a 'receive' transaction.
-                    if (transaction.IsCoinStake == null && !address.IsChange)
-                    {
-                        // Add incoming fund transaction details.
-                        var receivedItem = new TransactionItemModel
-                        {
-                            Type = TransactionItemType.Received,
-                            ToAddress = address.Address,
-                            Amount = transaction.Amount,
-                            Id = transaction.Id,
-                            Timestamp = transaction.CreationTime,
-                            ConfirmedInBlock = transaction.BlockHeight,
-                            BlockIndex = transaction.BlockIndex
-                        };
-
-                        transactionItems.Add(receivedItem);
-                        itemsCount++;
-                    }
-                }
-
-                transactionItems = transactionItems.Distinct(new SentTransactionItemModelComparer()).Select(e => e).ToList();
-
-                // Sort and filter the history items.
-                List<TransactionItemModel> itemsToInclude = transactionItems.OrderByDescending(t => t.Timestamp)
-                    .Where(x => string.IsNullOrEmpty(request.SearchQuery) || (x.Id.ToString() == request.SearchQuery || x.ToAddress == request.SearchQuery || x.Payments.Any(p => p.DestinationAddress == request.SearchQuery)))
-                    .Skip(request.Skip ?? 0)
-                    .Take(request.Take ?? transactionItems.Count)
-                    .ToList();
-
-                model.AccountsHistoryModel.Add(new AccountHistoryModel
-                {
-                    TransactionsHistory = itemsToInclude,
-                    Name = "account 0",
-                    CoinType = this.coinType,
-                    HdPath = "no HdPath"
-                });
-
-
-                return model;
-            }
-
-        }
+        
 
 
         public async Task<Balance> GetBalanceAsync(string walletName)
         {
             using (var context = GetWalletContext())
             {
-                var balances = context.WalletManager.GetBalances();
-
-                var walletBalance = new Balance { AmountConfirmed = Money.Zero, AmountUnconfirmed = Money.Zero, SpendableAmount = Money.Zero };
-
-                foreach (var balance in balances)
-                {
-                    walletBalance.AmountConfirmed += balance.AmountConfirmed;
-                    walletBalance.AmountUnconfirmed += balance.AmountUnconfirmed;
-                    walletBalance.SpendableAmount += balance.SpendableAmount;
-                }
-                return walletBalance;
-
+                return context.WalletManager.GetConfirmedWalletBalance(); 
             }
         }
 
 
-        public async Task<IActionResult> GetReceivedByAddressAsync(ReceivedByAddressRequest request)
-        {
-            using (var context = GetWalletContext())
-            {
-                AddressBalance balanceResult = context.WalletManager.GetAddressBalance(request.Address);
-                return this.Json(new AddressBalanceModel
-                {
-                    CoinType = this.coinType,
-                    Address = balanceResult.Address,
-                    AmountConfirmed = balanceResult.AmountConfirmed,
-                    AmountUnconfirmed = balanceResult.AmountUnconfirmed
-                });
-            }
-        }
+        
 
 
         public async Task<MaxSpendableAmountModel> GetMaximumSpendableBalanceAsync(WalletMaximumBalanceRequest request)
@@ -557,93 +351,44 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
+        public async Task<KeyAddressesModel> GetUnusedReceiveAddresses()
+        {
+            using (var context = GetWalletContext())
+            {
+                var unusedAddress = context.WalletManager.GetUnusedAddress();
+                if (unusedAddress == null)
+                    throw new X1WalletException(HttpStatusCode.BadRequest,
+                        "The wallet doesn't have any unused addresses left.", null);
+
+                var model = new KeyAddressesModel { Addresses = new List<KeyAddressModel>() };
+                model.Addresses.Add(new KeyAddressModel { Address = unusedAddress.Address, IsChange = false, IsUsed = false });
+                return model;
+            }
+        }
 
 
        
 
 
-        
-
-
-        public async Task<KeyAddressesModel> GetUnusedReceiveAddresses()
-        {
-            using (var context = GetWalletContext())
-            {
-                var model = new KeyAddressesModel { Addresses = new List<KeyAddressModel>() };
-
-                var unusedReceiveAddresses = context.WalletManager.GetUnusedAddresses(10, false);
-                foreach (var addr in unusedReceiveAddresses)
-                    model.Addresses.Add(new KeyAddressModel { Address = addr.Address, IsChange = addr.IsChange, IsUsed = false });
-                return model;
-            }
-        }
-
-
-        public async Task<IEnumerable<RemovedTransactionModel>> RemoveTransactionsAsync(RemoveTransactionsModel request)
-        {
-            using (var context = GetWalletContext())
-            {
-                var manager = context.WalletManager;
-                HashSet<(uint256 transactionId, DateTimeOffset creationTime)> result;
-
-                if (request.DeleteAll)
-                {
-                    result = manager.RemoveAllTransactions(request.WalletName);
-                }
-                else if (request.FromDate != default(DateTime))
-                {
-                    result = manager.RemoveTransactionsFromDate(request.WalletName, request.FromDate);
-                }
-                else if (request.TransactionsIds != null)
-                {
-                    IEnumerable<uint256> ids = request.TransactionsIds.Select(uint256.Parse);
-                    result = manager.RemoveTransactionsByIds(ids);
-                }
-                else
-                {
-                    throw new WalletException("A filter specifying what transactions to remove must be set.");
-                }
-
-                // If the user chose to resync the wallet after removing transactions.
-                if (result.Any() && request.ReSync)
-                {
-                    // From the list of removed transactions, check which one is the oldest and retrieve the block right before that time.
-                    DateTimeOffset earliestDate = result.Min(r => r.creationTime);
-                    ChainedHeader chainedHeader = this.chainIndexer.GetHeader(this.chainIndexer.GetHeightAtTime(earliestDate.DateTime));
-                   
-                    await this.walletManagerWrapper.WalletSyncManagerSyncFromHeightAsync(chainedHeader.Height - 1);
-                }
-
-                IEnumerable<RemovedTransactionModel> model = result.Select(r => new RemovedTransactionModel
-                {
-                    TransactionId = r.transactionId,
-                    CreationTime = r.creationTime
-                });
-
-                return model;
-            }
-        }
-
-
         public async Task SyncAsync(HashModel request)
         {
-                ChainedHeader block = this.chainIndexer.GetHeader(uint256.Parse(request.Hash));
+            ChainedHeader block = this.chainIndexer.GetHeader(uint256.Parse(request.Hash));
 
-                if (block == null)
-                {
-                    throw new X1WalletException(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", new Exception());
-                }
+            if (block == null)
+            {
+                throw new X1WalletException(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", new Exception());
+            }
 
-                await this.walletManagerWrapper.WalletSyncManagerSyncFromHeightAsync(block.Height);
+            await this.walletManagerWrapper.WalletSyncManagerSyncFromHeightAsync(block.Height);
         }
 
 
         public async Task SyncFromDate(WalletSyncFromDateRequest request)
         {
-                await this.walletManagerWrapper.WalletSyncManagerSyncFromDateAsync(request.Date);
+            await this.walletManagerWrapper.WalletSyncManagerSyncFromDateAsync(request.Date);
         }
 
-       
+
 
 
         public StatusModel GetNodeStatus()

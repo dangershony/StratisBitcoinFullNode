@@ -13,9 +13,6 @@ namespace Obsidian.Features.X1Wallet
             this.WalletManager = walletManager ?? throw new ArgumentNullException(nameof(walletManager));
             this.WalletManager.WalletSemaphore.Wait();
         }
-        
-
-        public WalletSyncManagerState WalletSyncManagerState;
 
         public void Dispose()
         {

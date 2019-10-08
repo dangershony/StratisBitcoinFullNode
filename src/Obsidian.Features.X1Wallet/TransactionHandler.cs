@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.Policy;
 using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
@@ -218,10 +219,10 @@ namespace Obsidian.Features.X1Wallet
 
             using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
             {
-                var addresses = context2.WalletManager.GetAllAddresses().Addresses;
+                var addresses = context2.WalletManager.GetAllAddresses();
                 // TODO: only decrypt the keys needed
                 var keys = addresses
-                    .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.EncryptedPrivateKey))
+                    .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.Value.EncryptedPrivateKey))
                     .Select(privateKeyBytes => new Key(privateKeyBytes))
                     .ToArray();
 
@@ -258,19 +259,14 @@ namespace Obsidian.Features.X1Wallet
         {
             using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
             {
-                P2WPKHAddress changeAddress = context2.WalletManager.GetUnusedAddresses(1, true).FirstOrDefault();
+                P2WpkhAddress changeAddress = context2.WalletManager.GetUnusedAddress();
                 // fall back to an unused address which is not a change address
                 if(changeAddress == null)
                 {
-                    changeAddress = context2.WalletManager.GetUnusedAddresses(1, false).FirstOrDefault();
+                    throw new X1WalletException(System.Net.HttpStatusCode.BadRequest,
+                        $"The wallet doesn't have any unused addresses left to provide an unused change address for this transaction.",
+                        null);
                 }
-                // if we are really out of unused addresses, we need to take an 'address of last resort'.
-                // TODO: create feature that warns the user when the address pool is running low.
-                if (changeAddress == null)
-                {
-                    changeAddress = context2.WalletManager.GetAddresses(1).Last();
-                }
-                
                 context.TransactionBuilder.SetChange(changeAddress.GetPaymentScript());
             }
         }

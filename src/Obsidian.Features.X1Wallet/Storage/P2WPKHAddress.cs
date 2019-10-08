@@ -6,9 +6,9 @@ using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
 using VisualCrypt.VisualCryptLight;
 
-namespace Obsidian.Features.X1Wallet.Models
+namespace Obsidian.Features.X1Wallet.Storage
 {
-    public class P2WPKHAddress : IEquatable<P2WPKHAddress>
+    public class P2WpkhAddress : IEquatable<P2WpkhAddress>
     {
         /// <summary>
         /// Decrypts to the pure key, length 32 bytes.
@@ -48,7 +48,7 @@ namespace Obsidian.Features.X1Wallet.Models
         public string CoinTicker { get; set; }
 
 
-        public static P2WPKHAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, bool isChange, int coinType, byte witnessVersion, string bech32Prefix, string coinTicker)
+        public static P2WpkhAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, bool isChange, int coinType, byte witnessVersion, string bech32Prefix, string coinTicker)
         {
             if (string.IsNullOrWhiteSpace(keyEncryptionPassphrase) || keyEncryption == null || string.IsNullOrWhiteSpace(bech32Prefix) || string.IsNullOrWhiteSpace(coinTicker))
                 throw new ArgumentException(nameof(CreateWithPrivateKey));
@@ -56,7 +56,7 @@ namespace Obsidian.Features.X1Wallet.Models
             if (privateKey == null || privateKey.Length != 32 || privateKey.All(bytes => bytes == privateKey[0]))
                 throw new ArgumentException(nameof(privateKey));
 
-            var adr = new P2WPKHAddress();
+            var adr = new P2WpkhAddress();
             adr.EncryptedPrivateKey = keyEncryption(keyEncryptionPassphrase, privateKey);
 
             adr.IsChange = isChange;
@@ -75,10 +75,10 @@ namespace Obsidian.Features.X1Wallet.Models
 
         public override bool Equals(object obj)
         {
-            return Equals(obj as P2WPKHAddress);
+            return Equals(obj as P2WpkhAddress);
         }
 
-        public bool Equals(P2WPKHAddress other)
+        public bool Equals(P2WpkhAddress other)
         {
             return other != null &&
                    this.HashHex == other.HashHex;
@@ -89,12 +89,12 @@ namespace Obsidian.Features.X1Wallet.Models
             return -1052816746 + EqualityComparer<string>.Default.GetHashCode(this.HashHex);
         }
 
-        public static bool operator ==(P2WPKHAddress left, P2WPKHAddress right)
+        public static bool operator ==(P2WpkhAddress left, P2WpkhAddress right)
         {
-            return EqualityComparer<P2WPKHAddress>.Default.Equals(left, right);
+            return EqualityComparer<P2WpkhAddress>.Default.Equals(left, right);
         }
 
-        public static bool operator !=(P2WPKHAddress left, P2WPKHAddress right)
+        public static bool operator !=(P2WpkhAddress left, P2WpkhAddress right)
         {
             return !(left == right);
         }
