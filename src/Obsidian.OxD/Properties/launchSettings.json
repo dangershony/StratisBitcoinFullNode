@@ -1,12 +1,8 @@
 {
   "profiles": {
-    "Obsidian.OxD": {
+    "Obsidian.ObsidianxD": {
       "commandName": "Project",
-      "commandLineArgs": "-addnode=165.22.90.248",
-      "environmentVariables": {
-        "deleteme2": "cli getinfo",
-        "deleteme": "-port=56666 -addnode=165.22.90.248"
-      }
+      "commandLineArgs": "-addnode=165.22.90.248"
     }
   }
 }

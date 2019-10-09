@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "Obsidian.ObsidianxD": {
-      "commandName": "Project",
-      "commandLineArgs": "-addnode=165.22.90.248"
-    }
-  }
-}
