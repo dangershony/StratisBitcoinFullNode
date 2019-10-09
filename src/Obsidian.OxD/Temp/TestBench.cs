@@ -48,7 +48,16 @@ namespace Obsidian.OxD.Temp
             var model = await controller.GetUnusedReceiveAddresses();
             var address = model.Addresses[0].FullAddress;
             var script = new ReserveScript { ReserveFullNodeScript = address.GetScriptPubKey() };
-            _ = Task.Run(() => fullNode.NodeService<IPowMining>().GenerateBlocks(script, ulong.MaxValue, uint.MaxValue));
+            _ = Task.Run(async () => 
+            {
+                while (!fullNode.NodeLifetime.ApplicationStopping.IsCancellationRequested)
+                {
+                    Console.WriteLine("Starting Miner...");
+                    fullNode.NodeService<IPowMining>().GenerateBlocks(script, 50, uint.MaxValue);
+                    await Task.Delay(1000);
+                  
+                }
+            }, fullNode.NodeLifetime.ApplicationStopping);
         }
     }
 }
