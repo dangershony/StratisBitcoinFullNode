@@ -152,8 +152,9 @@ namespace Obsidian.Networks.ObsidianX
                 .Register<PosFutureDriftRule>()
                 .Register<CheckDifficultyPosRule>()
                 .Register<ObsidianXHeaderVersionRule>()
-                //.Register<ObsidianXPreventLegacyRule>()
+                .Register<ObsidianXPreventLegacyRule>()
                 .Register<ObsidianXRequireNativeSegWitRule>()
+                .Register<ObsidianXNativeSegWitSpendsOnlyRule>()
                 .Register<ProvenHeaderSizeRule>()
                 .Register<ProvenHeaderCoinstakeRule>();
 
