@@ -9,6 +9,8 @@ using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Networks.ObsidianX;
 using Obsidian.OxD.Api;
 using Obsidian.OxD.Cli;
+using Obsidian.OxD.Temp;
+using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Api;
@@ -84,11 +86,11 @@ namespace Obsidian.OxD
                 var node = builder.Build();
 
 #if DEBUG
-                //_ = Task.Run(async () =>
-                //  {
-                //      await Task.Delay(15000);
-                //      TestBench.Run((FullNode)node);  // start mining to the wallet
-                //  });
+                _ = Task.Run(async () =>
+                  {
+                      await Task.Delay(10000);
+                      TestBench.Run((FullNode)node);  // start mining to the wallet
+                  });
 #endif
 
                 await node.RunAsync();

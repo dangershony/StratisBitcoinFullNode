@@ -2,6 +2,8 @@
 using System.Threading.Tasks;
 using NBitcoin;
 using Stratis.Bitcoin;
+using Stratis.Bitcoin.Features.Miner;
+using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 
@@ -14,8 +16,8 @@ namespace Obsidian.OxD.Temp
         public static async void Run(Stratis.Bitcoin.IFullNode node)
         {
            
-            await Task.Delay(15000);
-            var fullNode = (FullNode)node;
+            //await Task.Delay(15000);
+            //var fullNode = (FullNode)node;
 
 
             //CreateWallet(fullNode);

@@ -22,7 +22,7 @@ namespace Obsidian.Networks.ObsidianX
             this.RootFolderName = "obsidianx";
             this.DefaultConfigFilename = "obsidianx.conf";
 
-            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX1"), 0);
+            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX2"), 0); // temporary change for branch 'testrules'
             this.DefaultPort = 46660;
             this.DefaultRPCPort = 46661;
             this.DefaultAPIPort = 47221;
@@ -37,8 +37,8 @@ namespace Obsidian.Networks.ObsidianX
 
 
             var consensusFactory = new ObsidianXConsensusFactory();
-            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 7, 12, 23, 12, 23, DateTimeKind.Utc));
-            this.GenesisNonce = 11056784;
+            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 10, 9, 19, 44, 00, DateTimeKind.Utc));
+            this.GenesisNonce = 365784;
             this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
@@ -134,9 +134,9 @@ namespace Obsidian.Networks.ObsidianX
             // Do not put gateway nodes in this list.
             string[] seedNodes =
             {
-                "209.97.177.144",
+                //"209.97.177.144",
                 "165.22.90.248",
-                "138.68.130.127"
+                //"138.68.130.127"
             };
             this.SeedNodes = this.ConvertToNetworkAddresses(seedNodes, this.DefaultPort).ToList();
 

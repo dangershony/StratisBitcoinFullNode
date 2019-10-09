@@ -1,69 +1,48 @@
 ﻿using System;
-using NBitcoin;
 using Obsidian.Features.X1Wallet;
-using Obsidian.Features.X1Wallet.Temp;
-using Obsidian.Networks.ObsidianX;
 using Stratis.Bitcoin;
-using Stratis.Bitcoin.Base.Deployments;
-using Stratis.Bitcoin.Features.Wallet;
-using Stratis.Bitcoin.Features.Wallet.Interfaces;
+using Stratis.Bitcoin.Features.Miner;
+using Stratis.Bitcoin.Features.Miner.Interfaces;
 
 namespace Obsidian.OxD.Temp
 {
     public static class TestBench
     {
-        static BitcoinSecret _minerSecret;
-        static HdAddress _hdDddress;
 
         public static async void Run(FullNode fullNode)
         {
-
-
-            //CreateNDWallet(fullNode);
-            //CreateWalletAndPrintWords(fullNode);
-
-
-            Miner.Start(fullNode);
-
-            //var account = fullNode.NodeService<IWalletManager>().GetWallet("blackstone").GetAccounts().First();
-            //account.CreateAddresses(fullNode.Network, 2);
-
-            //var tx = StaticWallet.CreateTx();
-
-            //StaticWallet.SendTx(tx);
-
-
-            //await Task.Delay(15000);
-
-
-
-
-
-            // StaticWallet.PrintBlocks();
+            Mine(fullNode);
         }
 
-        
-
-
-        static void CreateNDWallet(FullNode fullNode)
+        static async void Mine(FullNode fullNode)
         {
-            //var segWitWalletController =  fullNode.NodeService<WalletController>();
-            //segWitWalletController.CreateKeyWalletAsync("blackstone-nd", "password");
+            const string walletName = "mine";
+
+            var controller = fullNode.NodeService<WalletController>();
+            try
+            {
+                controller.SetWalletName(walletName);
+                await controller.LoadAsync();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                if (!e.Message.StartsWith("No wallet file found"))
+                    throw;
+                await controller.CreateKeyWalletAsync(new Features.X1Wallet.Models.WalletCreateRequest
+                { Name = walletName, Password = "passwordpassword" });
+                Console.WriteLine($"Created a new wallet {walletName} for mining.");
+                Mine(fullNode);
+
+            }
+
+            var model = await controller.GetUnusedReceiveAddresses();
+            var address = model.Addresses[0].FullAddress;
+            var script = new ReserveScript { ReserveFullNodeScript = address.GetScriptPubKey() };
+            var blockHashes = fullNode.NodeService<IPowMining>().GenerateBlocks(script, ulong.MaxValue, uint.MaxValue);
+
+
         }
-
-        static void CreateWalletAndPrintWords(FullNode fullNode)
-        {
-            Mnemonic mnemonic = fullNode.NodeService<IWalletManager>().CreateWallet("password", "blackstone", "passphrase");
-            foreach (var w in mnemonic.Words)
-                Console.WriteLine(w);
-        }
-
-        static Mnemonic CreateMnemonic()
-        {
-            return new Mnemonic("boss ability moment scissors oven episode head siege void identify photo fabric");
-        }
-
-
 
     }
 }

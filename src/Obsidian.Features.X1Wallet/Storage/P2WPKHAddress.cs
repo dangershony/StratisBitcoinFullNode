@@ -47,6 +47,12 @@ namespace Obsidian.Features.X1Wallet.Storage
         /// </summary>
         public string CoinTicker { get; set; }
 
+        public Script GetScriptPubKey()
+        {
+            var hash160 = Hashes.Hash160(this.CompressedPublicKey).ToBytes();
+            return new Script(OpcodeType.OP_0, Op.GetPushOp(hash160));
+        }
+
 
         public static P2WpkhAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, bool isChange, int coinType, byte witnessVersion, string bech32Prefix, string coinTicker)
         {

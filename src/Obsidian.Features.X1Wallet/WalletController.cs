@@ -361,7 +361,7 @@ namespace Obsidian.Features.X1Wallet
                         "The wallet doesn't have any unused addresses left.", null);
 
                 var model = new KeyAddressesModel { Addresses = new List<KeyAddressModel>() };
-                model.Addresses.Add(new KeyAddressModel { Address = unusedAddress.Address, IsChange = false, IsUsed = false });
+                model.Addresses.Add(new KeyAddressModel { Address = unusedAddress.Address, IsChange = false, IsUsed = false, FullAddress = unusedAddress });
                 return model;
             }
         }
