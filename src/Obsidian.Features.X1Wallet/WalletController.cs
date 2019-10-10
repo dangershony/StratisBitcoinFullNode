@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Builder.Feature;
@@ -94,7 +95,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        
+
 
         public void SetWalletName(string target)
         {
@@ -103,7 +104,7 @@ namespace Obsidian.Features.X1Wallet
             this.walletName = target;
         }
 
-        
+
 
         public async Task<LoadWalletResponse> LoadAsync()
         {
@@ -175,19 +176,19 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-        
+
 
 
         public async Task<Balance> GetBalanceAsync(string walletName)
         {
             using (var context = GetWalletContext())
             {
-                return context.WalletManager.GetConfirmedWalletBalance(); 
+                return context.WalletManager.GetConfirmedWalletBalance();
             }
         }
 
 
-        
+
 
 
         public async Task<MaxSpendableAmountModel> GetMaximumSpendableBalanceAsync(WalletMaximumBalanceRequest request)
@@ -230,9 +231,12 @@ namespace Obsidian.Features.X1Wallet
             var recipients = new List<Recipient>();
             foreach (RecipientModel recipientModel in request.Recipients)
             {
+                var address = P2WpkhAddress.FromString(recipientModel.DestinationAddress, this.network);
+                if (address == null)
+                    throw new NotSupportedException($"Only {nameof(P2WpkhAddress)}es are supported at this time.");
                 recipients.Add(new Recipient
                 {
-                    ScriptPubKey = BitcoinAddress.Create(recipientModel.DestinationAddress, this.network).ScriptPubKey,
+                    ScriptPubKey = address.GetScriptPubKey(),
                     Amount = recipientModel.Amount
                 });
             }
@@ -367,7 +371,7 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-       
+
 
 
         public async Task SyncAsync(HashModel request)

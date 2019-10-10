@@ -1,7 +1,8 @@
 {
   "profiles": {
     "Obsidian.x1d": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "-addnode=165.22.90.248"
     }
   }
 }
