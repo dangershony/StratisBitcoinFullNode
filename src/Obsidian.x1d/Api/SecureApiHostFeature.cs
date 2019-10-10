@@ -10,7 +10,7 @@ using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.OxD.Api
+namespace Obsidian.x1d.Api
 {
     /// <summary>
     /// Provides an encrypted password-protected endpoint to the node.

@@ -5,7 +5,7 @@ using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
 
-namespace Obsidian.OxD.Temp
+namespace Obsidian.x1d.Temp
 {
     public static class TestBench
     {

@@ -2,7 +2,7 @@
 using Obsidian.Features.X1Wallet.SecureApi;
 using Stratis.Bitcoin.Builder;
 
-namespace Obsidian.OxD.Api
+namespace Obsidian.x1d.Api
 {
     /// <summary>
     /// A class providing extension methods for <see cref="IFullNodeBuilder"/>.
