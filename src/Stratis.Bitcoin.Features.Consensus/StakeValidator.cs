@@ -50,7 +50,7 @@ namespace Stratis.Bitcoin.Features.Consensus
         private const int MaxPushDataSize = 40;
 
         /// <summary>Expected (or target) block time in seconds.</summary>
-        public const uint TargetSpacingSeconds = 64;
+        public const uint TargetSpacingSeconds = 256;
 
         /// <summary>Time interval in minutes that is used in the retarget calculation.</summary>
         private const uint RetargetIntervalMinutes = 16;
