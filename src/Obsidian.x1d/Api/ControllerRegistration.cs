@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Obsidian.Features.X1Wallet.SecureApi;
 
-namespace Obsidian.OxD.Api
+namespace Obsidian.x1d.Api
 {
     public static class ControllerRegistration
     {

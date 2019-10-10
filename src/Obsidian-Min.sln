@@ -51,6 +51,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.ObsidianD", "Obsid
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Obsidian.DroidD", "Obsidian.DroidD\Obsidian.DroidD.csproj", "{1685ED2A-97A5-446D-9A79-3DD2BC4EC579}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.x1d", "Obsidian.x1d\Obsidian.x1d.csproj", "{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -141,6 +143,10 @@ Global
 		{1685ED2A-97A5-446D-9A79-3DD2BC4EC579}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1685ED2A-97A5-446D-9A79-3DD2BC4EC579}.Release|Any CPU.Build.0 = Release|Any CPU
 		{1685ED2A-97A5-446D-9A79-3DD2BC4EC579}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -166,6 +172,7 @@ Global
 		{0DEDC29E-F933-43FF-976F-F222B095F53B} = {4208F272-5766-46B4-8648-B5B5666166C5}
 		{E3B96125-6F07-477F-A3F1-5C76CF960485} = {E4693985-DDF7-4CF3-887B-0291135F9499}
 		{1685ED2A-97A5-446D-9A79-3DD2BC4EC579} = {E4693985-DDF7-4CF3-887B-0291135F9499}
+		{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578} = {4208F272-5766-46B4-8648-B5B5666166C5}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6C780ABA-5872-4B83-AD3F-A5BD423AD907}

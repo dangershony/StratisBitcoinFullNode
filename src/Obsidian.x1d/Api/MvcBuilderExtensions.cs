@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Stratis.Bitcoin.Controllers;
 
-namespace Obsidian.OxD.Api
+namespace Obsidian.x1d.Api
 {
     public static class MvcBuilderExtensions
     {

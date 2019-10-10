@@ -7,8 +7,10 @@ using NBitcoin.Protocol;
 using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Networks.ObsidianX;
-using Obsidian.OxD.Api;
-using Obsidian.OxD.Cli;
+using Obsidian.x1d.Api;
+using Obsidian.x1d.Cli;
+using Obsidian.x1d.Temp;
+using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.BlockStore;
@@ -16,7 +18,7 @@ using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.MemoryPool;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.OxD
+namespace Obsidian.x1d
 {
     public static class Program
     {
@@ -34,13 +36,7 @@ namespace Obsidian.OxD
             }
         }
 
-        /// <summary> Starts the fullnode asyncronously.</summary>
-        /// <remarks>To run as gateway node use the args -gateway=1 -whitelist=[trusted-QT-ip] addnode=[trusted-QT-ip],
-        /// e.g. -gateway=1 -whitelist=104.45.21.229 addnode=104.45.21.229 -port=56666
-        /// Use arg -maxblkmem=2 on a low memory VPS.
-        /// </remarks>
-        /// <param Command="args">args</param>
-        /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
+       
         static async Task MainAsync(string[] args)
         {
             PosBlockHeader.CustomPoWHash = ObsidianXHash.GetObsidianXPoWHash;
@@ -48,7 +44,7 @@ namespace Obsidian.OxD
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianXNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, Stratis ", args: args)
+                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}", args: args)
                 {
                     MinProtocolVersion = ProtocolVersion.PROVEN_HEADER_VERSION
                 };
@@ -65,28 +61,36 @@ namespace Obsidian.OxD
                 var node = builder.Build();
 
 #if DEBUG
-                //_ = Task.Run(async () =>
-                //  {
-                //      await Task.Delay(15000);
-                //      TestBench.Run((FullNode)node);  // start mining to the wallet
-                //  });
+                _ = Task.Run(async () =>
+                  {
+                      await Task.Delay(7500);
+                      TestBench.RunTestCodeAsync((FullNode)node);  // start mining to the wallet
+                  });
 #endif
 
                 await node.RunAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine(@"There was a problem initializing the node. Details: '{0}'", ex.Message);
+                Console.WriteLine($"An error occured in {GetName()}: {ex.Message}");
             }
         }
 
         static string GetName()
         {
-#if DEBUG
-            return $"oxd {Assembly.GetEntryAssembly()?.GetName().Version} (d)";
-#else
-			return $"oxd {Assembly.GetEntryAssembly()?.GetName().Version} (r)";
-#endif
+            var assembly = Assembly.GetExecutingAssembly().GetName();
+            var name = assembly.Name;
+            var version = assembly.Version;
+            var compilation = IsDebug ? " (Debug)" : "";
+            return $"{name} {version}{compilation}";
+
         }
+
+#if DEBUG
+        const bool IsDebug = true;
+#else
+		public const bool IsDebug;
+#endif
+
     }
 }

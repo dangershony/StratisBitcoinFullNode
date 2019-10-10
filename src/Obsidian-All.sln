@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.852
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29102.190
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "global", "global", "{5B331FD3-D493-46A9-928B-B786FC6F3103}"
 	ProjectSection(SolutionItems) = preProject
@@ -196,9 +196,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.Features.Diagnostic
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.Features.Collateral", "Stratis.Features.Collateral\Stratis.Features.Collateral.csproj", "{8DB71680-D10C-4DAD-B922-FFCAFF7BE997}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.Ox1D", "Obsidian.Ox1D\Obsidian.Ox1D.csproj", "{CE4301DD-6C04-46B2-84A7-EDFE3B0E5960}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.OxD", "Obsidian.OxD\Obsidian.OxD.csproj", "{B9AFF646-7A6B-49BD-B535-F8A37F2495CE}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.x1d", "Obsidian.x1d\Obsidian.x1d.csproj", "{AF47DA56-1EF5-4C26-833A-91E78CE5103C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -518,14 +518,14 @@ Global
 		{8DB71680-D10C-4DAD-B922-FFCAFF7BE997}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8DB71680-D10C-4DAD-B922-FFCAFF7BE997}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8DB71680-D10C-4DAD-B922-FFCAFF7BE997}.Release|Any CPU.Build.0 = Release|Any CPU
-		{CE4301DD-6C04-46B2-84A7-EDFE3B0E5960}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CE4301DD-6C04-46B2-84A7-EDFE3B0E5960}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CE4301DD-6C04-46B2-84A7-EDFE3B0E5960}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CE4301DD-6C04-46B2-84A7-EDFE3B0E5960}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B9AFF646-7A6B-49BD-B535-F8A37F2495CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B9AFF646-7A6B-49BD-B535-F8A37F2495CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B9AFF646-7A6B-49BD-B535-F8A37F2495CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B9AFF646-7A6B-49BD-B535-F8A37F2495CE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF47DA56-1EF5-4C26-833A-91E78CE5103C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF47DA56-1EF5-4C26-833A-91E78CE5103C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF47DA56-1EF5-4C26-833A-91E78CE5103C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF47DA56-1EF5-4C26-833A-91E78CE5103C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -597,8 +597,8 @@ Global
 		{C8D81134-8D49-4E68-8096-624312D8CA52} = {1B9A916F-DDAC-4675-B424-EDEDC1A58231}
 		{508D9F83-F30E-423C-A97A-EDE088CDB795} = {15D29FFD-6142-4DC5-AFFD-10BA0CA55C45}
 		{8DB71680-D10C-4DAD-B922-FFCAFF7BE997} = {15D29FFD-6142-4DC5-AFFD-10BA0CA55C45}
-		{CE4301DD-6C04-46B2-84A7-EDFE3B0E5960} = {4208F272-5766-46B4-8648-B5B5666166C5}
 		{B9AFF646-7A6B-49BD-B535-F8A37F2495CE} = {4208F272-5766-46B4-8648-B5B5666166C5}
+		{AF47DA56-1EF5-4C26-833A-91E78CE5103C} = {4208F272-5766-46B4-8648-B5B5666166C5}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6C780ABA-5872-4B83-AD3F-A5BD423AD907}

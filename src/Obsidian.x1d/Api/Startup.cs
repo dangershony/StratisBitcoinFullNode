@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using Obsidian.Features.X1Wallet.SecureApi;
 using Stratis.Bitcoin.Utilities.JsonConverters;
 
-namespace Obsidian.OxD.Api
+namespace Obsidian.x1d.Api
 {
     public class Startup
     {
