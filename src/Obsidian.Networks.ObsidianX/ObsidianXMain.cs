@@ -111,8 +111,12 @@ namespace Obsidian.Networks.ObsidianX
             this.StandardScriptsRegistry = new ObsidianXStandardScriptsRegistry();
 
             this.Base58Prefixes = new byte[12][];
-            this.Base58Prefixes[(int)Base58Type.PUBKEY_ADDRESS] = null; // protect legacy P2PKH usage
-            this.Base58Prefixes[(int)Base58Type.SCRIPT_ADDRESS] =null; // protect legacy P2SH usage
+
+            // TODO: The legacy previx are a dependency on the wallet so we keep them for now
+            // After the wallet (and maybe miners) are refactored we can remove this two entries
+            this.Base58Prefixes[(int)Base58Type.PUBKEY_ADDRESS] = new byte[] { (75) }; // ODN
+            this.Base58Prefixes[(int)Base58Type.SCRIPT_ADDRESS] = new byte[] { (125) };
+
             this.Base58Prefixes[(int)Base58Type.SECRET_KEY] = new byte[] { (75 + 128) };  // ODN
             this.Base58Prefixes[(int)Base58Type.ENCRYPTED_SECRET_KEY_NO_EC] = new byte[] { 0x01, 0x42 };
             this.Base58Prefixes[(int)Base58Type.ENCRYPTED_SECRET_KEY_EC] = new byte[] { 0x01, 0x43 };
@@ -122,9 +126,6 @@ namespace Obsidian.Networks.ObsidianX
 
             this.Base58Prefixes[(int)Base58Type.PASSPHRASE_CODE] = new byte[] { 0x2C, 0xE9, 0xB3, 0xE1, 0xFF, 0x39, 0xE2 };
             this.Base58Prefixes[(int)Base58Type.CONFIRMATION_CODE] = new byte[] { 0x64, 0x3B, 0xF6, 0xA8, 0x9A };
-           // this.Base58Prefixes[(int)Base58Type.STEALTH_ADDRESS] = new byte[] { 0x2a };
-           // this.Base58Prefixes[(int)Base58Type.ASSET_ID] = new byte[] { 23 };
-           // this.Base58Prefixes[(int)Base58Type.COLORED_ADDRESS] = new byte[] { 0x13 };
 
             this.Checkpoints = new Dictionary<int, CheckpointInfo>
             {

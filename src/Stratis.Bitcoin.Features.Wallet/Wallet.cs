@@ -745,12 +745,7 @@ namespace Stratis.Bitcoin.Features.Wallet
                 PubKey pubkey = HdOperations.GeneratePublicKey(this.ExtendedPubKey, i, isChange);
 
                 // Generate the P2PKH address corresponding to the pubkey.
-                BitcoinPubKeyAddress address = pubkey.GetAddress(network);
-                if (network.Base58Prefixes[(int)Base58Type.PUBKEY_ADDRESS] != null)
-                {
-                    address = pubkey.GetAddress(network);
-                }
-               
+                BitcoinPubKeyAddress address = pubkey.GetAddress(network);               
                 BitcoinWitPubKeyAddress witAddress = pubkey.GetSegwitAddress(network);
                 
                // Add the new address details to the list of addresses.
