@@ -120,9 +120,10 @@ namespace Obsidian.Features.X1Wallet
         void CompleteStart()
         {
             this.isStartingUp = false;
-            this.startupStopwatch.Start();
+            this.startupStopwatch.Stop();
             this.startupStopwatch = null;
             this.startupTimer = null;
+            this.SaveMetadata();
 
             if (this.broadcasterManager != null)
                 this.broadcasterManager.TransactionStateChanged += OnTransactionStateChanged;
@@ -315,63 +316,7 @@ namespace Obsidian.Features.X1Wallet
             SyncWallet();
         }
 
-        internal async Task<ExportKeysResponse> ExportKeysAsync(ExportKeysRequest exportKeysRequest)
-        {
-            var header = new StringBuilder();
-            header.AppendLine($"Starting export from wallet {this.X1WalletFile.WalletName}, network {this.network.Name} on {DateTime.UtcNow} UTC.");
-            var errors = new StringBuilder();
-            errors.AppendLine("Errors");
-            var success = new StringBuilder();
-            success.AppendLine("Exported Private Key (Hex); Unix Time UTC; IsChange; Address; Label:");
-            int errorCount = 0;
-            int successCount = 0;
-            try
-            {
-                var addresses = this.X1WalletFile.P2WPKHAddresses.Values;
-                header.AppendLine($"{this.X1WalletFile.P2WPKHAddresses.Count} found in wallet.");
-
-                var enc = new Bech32Encoder($"{this.network.CoinTicker.ToLowerInvariant()}key");
-
-                foreach (var a in addresses)
-                {
-                    try
-                    {
-                        var decryptedKey = VCL.DecryptWithPassphrase(exportKeysRequest.WalletPassphrase, a.EncryptedPrivateKey);
-                        if (decryptedKey == null)
-                        {
-                            errorCount++;
-                            header.AppendLine(
-                                $"Address '{a.Address}'  could not be decrpted with this passphrase.");
-                        }
-                        else
-                        {
-                            var privateKey = enc.Encode(0, decryptedKey);
-                            success.AppendLine($"{privateKey}; {a.IsChange}; {a.Address}");
-                            successCount++;
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        header.AppendLine($"Exception processing Address '{a.Address}': {e.Message}");
-                    }
-                }
-
-                header.AppendLine($"{errorCount} errors occured.");
-                header.AppendLine($"{successCount} addresses with private keys successfully exported.");
-            }
-            catch (Exception e)
-            {
-                errors.AppendLine(e.Message);
-                return new ExportKeysResponse { Message = $"Export failed because an exception occured: {e.Message}" };
-            }
-
-            return new ExportKeysResponse
-            { Message = $"{header}{Environment.NewLine}{success}{Environment.NewLine}{errors}{Environment.NewLine}" };
-        }
-
-      
-
-        #region public methods
+        #region import/export keys
 
         public async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
         {
@@ -429,6 +374,68 @@ namespace Obsidian.Features.X1Wallet
             return response;
         }
 
+        internal async Task<ExportKeysResponse> ExportKeysAsync(ExportKeysRequest exportKeysRequest)
+        {
+            var header = new StringBuilder();
+            header.AppendLine($"Starting export from wallet {this.X1WalletFile.WalletName}, network {this.network.Name} on {DateTime.UtcNow} UTC.");
+            var errors = new StringBuilder();
+            errors.AppendLine("Errors");
+            var success = new StringBuilder();
+            success.AppendLine("Exported Private Key (Hex); Unix Time UTC; IsChange; Address; Label:");
+            int errorCount = 0;
+            int successCount = 0;
+            try
+            {
+                var addresses = this.X1WalletFile.P2WPKHAddresses.Values;
+                header.AppendLine($"{this.X1WalletFile.P2WPKHAddresses.Count} found in wallet.");
+
+                var enc = new Bech32Encoder($"{this.network.CoinTicker.ToLowerInvariant()}key");
+
+                foreach (var a in addresses)
+                {
+                    try
+                    {
+                        var decryptedKey = VCL.DecryptWithPassphrase(exportKeysRequest.WalletPassphrase, a.EncryptedPrivateKey);
+                        if (decryptedKey == null)
+                        {
+                            errorCount++;
+                            header.AppendLine(
+                                $"Address '{a.Address}'  could not be decrpted with this passphrase.");
+                        }
+                        else
+                        {
+                            var privateKey = enc.Encode(0, decryptedKey);
+                            success.AppendLine($"{privateKey}; {a.IsChange}; {a.Address}");
+                            successCount++;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        header.AppendLine($"Exception processing Address '{a.Address}': {e.Message}");
+                    }
+                }
+
+                header.AppendLine($"{errorCount} errors occured.");
+                header.AppendLine($"{successCount} addresses with private keys successfully exported.");
+            }
+            catch (Exception e)
+            {
+                errors.AppendLine(e.Message);
+                return new ExportKeysResponse { Message = $"Export failed because an exception occured: {e.Message}" };
+            }
+
+            return new ExportKeysResponse
+            { Message = $"{header}{Environment.NewLine}{success}{Environment.NewLine}{errors}{Environment.NewLine}" };
+        }
+
+
+        #endregion
+
+
+        #region public methods
+
+
+
         internal Dictionary<string, P2WpkhAddress> GetAllAddresses()
         {
             return this.X1WalletFile.P2WPKHAddresses;
@@ -454,15 +461,48 @@ namespace Obsidian.Features.X1Wallet
         public List<UnspentKeyAddressOutput> GetAllSpendableTransactions(int confirmations = 0)
         {
             var res = new List<UnspentKeyAddressOutput>();
-            foreach (var adr in this.X1WalletFile.P2WPKHAddresses.Values)
+            var coins = new List<Coin>();
+            foreach (var block in this.Metadata.Blocks)
             {
-                // UnspentKeyAddressOutput[] unspentKeyAddress = GetSpendableTransactions(adr, confirmations);
-                // res.AddRange(unspentKeyAddress);
+                foreach (KeyValuePair<string, TransactionMetadata> tx in block.Value.ConfirmedTransactions)
+                {
+                    foreach (UtxoMetadata o in tx.Value.ReceivedUtxos)
+                    {
+                        coins.Add(new Coin(new uint256(tx.Key), (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.P2WPKHAddresses[o.HashHex].GetScriptPubKey()));
+                    }
+
+                }
             }
             return res;
         }
 
-        
+        public List<Coin> GetAllSpendableCoins()
+        {
+            var coins = new List<Coin>();
+            foreach (KeyValuePair<int, BlockMetadata> block in this.Metadata.Blocks)
+            {
+                foreach (KeyValuePair<string, TransactionMetadata> tx in block.Value.ConfirmedTransactions)
+                {
+                    if (tx.Value.IsCoinbase)
+                    {
+                        var txAge = this.chainIndexer.Tip.Height - block.Key;
+
+                        if (txAge < this.network.Consensus.CoinbaseMaturity)
+                            continue;
+                    }
+
+                    foreach (UtxoMetadata o in tx.Value.ReceivedUtxos)
+                    {
+                        coins.Add(new Coin(new uint256(tx.Key), (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.P2WPKHAddresses[o.HashHex].GetScriptPubKey()));
+                    }
+
+                }
+            }
+            return coins;
+        }
+
+
+
 
         public P2WpkhAddress GetUnusedAddress()
         {
@@ -628,7 +668,7 @@ namespace Obsidian.Features.X1Wallet
             if (blockHeight == null || block == null)
             {
                 // TODO: process unconfirmed tx separately, do not put them in the wallet file
-                throw new NotImplementedException("This is probably an unconfirmed tx from the mempool.");
+                this.logger.LogWarning("X1Wallet.WalletManager: Processing mempool tx is not yet implemented!");
             }
             else
             {
