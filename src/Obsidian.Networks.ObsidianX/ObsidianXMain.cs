@@ -111,8 +111,8 @@ namespace Obsidian.Networks.ObsidianX
             this.StandardScriptsRegistry = new ObsidianXStandardScriptsRegistry();
 
             this.Base58Prefixes = new byte[12][];
-            this.Base58Prefixes[int.MaxValue] = new byte[] { 0 }; // protect legacy P2PKH usage
-            this.Base58Prefixes[int.MaxValue] = new byte[] { 0 }; // protect legacy P2SH usage
+            this.Base58Prefixes[(int)Base58Type.PUBKEY_ADDRESS] = null; // protect legacy P2PKH usage
+            this.Base58Prefixes[(int)Base58Type.SCRIPT_ADDRESS] =null; // protect legacy P2SH usage
             this.Base58Prefixes[(int)Base58Type.SECRET_KEY] = new byte[] { (75 + 128) };  // ODN
             this.Base58Prefixes[(int)Base58Type.ENCRYPTED_SECRET_KEY_NO_EC] = new byte[] { 0x01, 0x42 };
             this.Base58Prefixes[(int)Base58Type.ENCRYPTED_SECRET_KEY_EC] = new byte[] { 0x01, 0x43 };
