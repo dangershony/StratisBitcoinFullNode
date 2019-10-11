@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Consensus.Rules;
@@ -8,15 +9,15 @@ namespace Obsidian.Networks.ObsidianX.Rules
     /// <summary>
     /// Checks if <see cref="ObsidianXMain"/> network's blocks contain legacy coinstake tx or P2PK outputs.
     /// </summary>
-    public class ObsidianXPreventLegacyRule : IntegrityValidationConsensusRule
+    public class ObsidianXPreventLegacyRule : PartialValidationConsensusRule
     {
         /// <inheritdoc />
         /// <exception cref="ConsensusErrors.BadVersion">Thrown if block's version is outdated or otherwise invalid.</exception>
-        public override void Run(RuleContext context)
+        public override Task RunAsync(RuleContext context)
         {
             var block = context.ValidationContext.BlockToValidate;
             if (block.Transactions.Count < 2)
-                return;
+                return Task.CompletedTask;
 
             if (block.Transactions[1].IsCoinStake && block.Transactions[1].Outputs.Count != 3)
             {
@@ -32,6 +33,8 @@ namespace Obsidian.Networks.ObsidianX.Rules
             {
                 CheckForP2Pk(block.Transactions[i]);
             }
+
+            return Task.CompletedTask;
         }
 
         void CheckForP2Pk(Transaction transaction)

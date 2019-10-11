@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Consensus.Rules;
@@ -8,11 +9,11 @@ namespace Obsidian.Networks.ObsidianX.Rules
     /// <summary>
     /// Checks if <see cref="ObsidianXMain"/> network's blocks contain legacy coinstake tx or P2PK outputs.
     /// </summary>
-    public class ObsidianXNativeSegWitSpendsOnlyRule : IntegrityValidationConsensusRule
+    public class ObsidianXNativeSegWitSpendsOnlyRule : PartialValidationConsensusRule
     {
         /// <inheritdoc />
         /// <exception cref="ConsensusErrors.BadVersion">Thrown if block's version is outdated or otherwise invalid.</exception>
-        public override void Run(RuleContext context)
+        public override Task RunAsync(RuleContext context)
         {
             var block = context.ValidationContext.BlockToValidate;
 
@@ -33,8 +34,9 @@ namespace Obsidian.Networks.ObsidianX.Rules
                     this.Logger.LogTrace("(-)[NOT_NATIVE_SEGWIT_OR_DATA]");
                     new ConsensusError("legacy-tx", "Only P2PKH, P2WSH is allowed outside Coinstake transactions.").Throw();
                 }
-               
             }
+
+            return Task.CompletedTask;
         }
     }
 }

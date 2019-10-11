@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Consensus.Rules;
@@ -8,9 +9,9 @@ namespace Obsidian.Networks.ObsidianX.Rules
     /// <summary>
     /// Checks if <see cref="ObsidianXMain"/> transaction are only native SegWit.
     /// </summary>
-    public class ObsidianXRequireNativeSegWitRule : IntegrityValidationConsensusRule
+    public class ObsidianXRequireNativeSegWitRule : PartialValidationConsensusRule
     {
-        public override void Run(RuleContext context)
+        public override Task RunAsync(RuleContext context)
         {
             var block = context.ValidationContext.BlockToValidate;
 
@@ -41,6 +42,8 @@ namespace Obsidian.Networks.ObsidianX.Rules
                     }
                 }
             }
+
+            return Task.CompletedTask;
         }
     }
 }
