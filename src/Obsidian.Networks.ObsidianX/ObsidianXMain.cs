@@ -169,7 +169,7 @@ namespace Obsidian.Networks.ObsidianX
                 .Register<PosFutureDriftRule>()
                 .Register<CheckDifficultyPosRule>()
                 .Register<ObsidianXHeaderVersionRule>()
-               .Register<ProvenHeaderSizeRule>()
+                .Register<ProvenHeaderSizeRule>()
                 .Register<ProvenHeaderCoinstakeRule>();
 
             consensus.ConsensusRules
