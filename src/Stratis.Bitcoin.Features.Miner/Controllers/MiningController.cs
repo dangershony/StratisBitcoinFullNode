@@ -86,7 +86,7 @@ namespace Stratis.Bitcoin.Features.Miner.Controllers
 
                 var generateBlocksModel = new GenerateBlocksModel
                 {
-                    Blocks = this.powMining.GenerateBlocks(new ReserveScript(address.Pubkey), (ulong)blockCount, int.MaxValue)
+                    Blocks = this.powMining.GenerateBlocks(new ReserveScript(address.Pubkey.GetWitScriptAddress(this.network).ScriptPubKey), (ulong)blockCount, int.MaxValue)
                 };
 
                 this.logger.LogTrace("(-):*.{0}={1}", "Generated block count", generateBlocksModel.Blocks.Count);
