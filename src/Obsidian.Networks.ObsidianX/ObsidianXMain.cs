@@ -22,7 +22,7 @@ namespace Obsidian.Networks.ObsidianX
             this.RootFolderName = "obsidianx";
             this.DefaultConfigFilename = "obsidianx.conf";
 
-            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX2"), 0); // temporary change for branch 'testrules'
+            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX2"), 0); 
             this.DefaultPort = 46660;
             this.DefaultRPCPort = 46661;
             this.DefaultAPIPort = 47221;
@@ -151,9 +151,9 @@ namespace Obsidian.Networks.ObsidianX
             // Do not put gateway nodes in this list.
             string[] seedNodes =
             {
-                //"209.97.177.144",
+                "209.97.177.144",
                 "165.22.90.248",
-                //"138.68.130.127"
+                "138.68.130.127"
             };
             this.SeedNodes = this.ConvertToNetworkAddresses(seedNodes, this.DefaultPort).ToList();
 
@@ -169,10 +169,7 @@ namespace Obsidian.Networks.ObsidianX
                 .Register<PosFutureDriftRule>()
                 .Register<CheckDifficultyPosRule>()
                 .Register<ObsidianXHeaderVersionRule>()
-                .Register<ObsidianXPreventLegacyRule>()
-                .Register<ObsidianXRequireNativeSegWitRule>()
-                .Register<ObsidianXNativeSegWitSpendsOnlyRule>()
-                .Register<ProvenHeaderSizeRule>()
+               .Register<ProvenHeaderSizeRule>()
                 .Register<ProvenHeaderCoinstakeRule>();
 
             consensus.ConsensusRules
@@ -183,6 +180,11 @@ namespace Obsidian.Networks.ObsidianX
             consensus.ConsensusRules
                 .Register<SetActivationDeploymentsPartialValidationRule>()
                 .Register<PosTimeMaskRule>()
+
+                // rules to prevent legacy script types and force segwit
+                .Register<ObsidianXPreventLegacyRule>()
+                .Register<ObsidianXRequireNativeSegWitRule>()
+                .Register<ObsidianXNativeSegWitSpendsOnlyRule>()
 
                 // rules that are inside the method ContextualCheckBlock
                 .Register<TransactionLocktimeActivationRule>()
