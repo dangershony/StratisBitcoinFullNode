@@ -22,7 +22,7 @@ namespace Obsidian.Networks.ObsidianX
             this.RootFolderName = "obsidianx";
             this.DefaultConfigFilename = "obsidianx.conf";
 
-            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX1"), 0);
+            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX2"), 0); 
             this.DefaultPort = 46660;
             this.DefaultRPCPort = 46661;
             this.DefaultAPIPort = 47221;
@@ -39,8 +39,8 @@ namespace Obsidian.Networks.ObsidianX
 
 
             var consensusFactory = new ObsidianXConsensusFactory();
-            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 7, 12, 23, 12, 23, DateTimeKind.Utc));
-            this.GenesisNonce = 11056784;
+            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 10, 9, 19, 44, 00, DateTimeKind.Utc));
+            this.GenesisNonce = 365784;
             this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
@@ -111,8 +111,12 @@ namespace Obsidian.Networks.ObsidianX
             this.StandardScriptsRegistry = new ObsidianXStandardScriptsRegistry();
 
             this.Base58Prefixes = new byte[12][];
+
+            // TODO: The legacy previx are a dependency on the wallet so we keep them for now
+            // After the wallet (and maybe miners) are refactored we can remove this two entries
             this.Base58Prefixes[(int)Base58Type.PUBKEY_ADDRESS] = new byte[] { (75) }; // ODN
             this.Base58Prefixes[(int)Base58Type.SCRIPT_ADDRESS] = new byte[] { (125) };
+
             this.Base58Prefixes[(int)Base58Type.SECRET_KEY] = new byte[] { (75 + 128) };  // ODN
             this.Base58Prefixes[(int)Base58Type.ENCRYPTED_SECRET_KEY_NO_EC] = new byte[] { 0x01, 0x42 };
             this.Base58Prefixes[(int)Base58Type.ENCRYPTED_SECRET_KEY_EC] = new byte[] { 0x01, 0x43 };
@@ -122,9 +126,6 @@ namespace Obsidian.Networks.ObsidianX
 
             this.Base58Prefixes[(int)Base58Type.PASSPHRASE_CODE] = new byte[] { 0x2C, 0xE9, 0xB3, 0xE1, 0xFF, 0x39, 0xE2 };
             this.Base58Prefixes[(int)Base58Type.CONFIRMATION_CODE] = new byte[] { 0x64, 0x3B, 0xF6, 0xA8, 0x9A };
-            this.Base58Prefixes[(int)Base58Type.STEALTH_ADDRESS] = new byte[] { 0x2a };
-            this.Base58Prefixes[(int)Base58Type.ASSET_ID] = new byte[] { 23 };
-            this.Base58Prefixes[(int)Base58Type.COLORED_ADDRESS] = new byte[] { 0x13 };
 
             this.Checkpoints = new Dictionary<int, CheckpointInfo>
             {
@@ -168,7 +169,6 @@ namespace Obsidian.Networks.ObsidianX
                 .Register<PosFutureDriftRule>()
                 .Register<CheckDifficultyPosRule>()
                 .Register<ObsidianXHeaderVersionRule>()
-                //.Register<ObsidianXPreventLegacyRule>()
                 .Register<ProvenHeaderSizeRule>()
                 .Register<ProvenHeaderCoinstakeRule>();
 
@@ -180,6 +180,11 @@ namespace Obsidian.Networks.ObsidianX
             consensus.ConsensusRules
                 .Register<SetActivationDeploymentsPartialValidationRule>()
                 .Register<PosTimeMaskRule>()
+
+                // rules to prevent legacy script types and force segwit
+                .Register<ObsidianXPreventLegacyRule>()
+                .Register<ObsidianXRequireNativeSegWitRule>()
+                .Register<ObsidianXNativeSegWitSpendsOnlyRule>()
 
                 // rules that are inside the method ContextualCheckBlock
                 .Register<TransactionLocktimeActivationRule>()

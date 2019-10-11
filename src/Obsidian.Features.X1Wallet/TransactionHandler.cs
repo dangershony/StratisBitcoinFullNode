@@ -278,6 +278,20 @@ namespace Obsidian.Features.X1Wallet
         /// <param name="context">The context associated with the current transaction being built.</param>
         protected void AddCoins(TransactionBuildContext context)
         {
+            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            {
+                var allSpendableCoins = context2.WalletManager.GetAllSpendableCoins();
+
+                // All the UTXOs are added to the builder without filtering.
+                // The builder then has its own coin selection mechanism
+                // to select the best UTXO set for the corresponding amount.
+                // To add a custom implementation of a coin selection override
+                // the builder using builder.SetCoinSelection().
+                context.TransactionBuilder.AddCoins(allSpendableCoins);
+            }
+
+            return;
+
             var unspentOutputs = new List<UnspentKeyAddressOutput>();
             using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
             {
@@ -359,14 +373,14 @@ namespace Obsidian.Features.X1Wallet
                 coins.Add(new Coin(item.Transaction.Id, (uint)item.Transaction.Index, item.Transaction.Amount, item.Transaction.ScriptPubKey));
                 sum += item.Transaction.Amount;
             }
-
             // All the UTXOs are added to the builder without filtering.
             // The builder then has its own coin selection mechanism
             // to select the best UTXO set for the corresponding amount.
             // To add a custom implementation of a coin selection override
             // the builder using builder.SetCoinSelection().
-
             context.TransactionBuilder.AddCoins(coins);
+            
+          
         }
 
         /// <summary>

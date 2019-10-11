@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using Obsidian.Features.X1Wallet.Storage;
 
 namespace Obsidian.Features.X1Wallet.Models
 {
@@ -12,5 +13,6 @@ namespace Obsidian.Features.X1Wallet.Models
         public bool IsChange { get; set; }
 
         public byte[] EncryptedPrivateKey { get; set; }
+        public P2WpkhAddress FullAddress { get; internal set; }
     }
 }

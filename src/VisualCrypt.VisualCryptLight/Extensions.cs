@@ -7,6 +7,8 @@ namespace VisualCrypt.VisualCryptLight
     public static class Extensions
     {
         static readonly Dictionary<byte, string> HexTable = new Dictionary<byte, string>();
+        static readonly Dictionary<string, byte> HexTable2 = new Dictionary<string, byte>();
+
         static readonly object lockObject = new object();
 
         public static string ToBase64(this byte[] bytes)
@@ -39,6 +41,20 @@ namespace VisualCrypt.VisualCryptLight
             return hexString;
         }
 
+        public static byte[] FromHexString(this string hexString)
+        {
+            EnsureHexTable();
+
+            var bytes = new byte[hexString.Length / 2];
+            var byteIndex = 0;
+            for (var i = 0; i < hexString.Length; i += 2)
+            {
+                bytes[byteIndex] = HexTable2[hexString.Substring(i, 2)];
+                byteIndex++;
+            }
+            return bytes;
+        }
+
         static void EnsureHexTable()
         {
             if (HexTable.Count == 0)
@@ -49,7 +65,9 @@ namespace VisualCrypt.VisualCryptLight
                     {
                         for (byte i = 0; i <= 255; i++)
                         {
-                            HexTable.Add(i, i.ToString("x2"));
+                            var hexString = i.ToString("x2");
+                            HexTable.Add(i, hexString);
+                            HexTable2.Add(hexString, i);
                             if (i == 255)  // overflow!
                                 return;
                         }

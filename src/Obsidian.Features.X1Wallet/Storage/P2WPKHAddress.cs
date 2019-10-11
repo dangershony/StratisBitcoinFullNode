@@ -47,6 +47,13 @@ namespace Obsidian.Features.X1Wallet.Storage
         /// </summary>
         public string CoinTicker { get; set; }
 
+        public Script GetScriptPubKey()
+        {
+            //var hash160 = Hashes.Hash160(this.CompressedPublicKey).ToBytes();
+            var hash160 = this.HashHex.FromHexString();
+            return new Script(OpcodeType.OP_0, Op.GetPushOp(hash160));
+        }
+
 
         public static P2WpkhAddress CreateWithPrivateKey(byte[] privateKey, string keyEncryptionPassphrase, Func<string, byte[], byte[]> keyEncryption, bool isChange, int coinType, byte witnessVersion, string bech32Prefix, string coinTicker)
         {
@@ -72,6 +79,25 @@ namespace Obsidian.Features.X1Wallet.Storage
 
             return adr;
         }
+
+        public static P2WpkhAddress FromString(string candidate, Network network)
+        {
+            try
+            {
+                var hash160 = network.Bech32Encoders[(int) Bech32Type.WITNESS_PUBKEY_ADDRESS]
+                    .Decode(candidate, out var witnessVersion);
+                if (hash160 == null || hash160.Length != 20 || witnessVersion != 0)
+                    return null;
+                return new P2WpkhAddress {Address = candidate, HashHex = hash160.ToHexString()};
+            }
+            catch (Exception e)
+            {
+                ;
+            }
+            return null;
+           
+        }
+
 
         public override bool Equals(object obj)
         {
