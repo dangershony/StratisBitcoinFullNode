@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Security;
 using System.Text;
 using NBitcoin.BouncyCastle.Asn1.X9;
@@ -32,7 +33,17 @@ namespace NBitcoin
         {
             byte[] vch = key.ToBytes();
             //Compute the Bitcoin address (ASCII),
-            byte[] addressBytes = Encoders.ASCII.DecodeData(key.PubKey.GetAddress(network).ToString());
+            byte[] addressBytes;
+            try
+            {
+                //Compute the Bitcoin address (ASCII),
+                addressBytes = Encoders.ASCII.DecodeData(key.PubKey.GetAddress(network).ToString());
+            }
+            catch (Exception)
+            {
+                addressBytes = key.PubKey.ToBytes(); // in case there is no Base58Type.PUBKEY_ADDRESS defined, we deviate from the WIF Spec
+            }
+           
             // and take the first four bytes of SHA256(SHA256()) of it. Let's call this "addresshash".
             byte[] addresshash = Hashes.Hash256(addressBytes).ToBytes().SafeSubarray(0, 4);
 
