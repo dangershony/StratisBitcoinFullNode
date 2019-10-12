@@ -59,24 +59,29 @@ namespace Obsidian.Features.X1Wallet.Storage
     {
         public string HashBlock { get; set; }
 
-        public Dictionary<string, TransactionMetadata> ConfirmedTransactions { get; set; }
+        public Dictionary<string, TransactionMetadata> Received { get; set; }
+        public Dictionary<string, UtxoMetadata> Spent { get; internal set; }
     }
 
     public class TransactionMetadata
     {
-        public bool IsCoinbase;
-        public bool IsCoinstake;
+        public bool IsCoinBase { get; set; }
+        public bool IsCoinstake { get; set; }
         public string HashTx { get; set; }
-        public List<UtxoMetadata> ReceivedUtxos { get; set; } 
+        public Dictionary<string, UtxoMetadata> ReceivedUtxos { get; set; } 
     }
 
     public class UtxoMetadata
     {
-        public string HashHex;
+        public string AddressHashHex { get; set; }
         public string HashTx { get; set; }
         public int Index { get; set; }
         public long Satoshis { get; set; }
-        public bool IsSpent { get; set; }
+
+        public string GetKey()
+        {
+            return $"{this.HashTx}-{this.Index}";
+        }
     }
 
     public enum TxType

@@ -84,7 +84,7 @@ namespace Obsidian.Features.X1Wallet
                 if (context != null)
                 {
                     walletName = context.WalletManager.WalletName;
-                    balance = context.WalletManager.GetConfirmedWalletBalance();
+                    context.WalletManager.GetBudget(out balance);
                 }
             }
 

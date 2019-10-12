@@ -35,11 +35,11 @@ namespace Obsidian.Features.X1Wallet.Storage
             Dictionary<string, TransactionMetadata> transactions = null;
             foreach (BlockMetadata block in Metadata.Blocks.Values)
             {
-                foreach (TransactionMetadata tx in block.ConfirmedTransactions.Values)
+                foreach (TransactionMetadata tx in block.Received.Values)
                 {
-                    foreach (UtxoMetadata utxo in tx.ReceivedUtxos)
+                    foreach (UtxoMetadata utxo in tx.ReceivedUtxos.Values)
                     {
-                        if (utxo.HashHex == address.HashHex)
+                        if (utxo.AddressHashHex == address.HashHex)
                         {
                             if (transactions == null)
                                 transactions = new Dictionary<string, TransactionMetadata>();

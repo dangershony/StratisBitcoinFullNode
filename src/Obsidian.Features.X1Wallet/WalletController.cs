@@ -183,7 +183,8 @@ namespace Obsidian.Features.X1Wallet
         {
             using (var context = GetWalletContext())
             {
-                return context.WalletManager.GetConfirmedWalletBalance();
+                context.WalletManager.GetBudget(out var balance);
+                return balance;
             }
         }
 

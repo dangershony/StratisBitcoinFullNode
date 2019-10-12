@@ -27,6 +27,7 @@ using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
+using static Obsidian.Features.X1Wallet.Extensions.Tools;
 
 namespace Obsidian.Features.X1Wallet
 {
@@ -464,11 +465,11 @@ namespace Obsidian.Features.X1Wallet
             var coins = new List<Coin>();
             foreach (var block in this.Metadata.Blocks)
             {
-                foreach (KeyValuePair<string, TransactionMetadata> tx in block.Value.ConfirmedTransactions)
+                foreach (KeyValuePair<string, TransactionMetadata> tx in block.Value.Received)
                 {
-                    foreach (UtxoMetadata o in tx.Value.ReceivedUtxos)
+                    foreach (UtxoMetadata o in tx.Value.ReceivedUtxos.Values)
                     {
-                        coins.Add(new Coin(new uint256(tx.Key), (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.P2WPKHAddresses[o.HashHex].GetScriptPubKey()));
+                        coins.Add(new Coin(new uint256(tx.Key), (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.P2WPKHAddresses[o.AddressHashHex].GetScriptPubKey()));
                     }
 
                 }
@@ -476,30 +477,6 @@ namespace Obsidian.Features.X1Wallet
             return res;
         }
 
-        public List<Coin> GetAllSpendableCoins()
-        {
-            var coins = new List<Coin>();
-            foreach (KeyValuePair<int, BlockMetadata> block in this.Metadata.Blocks)
-            {
-                foreach (KeyValuePair<string, TransactionMetadata> tx in block.Value.ConfirmedTransactions)
-                {
-                    if (tx.Value.IsCoinbase)
-                    {
-                        var txAge = this.chainIndexer.Tip.Height - block.Key;
-
-                        if (txAge < this.network.Consensus.CoinbaseMaturity)
-                            continue;
-                    }
-
-                    foreach (UtxoMetadata o in tx.Value.ReceivedUtxos)
-                    {
-                        coins.Add(new Coin(new uint256(tx.Key), (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.P2WPKHAddresses[o.HashHex].GetScriptPubKey()));
-                    }
-
-                }
-            }
-            return coins;
-        }
 
 
 
@@ -520,11 +497,11 @@ namespace Obsidian.Features.X1Wallet
             // slow version
             foreach (BlockMetadata block in this.Metadata.Blocks.Values)
             {
-                foreach (TransactionMetadata tx in block.ConfirmedTransactions.Values)
+                foreach (TransactionMetadata tx in block.Received.Values)
                 {
-                    foreach (var utxo in tx.ReceivedUtxos)
+                    foreach (var utxo in tx.ReceivedUtxos.Values)
                     {
-                        if (utxo.HashHex == address.HashHex)
+                        if (utxo.AddressHashHex == address.HashHex)
                             return true;
                     }
 
@@ -537,48 +514,109 @@ namespace Obsidian.Features.X1Wallet
 
         public Balance GetConfirmedWalletBalance()
         {
-            Dictionary<string, TransactionMetadata> confirmedTransactions = new Dictionary<string, TransactionMetadata>();
+            long totalReceived = 0;
+            long totalSent = 0;
 
             foreach (BlockMetadata block in this.Metadata.Blocks.Values)
             {
-                foreach (TransactionMetadata tx in block.ConfirmedTransactions.Values)
-                {
-                    foreach (UtxoMetadata utxo in tx.ReceivedUtxos)
+                if (block.Received != null)
+                    foreach (TransactionMetadata tx in block.Received.Values)
                     {
-                        if (this.X1WalletFile.P2WPKHAddresses.ContainsKey(utxo.HashHex))
+                        foreach (var r in tx.ReceivedUtxos.Values)
                         {
-                            confirmedTransactions.Add(tx.HashTx, tx);
-                            break;
+                            totalReceived += r.Satoshis;
                         }
                     }
 
-                }
+                if (block.Spent != null)
+                    foreach (var s in block.Spent.Values)
+                        totalSent += s.Satoshis;
             }
 
-            long totalReceived = 0;
 
-            foreach (var tx in confirmedTransactions.Values)
-            {
-                foreach (var utxo in tx.ReceivedUtxos)
-                {
-                    if (this.X1WalletFile.P2WPKHAddresses.ContainsKey(utxo.HashHex))
-                    {
-                        totalReceived += utxo.Satoshis;
-                        break;
-                    }
-                }
 
-            }
 
             var balance = new Balance
             {
-                AmountConfirmed = Money.Satoshis(totalReceived),
+                AmountConfirmed = Money.Satoshis(totalReceived - totalSent),
                 AmountUnconfirmed = Money.Zero,
-                SpendableAmount = totalReceived / 10
+                SpendableAmount = Money.Zero // todo, maturity, unconfirmed
             };
             return balance;
         }
 
+
+        public List<Coin> GetBudget(out Balance balance)
+        {
+            var receivedAndMature = new Dictionary<string, UtxoMetadata>();
+            var spent = new Dictionary<string, UtxoMetadata>();
+
+            long totalReceived = 0;
+            long immatureReceived = 0;
+            long totalSent = 0;
+           
+
+            foreach (KeyValuePair<int, BlockMetadata> block in this.Metadata.Blocks)
+            {
+                if (block.Value.Received != null)
+                {
+                    foreach (TransactionMetadata tx in block.Value.Received.Values)
+                    {
+                        bool isImmature = false;
+                        if (tx.IsCoinBase)
+                        {
+                            var confirmations = this.Metadata.SyncedHeight - block.Key + 1;
+                            isImmature = confirmations < this.network.Consensus.CoinbaseMaturity;
+                        }
+
+                        foreach (var r in tx.ReceivedUtxos)
+                        {
+                            totalReceived += r.Value.Satoshis;
+
+                            if (!isImmature)
+                            {
+                                receivedAndMature.Add(r.Key, r.Value);
+                            }
+                            else
+                            {
+                                immatureReceived += r.Value.Satoshis;
+                            }
+                        }
+                    }
+                }
+
+                if (block.Value.Spent != null)
+                {
+                    foreach (var s in block.Value.Spent)
+                    {
+                        totalSent += s.Value.Satoshis;
+                        spent.Add(s.Key, s.Value);
+                        
+                    }
+                }
+                    
+                       
+            }
+
+            foreach (var item in spent)
+            {
+                if (receivedAndMature.ContainsKey(item.Key))
+                    receivedAndMature.Remove(item.Key);
+            }
+
+            var coins = new List<Coin>();
+            foreach (var utxo in receivedAndMature.Values)
+                coins.Add(new Coin(new uint256(utxo.HashTx), (uint)utxo.Index, Money.Satoshis(utxo.Satoshis), this.X1WalletFile.P2WPKHAddresses[utxo.AddressHashHex].GetScriptPubKey()));
+
+            balance = new Balance
+            {
+                AmountConfirmed = Money.Satoshis(totalReceived - totalSent),
+                AmountUnconfirmed = Money.Zero,
+                SpendableAmount = Money.Satoshis(totalReceived - totalSent - immatureReceived) // todo: unconfirmed
+            };
+
+            return coins;
+        }
 
 
 
@@ -597,9 +635,9 @@ namespace Obsidian.Features.X1Wallet
                 SaveMetadata();
         }
 
-        TransactionMetadata ExtractWalletTransaction(Transaction transaction)
+        TransactionMetadata ExtractIncomingFunds(Transaction transaction)
         {
-            List<UtxoMetadata> receivedUtxos = null;
+            Dictionary<string, UtxoMetadata> receivedUtxos = null;
             int index = 0;
             foreach (var output in transaction.Outputs)
             {
@@ -607,8 +645,15 @@ namespace Obsidian.Features.X1Wallet
                 if (ownAddress != null)
                 {
                     if (receivedUtxos == null)
-                        receivedUtxos = new List<UtxoMetadata>();
-                    receivedUtxos.Add(new UtxoMetadata { HashHex = ownAddress.HashHex, HashTx = transaction.GetHash().ToString(), Satoshis = output.Value.Satoshi, Index = index });
+                        receivedUtxos = new Dictionary<string, UtxoMetadata>();
+                    var item = new UtxoMetadata
+                    {
+                        AddressHashHex = ownAddress.HashHex,
+                        HashTx = transaction.GetHash().ToString(),
+                        Satoshis = output.Value.Satoshi,
+                        Index = index
+                    };
+                    receivedUtxos.Add(item.GetKey(), item);
                 }
                 index++;
             }
@@ -618,13 +663,55 @@ namespace Obsidian.Features.X1Wallet
                 var tx = new TransactionMetadata
                 {
                     HashTx = transaction.GetHash().ToString(),
-                    IsCoinbase = transaction.IsCoinBase,
+                    IsCoinBase = transaction.IsCoinBase,
                     IsCoinstake = transaction.IsCoinStake,
                     ReceivedUtxos = receivedUtxos
                 };
                 return tx;
             }
             return null;
+        }
+
+        // do not call this fdr coinbase, coinstake
+        Dictionary<string, UtxoMetadata> ExtractOutgoingFunds(Transaction transaction)
+        {
+            List<OutPoint> prevOuts = GetPrevOuts(transaction);
+            Dictionary<string, UtxoMetadata> spends = null;
+
+            foreach (var b in this.Metadata.Blocks.Values) // iterate ovr the large collection in outer loop (only once)
+            {
+                findOutPointInBlock:
+                foreach (OutPoint prevOut in prevOuts)
+                {
+                    if (b.Received.TryGetValue(prevOut.Hash.ToString(), out TransactionMetadata prevTx))  // prevOut tx id is in the wallet
+                    {
+                        var prevWalletUtxo = prevTx.ReceivedUtxos.Values.SingleOrDefault(x => x.Index == prevOut.N);  // do we have the indexed output?
+                        if (prevWalletUtxo != null)  // yes, it's a spend from this wallet
+                        {
+                            NotNull(ref spends, transaction.Inputs.Count); // ensure the return collection is initialized
+                            spends.Add(prevWalletUtxo.GetKey(), prevWalletUtxo);  // add the spend
+
+                            if (spends.Count == transaction.Inputs.Count) // we will find no more spends than inputs, quick exit
+                                return spends;
+                            prevOuts.Remove(prevOut); // do not search for this item any more
+                            goto findOutPointInBlock; // we need a new enumerator for the shortened collection
+                        }
+                    }  // is the next prvOut also in this block? That's definitely possible!
+                }
+            }
+
+            return spends; // might be null or contain less then the tx inputs in edge cases, e.g. if an private key was removed from the wallet and no more items than the tx inputs.
+        }
+
+        List<OutPoint> GetPrevOuts(Transaction transaction)
+        {
+            var prevOuts = new List<OutPoint>(transaction.Inputs.Count);
+            foreach (TxIn input in transaction.Inputs)
+            {
+                prevOuts.Add(input.PrevOut);
+            }
+
+            return prevOuts;
         }
 
         bool AreInputsInWallet(Transaction transaction)
@@ -639,18 +726,47 @@ namespace Obsidian.Features.X1Wallet
 
         bool ProcessTransaction(Transaction transaction, int blockHeight, Block block)
         {
+            long received;
+            long spent;
 
-            var tx = ExtractWalletTransaction(transaction);
-            if (tx != null)
+            TransactionMetadata tx = ExtractIncomingFunds(transaction);
+            var spends = ExtractOutgoingFunds(transaction);
+            BlockMetadata walletBlock = null;
+            if (tx != null || spends != null)
             {
-                if (!this.Metadata.Blocks.ContainsKey(blockHeight))
-                    this.Metadata.Blocks.Add(blockHeight, new BlockMetadata { HashBlock = block.GetHash().ToString(), ConfirmedTransactions = new Dictionary<string, TransactionMetadata>() });
-
-                this.Metadata.Blocks[blockHeight].ConfirmedTransactions.Add(tx.HashTx, tx);
-                return true;
+                if (!this.Metadata.Blocks.TryGetValue(blockHeight, out walletBlock))
+                {
+                    walletBlock = new BlockMetadata { HashBlock = block.GetHash().ToString() };
+                    this.Metadata.Blocks.Add(blockHeight, walletBlock);
+                }
             }
 
-            return false;
+            if (tx != null)
+            {
+                if (walletBlock.Received == null)
+                {
+                    walletBlock.Received = new Dictionary<string, TransactionMetadata>(1);
+                }
+                walletBlock.Received.Add(tx.HashTx, tx);
+                received = tx.ReceivedUtxos.Values.Sum(x => x.Satoshis);
+            }
+
+            if (spends != null)
+            {
+                if (walletBlock.Spent == null)
+                {
+                    walletBlock.Spent = spends;
+                }
+                else
+                {
+                    foreach (var spend in spends)
+                        walletBlock.Spent.Add(spend.Key, spend.Value);
+                }
+                spent = spends.Values.Sum(x => x.Satoshis);
+            }
+
+
+            return tx != null || spends != null;
 
 
             Guard.NotNull(transaction, nameof(transaction));
