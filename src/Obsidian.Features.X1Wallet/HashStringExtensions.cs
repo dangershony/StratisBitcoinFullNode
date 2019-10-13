@@ -7,13 +7,13 @@ namespace Obsidian.Features.X1Wallet
 {
     public static class HashStringExtensions
     {
-        static string genesisHash;
-        static string nullHash;
+        static uint256 genesisHash;
+        static uint256 nullHash;
 
         public static void Init(Network network)
         {
-            genesisHash = network.GenesisHash.ToString();
-            nullHash = uint256.Zero.ToString();
+            genesisHash = network.GenesisHash;
+            nullHash = uint256.Zero;
         }
 
         /// <summary>
@@ -21,16 +21,12 @@ namespace Obsidian.Features.X1Wallet
         /// </summary>
         /// <param name="hashBlock">block hash</param>
         /// <returns>true, if nullish</returns>
-        public static bool IsDefault(this string hashBlock)
+        public static bool IsDefault(this uint256 hashBlock)
         {
-            if (string.IsNullOrEmpty(hashBlock) || genesisHash == hashBlock || nullHash == hashBlock)
+            if (hashBlock == null || genesisHash == hashBlock || nullHash == hashBlock)
                 return true;
             return false;
         }
-
-        public static uint256 ToUInt256(this string uint256)
-        {
-            return new uint256(uint256);
-        }
+       
     }
 }

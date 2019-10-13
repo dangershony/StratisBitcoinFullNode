@@ -13,7 +13,7 @@ namespace Obsidian.Features.X1Wallet.Storage
         /// <summary>
         /// The key is the HashHex of an address. The value contains the transaction data for that address.
         /// </summary>
-        public Dictionary<string, P2WpkhAddress> P2WPKHAddresses { get; set; }
+        public Dictionary<string, P2WpkhAddress> Addresses { get; set; }
 
         public byte[] PassphraseChallenge { get; set; }
 
@@ -45,9 +45,11 @@ namespace Obsidian.Features.X1Wallet.Storage
         /// <summary>
         /// The hash of the last block that was synced.
         /// </summary>
-        public string SyncedHash { get; set; }
+        [JsonConverter(typeof(UInt256JsonConverter))]
+        public uint256 SyncedHash { get; set; }
 
-        public string CheckpointHash { get; set; }
+        [JsonConverter(typeof(UInt256JsonConverter))]
+        public uint256 CheckpointHash { get; set; }
 
         public int CheckpointHeight { get; set; }
 
@@ -57,24 +59,35 @@ namespace Obsidian.Features.X1Wallet.Storage
 
     public class BlockMetadata
     {
-        public string HashBlock { get; set; }
+        [JsonConverter(typeof(UInt256JsonConverter))]
+        public uint256 HashBlock { get; set; }
 
-        public Dictionary<string, TransactionMetadata> Received { get; set; }
-        public Dictionary<string, UtxoMetadata> Spent { get; internal set; }
+        [JsonConverter(typeof(UInt256JsonConverter))]
+        public Dictionary<uint256, TransactionMetadata> Transactions { get; set; }
+       
     }
 
     public class TransactionMetadata
     {
-        public bool IsCoinBase { get; set; }
-        public bool IsCoinstake { get; set; }
-        public string HashTx { get; set; }
-        public Dictionary<string, UtxoMetadata> ReceivedUtxos { get; set; } 
+        public TxType TxType { get; set; }
+
+        [JsonConverter(typeof(UInt256JsonConverter))]
+        public uint256 HashTx { get; set; }
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public Dictionary<string, UtxoMetadata> Received { get; set; }
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public Dictionary<string, UtxoMetadata> Spent { get; set; }
     }
 
     public class UtxoMetadata
     {
-        public string AddressHashHex { get; set; }
-        public string HashTx { get; set; }
+        public string HashHexAddress { get; set; }
+
+        [JsonConverter(typeof(UInt256JsonConverter))]
+        public uint256 HashTx { get; set; }
+
         public int Index { get; set; }
         public long Satoshis { get; set; }
 
@@ -86,11 +99,51 @@ namespace Obsidian.Features.X1Wallet.Storage
 
     public enum TxType
     {
-        Coinbase,
-        Coinstake,
-        Spend,
-        Receive,
-        SpendReceive
+        /// <summary>
+        /// The value has not been set.
+        /// </summary>
+        NotSet = 0,
+
+        /// <summary>
+        /// Coinbase transaction.
+        /// </summary>
+        Coinbase = 10,
+
+        /// <summary>
+        /// Legacy Coinstake transaction with 3 outputs.
+        /// </summary>
+        CoinstakeLegacy = 20,
+
+        /// <summary>
+        /// Coinstake transaction with 3 outputs.
+        /// </summary>
+        Coinstake = 21,
+
+       /// <summary>
+       /// The transaction spent wallet outputs, no outputs were received. 
+       /// </summary>
+        Spend = 30,
+
+       /// <summary>
+       /// The transaction added outputs to the wallet, but its type was not Coinbase, Legacy Coinstake or coinstake.
+       /// </summary>
+        Receive = 31,
+
+       /// <summary>
+       /// The transaction added outputs to the wallet, but they were not Coinbase, Legacy Coinstake or coinstake.
+       /// In addition to that, the wallet received new unspent outputs. This normally means sending funds to oneself.
+       /// </summary>
+        SpendReceive = 32,
+
+       /// <summary>
+       /// Legacy ColdCoinstake.
+       /// </summary>
+       ColdCoinstakeLegacy = 40,
+
+       /// <summary>
+       /// ColdCoinstake.
+       /// </summary>
+        ColdCoinstake = 41
     }
 
 

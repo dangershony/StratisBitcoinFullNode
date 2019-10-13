@@ -145,7 +145,7 @@ namespace Obsidian.Features.X1Wallet
             if (string.IsNullOrWhiteSpace(walletCreateRequest.Password))
                 throw new InvalidOperationException("A passphrase is required.");
 
-            var x1WalletFile = new X1WalletFile { P2WPKHAddresses = new Dictionary<string, P2WpkhAddress>() };
+            var x1WalletFile = new X1WalletFile { Addresses = new Dictionary<string, P2WpkhAddress>() };
 
             x1WalletFile.WalletGuid = Guid.NewGuid();
             x1WalletFile.WalletName = walletName;
@@ -168,14 +168,14 @@ namespace Obsidian.Features.X1Wallet
                 rng.GetBytes(bytes);
                 var isChange = i % 4 != 0; // 75% change addresses
                 var address = P2WpkhAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, isChange, this.network.Consensus.CoinType, witnessVersion, bech32Prefix, this.network.CoinTicker);
-                x1WalletFile.P2WPKHAddresses.Add(address.HashHex, address);
+                x1WalletFile.Addresses.Add(address.HashHex, address);
             }
-            if (x1WalletFile.P2WPKHAddresses.Count != addressPoolSize)
+            if (x1WalletFile.Addresses.Count != addressPoolSize)
                 throw new Exception("Something is seriously wrong, collision of random numbers detected. Do not use this wallet.");
 
             x1WalletFile.SaveX1WalletFile(filePath);
 
-            X1WalletMetadataFile x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile(WalletManager.ExpectedMetadataVersion, this.network.GenesisHash.ToString());
+            X1WalletMetadataFile x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile(WalletManager.ExpectedMetadataVersion, this.network.GenesisHash);
             var x1WalletMetadataFilename = walletName.GetX1WalletMetaDataFilepath(this.network, this.dataFolder);
             x1WalletMetadataFile.SaveX1WalletMetadataFile(x1WalletMetadataFilename);
 

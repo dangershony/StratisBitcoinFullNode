@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 using System.Threading.Tasks;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Models;
@@ -30,8 +29,8 @@ namespace Obsidian.Features.X1Wallet
             this.broadcasterBehavior = broadcasterBehavior;
             this.network = network;
 
-            nodeStats.RegisterStats(AddComponentStats, StatsType.Component, this.GetType().Name);
-            nodeStats.RegisterStats(AddInlineStats, StatsType.Inline, this.GetType().Name, 800);
+            nodeStats.RegisterStats(AddComponentStats, StatsType.Component, GetType().Name);
+            nodeStats.RegisterStats(AddInlineStats, StatsType.Inline, GetType().Name, 800);
         }
 
         public override Task InitializeAsync()
@@ -59,7 +58,7 @@ namespace Obsidian.Features.X1Wallet
                 if (context != null)
                 {
                     height = context.WalletManager.WalletLastBlockSyncedHeight.ToString();
-                    hash = context.WalletManager.WalletLastBlockSyncedHash ?? "n/a";
+                    hash = context.WalletManager.WalletLastBlockSyncedHash?.ToString() ?? "n/a";
                     walletName = context.WalletManager.WalletName;
                 }
             }

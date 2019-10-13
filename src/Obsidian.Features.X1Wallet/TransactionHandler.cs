@@ -240,7 +240,7 @@ namespace Obsidian.Features.X1Wallet
                         $"The wallet doesn't have any unused addresses left to provide an unused change address for this transaction.",
                         null);
                 }
-                context.TransactionBuilder.SetChange(changeAddress.GetPaymentScript());
+                context.TransactionBuilder.SetChange(changeAddress.GetScriptPubKey());
             }
         }
 

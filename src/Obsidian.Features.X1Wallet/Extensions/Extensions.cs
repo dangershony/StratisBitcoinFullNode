@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using NBitcoin;
 
 namespace Obsidian.Features.X1Wallet.Extensions
 {
@@ -8,6 +9,17 @@ namespace Obsidian.Features.X1Wallet.Extensions
         {
             if (list == null)
                 list = new Dictionary<K, T>(capacity);
+        }
+
+        public static List<OutPoint> GetPrevOuts(Transaction transaction)
+        {
+            var prevOuts = new List<OutPoint>(transaction.Inputs.Count);
+            foreach (TxIn input in transaction.Inputs)
+            {
+                prevOuts.Add(input.PrevOut);
+            }
+
+            return prevOuts;
         }
     }
 }
