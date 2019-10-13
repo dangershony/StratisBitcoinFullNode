@@ -130,7 +130,7 @@ namespace Obsidian.Features.X1Wallet
                     throw new NotSupportedException(
                         "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
-            this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, 
+            this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader,
                 this.dateTimeProvider, this.nodeLifetime, this.asyncProvider, this.posMinting, this.timeSyncBehaviorState, this.signals, this.initialBlockDownloadState, this.blockStore);
         }
 
@@ -145,30 +145,35 @@ namespace Obsidian.Features.X1Wallet
             if (string.IsNullOrWhiteSpace(walletCreateRequest.Password))
                 throw new InvalidOperationException("A passphrase is required.");
 
-            var x1WalletFile = new X1WalletFile { Addresses = new Dictionary<string, P2WpkhAddress>() };
-
-            x1WalletFile.WalletGuid = Guid.NewGuid();
-            x1WalletFile.WalletName = walletName;
+            var now = DateTime.UtcNow;
 
             // Create the passphrase challenge
             var challengePlaintext = new byte[32];
             rng.GetBytes(challengePlaintext);
-            x1WalletFile.PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Password, challengePlaintext);
 
-            x1WalletFile.Comment = $"Created on {DateTime.UtcNow} with filename {filePath}";
-            x1WalletFile.Version = 1;
-
-            const int witnessVersion = 0;
-            var bech32Prefix = this.network.CoinTicker.ToLowerInvariant();  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
+            var x1WalletFile = new X1WalletFile
+            {
+                Addresses = new Dictionary<string, P2WpkhAddress>(),
+                WalletGuid = Guid.NewGuid(),
+                WalletName = walletName,
+                CoinTicker = this.network.CoinTicker,
+                CoinType = this.network.Consensus.CoinType,
+                CreatedUtc = now,
+                ModifiedUtc = now,
+                SyncFromHeight = 0, // TODO
+                Comment = "Your notes here!",
+                Version = 1,
+                PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Password, challengePlaintext)
+            };
 
             const int addressPoolSize = 1000;
+
             for (var i = 0; i < addressPoolSize; i++)
             {
                 var bytes = new byte[32];
                 rng.GetBytes(bytes);
-                var isChange = i % 4 != 0; // 75% change addresses
-                var address = P2WpkhAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, isChange, this.network.Consensus.CoinType, witnessVersion, bech32Prefix, this.network.CoinTicker);
-                x1WalletFile.Addresses.Add(address.HashHex, address);
+                var address = AddressHelper.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase);
+                x1WalletFile.Addresses.Add(address.Address, address);
             }
             if (x1WalletFile.Addresses.Count != addressPoolSize)
                 throw new Exception("Something is seriously wrong, collision of random numbers detected. Do not use this wallet.");

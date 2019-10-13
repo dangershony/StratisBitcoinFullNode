@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Obsidian.Features.X1Wallet;
+using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
@@ -47,7 +48,8 @@ namespace Obsidian.x1d.Temp
 
             var model = await controller.GetUnusedReceiveAddresses();
             var address = model.Addresses[0].FullAddress;
-            var script = new ReserveScript { ReserveFullNodeScript = address.GetScriptPubKey() };
+
+            var script = new ReserveScript { ReserveFullNodeScript = address.ScriptPubKeyFromPublicKey() };
             _ = Task.Run(async () => 
             {
                 while (!fullNode.NodeLifetime.ApplicationStopping.IsCancellationRequested)

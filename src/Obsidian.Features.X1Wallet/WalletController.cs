@@ -217,7 +217,7 @@ namespace Obsidian.Features.X1Wallet
                         Amount = st.Transaction.Amount,
                         Address = st.Address.Address,
                         Index = st.Transaction.Index,
-                        IsChange = st.Address.IsChange,
+                        IsChange = false,
                         CreationTime = st.Transaction.CreationTime,
                         Confirmations = st.Confirmations
                     }).ToList()
@@ -232,12 +232,14 @@ namespace Obsidian.Features.X1Wallet
             var recipients = new List<Recipient>();
             foreach (RecipientModel recipientModel in request.Recipients)
             {
-                var address = P2WpkhAddress.FromString(recipientModel.DestinationAddress, this.network);
-                if (address == null)
+                var scriptPubKey = recipientModel.DestinationAddress.ScriptPubKeyFromBech32();
+
+                if (scriptPubKey == null)
                     throw new NotSupportedException($"Only {nameof(P2WpkhAddress)}es are supported at this time.");
+
                 recipients.Add(new Recipient
                 {
-                    ScriptPubKey = address.GetScriptPubKey(),
+                    ScriptPubKey = scriptPubKey,
                     Amount = recipientModel.Amount
                 });
             }

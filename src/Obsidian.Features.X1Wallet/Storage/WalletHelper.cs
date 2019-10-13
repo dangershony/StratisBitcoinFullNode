@@ -1,20 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using NBitcoin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.Utilities.JsonConverters;
 
 namespace Obsidian.Features.X1Wallet.Storage
 {
     public static class WalletHelper
     {
-        static readonly JsonSerializerSettings JsonSettings = new JsonSerializerSettings()
+        static readonly JsonSerializerSettings JsonSettings;
+
+        static WalletHelper()
         {
-            ContractResolver = new CamelCasePropertyNamesContractResolver()
-        };
+            JsonSettings = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };
+            JsonSettings.Converters.Add(new UInt256JsonConverter());
+            JsonSettings.NullValueHandling = NullValueHandling.Ignore;
+        }
+
 
         public static string GetX1WalletFilepath(this string walletName, Network network, DataFolder dataFolder)
         {
@@ -46,8 +51,11 @@ namespace Obsidian.Features.X1Wallet.Storage
         {
             var file = File.ReadAllText(filePath);
             var x1WalletFile = JsonConvert.DeserializeObject<X1WalletFile>(file, JsonSettings);
-            if (Path.GetFileName(filePath.Replace(X1WalletFile.FileExtension, string.Empty).Replace($".{x1WalletFile.Addresses.Values.First().CoinTicker}", string.Empty)) != x1WalletFile.WalletName)
+            if (Path.GetFileName(filePath.Replace(X1WalletFile.FileExtension, string.Empty).Replace($".{x1WalletFile.CoinTicker}", string.Empty)) != x1WalletFile.WalletName)
                 throw new InvalidOperationException($"The wallet name {x1WalletFile.WalletName} inside of file {filePath} doesn't match the naming convention for {X1WalletFile.FileExtension}-files. Please correct this.");
+
+            // a good place for file format updates is here
+
             return x1WalletFile;
         }
 
