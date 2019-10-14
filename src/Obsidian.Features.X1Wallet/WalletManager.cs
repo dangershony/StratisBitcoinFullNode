@@ -592,6 +592,8 @@ namespace Obsidian.Features.X1Wallet
 
         void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
+            if (chainedHeader.Height == 235 || chainedHeader.Height == 715)
+                ;
 
             foreach (Transaction transaction in block.Transactions)
             {
@@ -606,7 +608,7 @@ namespace Obsidian.Features.X1Wallet
                 SaveMetadata();
         }
 
-        Dictionary<string, UtxoMetadata> ExtractIncomingFunds(Transaction transaction, out long amountReceived, out Dictionary<string, UtxoMetadata> destinations)
+        Dictionary<string, UtxoMetadata> ExtractIncomingFunds(Transaction transaction, bool didSpend, out long amountReceived, out Dictionary<string, UtxoMetadata> destinations)
         {
             Dictionary<string, UtxoMetadata> received = null;
             Dictionary<string, UtxoMetadata> notInWallet = null;
@@ -631,8 +633,11 @@ namespace Obsidian.Features.X1Wallet
                     sum += item.Satoshis;
                 }
                 else
-                {
-                    if (!transaction.IsCoinBase && !transaction.IsCoinStake) // for protocol tx, we are not interested in the other outputs
+                {   // For protocol tx, we are not interested in the other outputs.
+                    // If we spent, the save the destinations, because the wallet wants to show where we sent coins to.
+                    // if we did not spent, we do not save the destinations, because they are the other parties change address
+                    // and we only received coins.
+                    if (!transaction.IsCoinBase && !transaction.IsCoinStake && didSpend)
                     {
                         NotNull(ref notInWallet, transaction.Outputs.Count);
                         var dest = new UtxoMetadata
@@ -644,7 +649,7 @@ namespace Obsidian.Features.X1Wallet
                         };
                         notInWallet.Add(dest.GetKey(), dest);
                     }
-                   
+
                 }
                 index++;
             }
@@ -715,9 +720,9 @@ namespace Obsidian.Features.X1Wallet
 
         long? ProcessTransaction(Transaction transaction, int blockHeight, Block block)
         {
-
-            var received = ExtractIncomingFunds(transaction, out var amountReceived, out var destinations);
             var spent = ExtractOutgoingFunds(transaction, out var amountSpent);
+            var received = ExtractIncomingFunds(transaction, spent != null, out var amountReceived, out var destinations);
+
 
             if (received == null && spent == null)
                 return null;
@@ -773,7 +778,7 @@ namespace Obsidian.Features.X1Wallet
 
             if (didSpend)
                 return TxType.SpendWithoutChange; // we spent with no change to out wallet
-           
+
             // if we are here, we neither spent or received and that should never happen for transactions that affect the wallet.
             throw new ArgumentException(
                 $"{nameof(GetTxType)} cant't determine {nameof(TxType)} for transaction {transaction.GetHash()}.");
@@ -811,58 +816,6 @@ namespace Obsidian.Features.X1Wallet
             this.posMinting.StopStake();
         }
 
-        //public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
-        //{
-        //    List<uint256> idsToRemove = transactionsIds.ToList();
-        //    var result = new HashSet<(uint256, DateTimeOffset)>();
-
-        //    foreach (P2WpkhAddress addr in this.X1WalletFile.P2WPKHAddresses.Values)
-        //    {
-        //        var txs = addr.GetTransactionsByAddress();
-
-        //        for (int i = 0; i < txs.Count; i++)
-        //        {
-        //            TransactionData transaction = txs.ElementAt(i);
-
-        //            // Remove the transaction from the list of transactions affecting an address.
-        //            // Only transactions that haven't been confirmed in a block can be removed.
-        //            if (!transaction.IsConfirmed() && idsToRemove.Contains(transaction.Id))
-        //            {
-        //                result.Add((transaction.Id, transaction.CreationTime));
-        //                txs = txs.Except(new[] { transaction }).ToList();
-        //                i--;
-        //            }
-
-        //            // Remove the spending transaction object containing this transaction id.
-        //            if (transaction.SpendingDetails != null && !transaction.SpendingDetails.IsSpentConfirmed() && idsToRemove.Contains(transaction.SpendingDetails.TransactionId))
-        //            {
-        //                result.Add((transaction.SpendingDetails.TransactionId, transaction.SpendingDetails.CreationTime));
-        //                txs.ElementAt(i).SpendingDetails = null;
-        //            }
-        //        }
-        //    }
-
-
-        //    if (result.Any())
-        //    {
-        //        // Reload the lookup dictionaries.
-        //        this.RefreshDictionary_OutpointTransactionData();
-
-        //        this.SaveMetadata();
-        //    }
-
-        //    return result;
-        //}
-
-        public Dictionary<string, ScriptTemplate> GetValidStakingTemplates()
-        {
-            return new Dictionary<string, ScriptTemplate>();
-        }
-
-        public IEnumerable<BuilderExtension> GetTransactionBuilderExtensionsForStaking()
-        {
-            throw new NotImplementedException();
-        }
 
 
         #endregion
@@ -985,7 +938,7 @@ namespace Obsidian.Features.X1Wallet
 
         internal P2WpkhAddress GetAddress(string address)
         {
-            return this.X1WalletFile.Addresses.Values.Single(x => x.Address == address);
+            return this.X1WalletFile.Addresses[address];
         }
 
 

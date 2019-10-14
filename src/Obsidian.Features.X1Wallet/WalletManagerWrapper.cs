@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
+using Obsidian.Features.X1Wallet.Adapters;
 using Obsidian.Features.X1Wallet.Models;
 using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin.AsyncWork;

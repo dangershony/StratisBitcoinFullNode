@@ -10,8 +10,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
             var hd = new HdAddress
             {
                 Address = address.Address,
-                HdPath = HdOperations.CreateHdPath(555, 0, false, address.GetHashCode()),
-                Index = address.GetHashCode(),
+                Bech32Address = address.Address
             };
             return hd;
         }

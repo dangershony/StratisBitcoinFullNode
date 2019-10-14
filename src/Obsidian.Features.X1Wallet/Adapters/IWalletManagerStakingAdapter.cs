@@ -1,15 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
-using Obsidian.Features.X1Wallet.Adapters;
 using Obsidian.Features.X1Wallet.Models;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 
-namespace Obsidian.Features.X1Wallet
+namespace Obsidian.Features.X1Wallet.Adapters
 {
     public class IWalletManagerStakingAdapter : IWalletManager
     {
@@ -41,7 +39,7 @@ namespace Obsidian.Features.X1Wallet
             {
                 using (var context = this.walletManagerWrapper.GetWalletContext(this.walletName))
                 {
-                    return new uint256(context.WalletManager.WalletLastBlockSyncedHash);
+                    return new uint256(context.WalletManager.WalletLastBlockSyncedHash); // a copy?
                 }
             }
             set { throw new NotImplementedException(); }
