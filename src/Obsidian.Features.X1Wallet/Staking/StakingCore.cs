@@ -17,16 +17,11 @@ using Stratis.Bitcoin.Features.Consensus.Interfaces;
 using Stratis.Bitcoin.Features.Consensus.Rules.CommonRules;
 using Stratis.Bitcoin.Features.MemoryPool;
 using Stratis.Bitcoin.Features.MemoryPool.Interfaces;
-using Stratis.Bitcoin.Features.Miner;
-using Stratis.Bitcoin.Features.Miner.Interfaces;
-using Stratis.Bitcoin.Features.Miner.Staking;
-using Stratis.Bitcoin.Features.Wallet;
-using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Mining;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.Features.X1Wallet.Adapters
+namespace Obsidian.Features.X1Wallet.Staking
 {
     /// <summary>
     /// <see cref="PosMinting"/> is used in order to generate new blocks. It involves a sort of lottery, similar to proof-of-work,
@@ -65,7 +60,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
     /// and the new value depends on the kernel, it is hard to predict its value in the future.
     /// </para>
     /// </remarks>
-    public class Staking : IPosMinting
+    public class StakingCore
     {
 
         /// <summary>
@@ -129,9 +124,6 @@ namespace Obsidian.Features.X1Wallet.Adapters
         /// <summary>Factory for creating background async loop tasks.</summary>
         private readonly IAsyncProvider asyncProvider;
 
-        /// <summary>A manager providing operations on wallets.</summary>
-        private readonly IWalletManager walletManager;
-
         /// <summary>Factory for creating loggers.</summary>
         private readonly ILoggerFactory loggerFactory;
 
@@ -181,7 +173,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
         /// <summary>Information about node's staking for RPC "getstakinginfo" command.</summary>
         /// <remarks>This object does not need a synchronized access because there is no execution logic
         /// that depends on the reported information.</remarks>
-        private Stratis.Bitcoin.Features.Miner.Models.GetStakingInfoModel rpcGetStakingInfoModel;
+        private GetStakingInfoModel rpcGetStakingInfoModel;
 
         /// <summary>Estimation of the total staking weight of all nodes on the network.</summary>
         private long networkWeight;
@@ -217,7 +209,10 @@ namespace Obsidian.Features.X1Wallet.Adapters
         /// <summary>State of time synchronization feature that stores collected data samples.</summary>
         private readonly ITimeSyncBehaviorState timeSyncBehaviorState;
 
-        public Staking(
+        WalletManagerFactory walletManagerFactory;
+        private string walletName;
+
+        public StakingCore(
             IBlockProvider blockProvider,
             IConsensusManager consensusManager,
             ChainIndexer chainIndexer,
@@ -230,11 +225,9 @@ namespace Obsidian.Features.X1Wallet.Adapters
             IStakeValidator stakeValidator,
             MempoolSchedulerLock mempoolLock,
             ITxMempool mempool,
-            IWalletManager walletManager,
             IAsyncProvider asyncProvider,
             ITimeSyncBehaviorState timeSyncBehaviorState,
-            ILoggerFactory loggerFactory,
-            MinerSettings minerSettings)
+            ILoggerFactory loggerFactory)
         {
             this.blockProvider = blockProvider;
             this.consensusManager = consensusManager;
@@ -249,7 +242,6 @@ namespace Obsidian.Features.X1Wallet.Adapters
             this.mempoolLock = mempoolLock;
             this.mempool = mempool;
             this.asyncProvider = asyncProvider;
-            this.walletManager = walletManager;
             this.timeSyncBehaviorState = timeSyncBehaviorState;
             this.loggerFactory = loggerFactory;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
@@ -261,18 +253,21 @@ namespace Obsidian.Features.X1Wallet.Adapters
             this.targetReserveBalance = 0; // TODO:settings.targetReserveBalance
             this.currentState = (int)CurrentState.Idle;
 
-            this.rpcGetStakingInfoModel = new Stratis.Bitcoin.Features.Miner.Models.GetStakingInfoModel();
+            this.rpcGetStakingInfoModel = new GetStakingInfoModel();
 
-            this.CoinstakeSplitEnabled = minerSettings.EnableCoinStakeSplitting;
-            this.MinimumStakingCoinValue = minerSettings.MinimumStakingCoinValue;
-            this.MinimumSplitCoinValue = minerSettings.MinimumSplitCoinValue;
-            this.ValidStakingTemplates = walletManager.GetValidStakingTemplates();
+            this.MinimumStakingCoinValue = Money.COIN;
+            this.ValidStakingTemplates =  new Dictionary<string, ScriptTemplate> {
+               // { "P2PK", PayToPubkeyTemplate.Instance },
+               // { "P2PKH", PayToPubkeyHashTemplate.Instance },
+                { "P2WPKH", PayToWitPubKeyHashTemplate.Instance }
+            };
+
         }
 
+
         /// <inheritdoc/>
-        public void Stake(WalletSecret walletSecret)
+        public void Stake()
         {
-            Guard.NotNull(walletSecret, nameof(walletSecret));
 
             if (Interlocked.CompareExchange(ref this.currentState, (int)CurrentState.StakingRequested, (int)CurrentState.Idle) != (int)CurrentState.Idle)
             {
@@ -281,26 +276,18 @@ namespace Obsidian.Features.X1Wallet.Adapters
             }
 
             this.rpcGetStakingInfoModel.Enabled = true;
-            this.stakeCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(new[] { this.nodeLifetime.ApplicationStopping });
+            this.stakeCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.nodeLifetime.ApplicationStopping);
 
             this.stakingLoop = this.asyncProvider.CreateAndRunAsyncLoop("PosMining.Stake", async token =>
             {
                 try
                 {
-                    await this.GenerateBlocksAsync(walletSecret, token)
+                    await this.GenerateBlocksAsync(token)
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
                     // Application stopping, nothing to do as the loop will be stopped.
-                }
-                catch (MinerException me)
-                {
-                    // Miner exceptions should be ignored. It means that the miner
-                    // possibly mined a block that was not accepted by peers or is even invalid,
-                    // but it should not halted the staking operation.
-                    this.logger.LogDebug("Miner exception occurred in miner loop: {0}", me.ToString());
-                    this.rpcGetStakingInfoModel.Errors = me.Message;
                 }
                 catch (ConsensusErrorException cee)
                 {
@@ -352,10 +339,8 @@ namespace Obsidian.Features.X1Wallet.Adapters
             Interlocked.CompareExchange(ref this.currentState, (int)CurrentState.Idle, (int)CurrentState.StopStakingRequested);
         }
 
-        /// <inheritdoc/>
-        public async Task GenerateBlocksAsync(WalletSecret walletSecret, CancellationToken cancellationToken)
+        async Task GenerateBlocksAsync(CancellationToken cancellationToken)
         {
-            Guard.NotNull(walletSecret, nameof(walletSecret));
 
             BlockTemplate blockTemplate = null;
 
@@ -370,14 +355,19 @@ namespace Obsidian.Features.X1Wallet.Adapters
                     continue;
                 }
 
-                // Don't stake if the wallet is not up-to-date with the current chain.
-                if (this.consensusManager.Tip.HashBlock != this.walletManager.WalletTipHash)
+                using (var context = GetWalletContext())
                 {
-                    this.logger.LogDebug("Waiting for wallet to catch up before mining can be started.");
+                    // Don't stake if the wallet is not up-to-date with the current chain.
+                    if (this.consensusManager.Tip.HashBlock != context.WalletManager.WalletLastBlockSyncedHash)
+                    {
+                        this.logger.LogInformation("Waiting for wallet to catch up before staking can be started.");
 
-                    await Task.Delay(TimeSpan.FromMilliseconds(this.minerSleep), cancellationToken).ConfigureAwait(false);
-                    continue;
+                        await Task.Delay(TimeSpan.FromMilliseconds(this.minerSleep), cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
                 }
+
+               
 
                 // Prevent staking if in initial block download.
                 if (this.initialBlockDownloadState.IsInitialBlockDownload())
@@ -408,7 +398,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
                     return;
                 }
 
-                List<UtxoStakeDescription> utxoStakeDescriptions = this.GetUtxoStakeDescriptions(walletSecret, cancellationToken);
+                List<UtxoDescription> utxoStakeDescriptions = this.GetUtxoStakeDescriptions();
 
                 blockTemplate = blockTemplate ?? this.blockProvider.BuildPosBlock(chainTip, new Script());
                 var posBlock = (PosBlock)blockTemplate.Block;
@@ -436,54 +426,47 @@ namespace Obsidian.Features.X1Wallet.Adapters
             }
         }
 
-        internal List<UtxoStakeDescription> GetUtxoStakeDescriptions(WalletSecret walletSecret, CancellationToken cancellationToken)
+        List<UtxoDescription> GetUtxoStakeDescriptions()
         {
-            var utxoStakeDescriptions = new List<UtxoStakeDescription>();
-
-            List<UnspentOutputReference> stakableUtxos = this.walletManager
-                .GetSpendableTransactionsInWalletForStaking(walletSecret.WalletName, 1)
-                .Where(utxo => utxo.Transaction.Amount >= this.MinimumStakingCoinValue) // exclude dust from stake process
-                .ToList();
-
-            FetchCoinsResponse fetchedCoinSet = this.coinView.FetchCoins(stakableUtxos.Select(t => t.Transaction.Id).Distinct().ToArray(), cancellationToken);
-            Dictionary<uint256, UnspentOutputs> utxoByTransaction = fetchedCoinSet.UnspentOutputs.Where(utxo => utxo != null).ToDictionary(utxo => utxo.TransactionId, utxo => utxo);
-            fetchedCoinSet = null; // allow GC to collect as soon as possible.
-
-            for (int i = 0; i < stakableUtxos.Count; i++)
+            var utxoStakeDescriptions = new List<UtxoDescription>();
+            StakingCoin[] coins;
+            using (var context = GetWalletContext())
             {
-                UnspentOutputReference stakableUtxo = stakableUtxos[i];
+               coins = context.WalletManager.GetBudget(out var _);
+            }
 
-                if (cancellationToken.IsCancellationRequested)
+
+            var distinctTxIds = new HashSet<uint256>();
+            foreach (var c in coins)
+                distinctTxIds.Add(c.Outpoint.Hash);
+
+            
+            FetchCoinsResponse fetchedCoinSet = this.coinView.FetchCoins(distinctTxIds.ToArray());
+            Dictionary<uint256, UnspentOutputs> utxoByTransaction = fetchedCoinSet.UnspentOutputs.Where(utxo => utxo != null).ToDictionary(utxo => utxo.TransactionId, utxo => utxo);
+
+            foreach (var c in coins)
+            {
+                var item = new Obsidian.Features.X1Wallet.Staking.UtxoDescription
                 {
-                    this.logger.LogTrace("(-)[CANCELLATION]");
-                    throw new OperationCanceledException(cancellationToken);
+                    TxOut = c.TxOut,
+                    OutPoint = c.Outpoint,
+                    Bech32Address = c.Address,
+                    HashBlock = c.BlockHash,
+                    UtxoSet = utxoByTransaction.TryGet(c.Outpoint.Hash)
+                };
+
+                if (item.UtxoSet == null)
+                {
+                    this.logger.LogWarning($"Could not get UtxoSet for {c.Outpoint.Hash}");
                 }
 
-                UnspentOutputs coinSet = utxoByTransaction.TryGet(stakableUtxo.Transaction.Id);
-                if ((coinSet == null) || (stakableUtxo.Transaction.Index >= coinSet.Outputs.Length))
+                if (item.TxOut.Value < this.MinimumStakingCoinValue)
                     continue;
 
-                TxOut utxo = coinSet.Outputs[stakableUtxo.Transaction.Index];
-                if ((utxo == null) || (utxo.Value < this.MinimumStakingCoinValue))
-                    continue;
-
-                uint256 hashBlock = this.chainIndexer.GetHeader((int)coinSet.Height)?.HashBlock;
-                if (hashBlock == null)
-                    continue;
-
-                var utxoStakeDescription = new UtxoStakeDescription
-                {
-                    TxOut = utxo,
-                    OutPoint = new OutPoint(coinSet.TransactionId, stakableUtxo.Transaction.Index),
-                    Address = stakableUtxo.Address,
-                    HashBlock = hashBlock,
-                    UtxoSet = coinSet,
-                    Secret = walletSecret // Temporary.
-                };
-                utxoStakeDescriptions.Add(utxoStakeDescription);
-
-                this.logger.LogDebug("UTXO '{0}' with value {1} might be available for staking.", utxoStakeDescription.OutPoint, utxo.Value);
+                utxoStakeDescriptions.Add(item);
             }
+
+           
 
             this.logger.LogDebug("Wallet total staking balance is {0}.", new Money(utxoStakeDescriptions.Sum(d => d.TxOut.Value)));
             return utxoStakeDescriptions;
@@ -535,7 +518,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
         /// <param name="fees">Transaction fees from the transactions included in the block if we mine it.</param>
         /// <param name="coinstakeTimestamp">Maximal timestamp of the coinstake transaction. The actual timestamp can be lower, but not higher.</param>
         /// <returns><c>true</c> if the function succeeds, <c>false</c> otherwise.</returns>
-        private async Task<bool> StakeAndSignBlockAsync(List<UtxoStakeDescription> utxoStakeDescriptions, BlockTemplate blockTemplate, ChainedHeader chainTip, long fees, uint coinstakeTimestamp)
+        private async Task<bool> StakeAndSignBlockAsync(List<UtxoDescription> utxoStakeDescriptions, BlockTemplate blockTemplate, ChainedHeader chainTip, long fees, uint coinstakeTimestamp)
         {
             var block = blockTemplate.Block as PosBlock;
 
@@ -553,7 +536,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
                 return true;
             }
 
-            var coinstakeContext = new CoinstakeContext { CoinstakeTx = this.network.CreateTransaction() };
+            var coinstakeContext = new StakingContext { CoinstakeTx = this.network.CreateTransaction() };
             coinstakeContext.CoinstakeTx.Time = coinstakeTimestamp;
 
             // Search to current coinstake time.
@@ -592,7 +575,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
         }
 
         /// <inheritdoc/>
-        public async Task<bool> CreateCoinstakeAsync(List<UtxoStakeDescription> utxoStakeDescriptions, BlockTemplate blockTemplate, ChainedHeader chainTip, long searchInterval, long fees, CoinstakeContext coinstakeContext)
+        public async Task<bool> CreateCoinstakeAsync(List<UtxoDescription> utxoStakeDescriptions, BlockTemplate blockTemplate, ChainedHeader chainTip, long searchInterval, long fees, StakingContext coinstakeContext)
         {
             coinstakeContext.CoinstakeTx.Inputs.Clear();
             coinstakeContext.CoinstakeTx.Outputs.Clear();
@@ -614,7 +597,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
             }
 
             // Select UTXOs with suitable depth.
-            List<UtxoStakeDescription> stakingUtxoDescriptions = await this.GetUtxoStakeDescriptionsSuitableForStakingAsync(utxoStakeDescriptions, chainTip, coinstakeContext.CoinstakeTx.Time, balance - this.targetReserveBalance).ConfigureAwait(false);
+            List<UtxoDescription> stakingUtxoDescriptions = await this.GetUtxoStakeDescriptionsSuitableForStakingAsync(utxoStakeDescriptions, chainTip, coinstakeContext.CoinstakeTx.Time, balance - this.targetReserveBalance).ConfigureAwait(false);
             if (!stakingUtxoDescriptions.Any())
             {
                 this.rpcGetStakingInfoModel.PauseStaking();
@@ -647,16 +630,16 @@ namespace Obsidian.Features.X1Wallet.Adapters
             int coinIndex = 0;
             int workerCount = (stakingUtxoDescriptions.Count + UtxoStakeDescriptionsPerCoinstakeWorker - 1) / UtxoStakeDescriptionsPerCoinstakeWorker;
             var workers = new Task[workerCount];
-            var workerContexts = new CoinstakeWorkerContext[workerCount];
+            var workerContexts = new WorkerContext[workerCount];
 
-            var workersResult = new CoinstakeWorkerResult();
+            var workersResult = new WorkerResult();
             for (int workerIndex = 0; workerIndex < workerCount; workerIndex++)
             {
-                var cwc = new CoinstakeWorkerContext
+                var cwc = new WorkerContext
                 {
                     Index = workerIndex,
                     Logger = this.loggerFactory.CreateLogger(this.GetType().FullName, $"[Worker #{workerIndex}] "),
-                    utxoStakeDescriptions = new List<UtxoStakeDescription>(),
+                    utxoStakeDescriptions = new List<UtxoDescription>(),
                     CoinstakeContext = coinstakeContext,
                     Result = workersResult
                 };
@@ -672,7 +655,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
                 this.CoinstakeWorker(cwc, chainTip, blockTemplate.Block, minimalAllowedTime, searchInterval);
             }));
 
-            if (workersResult.KernelFoundIndex == CoinstakeWorkerResult.KernelNotFound)
+            if (workersResult.KernelFoundIndex == WorkerResult.KernelNotFound)
             {
                 this.logger.LogTrace("(-)[KERNEL_NOT_FOUND]:false");
                 return false;
@@ -707,13 +690,12 @@ namespace Obsidian.Features.X1Wallet.Adapters
             }
 
             // Input to coinstake transaction.
-            UtxoStakeDescription coinstakeInput = workersResult.KernelCoin;
+            UtxoDescription coinstakeInput = workersResult.KernelCoin;
 
             // Total amount of input values in coinstake transaction.
             long coinstakeOutputValue = coinstakeInput.TxOut.Value + reward;
 
-            int eventuallyStakableUtxosCount = utxoStakeDescriptions.Count;
-            Transaction coinstakeTx = this.PrepareCoinStakeTransactions(chainTip.Height, coinstakeContext, coinstakeOutputValue, eventuallyStakableUtxosCount, ourWeight);
+            Transaction coinstakeTx = this.PrepareCoinStakeTransactions(coinstakeContext, coinstakeOutputValue);
 
             // Sign.
             if (!this.SignTransactionInput(coinstakeInput, coinstakeTx))
@@ -735,33 +717,10 @@ namespace Obsidian.Features.X1Wallet.Adapters
             return true;
         }
 
-        internal Transaction PrepareCoinStakeTransactions(int currentChainHeight, CoinstakeContext coinstakeContext, long coinstakeOutputValue, int utxosCount, long amountStaked)
+        Transaction PrepareCoinStakeTransactions(StakingContext coinstakeContext, long coinstakeOutputValue)
         {
-            // Split stake into SplitFactor utxos if above threshold.
-            bool shouldSplitStake = this.ShouldSplitStake(utxosCount, amountStaked, coinstakeOutputValue, currentChainHeight);
-
             int lastOutputIndex = coinstakeContext.CoinstakeTx.Outputs.Count - 1;
-
-            if (!shouldSplitStake)
-            {
-                coinstakeContext.CoinstakeTx.Outputs[lastOutputIndex].Value = coinstakeOutputValue;
-                this.logger.LogDebug("Coinstake output value is {0}.", coinstakeContext.CoinstakeTx.Outputs[lastOutputIndex].Value);
-                this.logger.LogTrace("(-)[NO_SPLIT]:{0}", coinstakeContext.CoinstakeTx);
-                return coinstakeContext.CoinstakeTx;
-            }
-
-            long splitValue = coinstakeOutputValue / SplitFactor;
-            long remainder = coinstakeOutputValue - (SplitFactor - 1) * splitValue;
-            coinstakeContext.CoinstakeTx.Outputs[lastOutputIndex].Value = remainder;
-
-            for (int i = 0; i < SplitFactor - 1; i++)
-            {
-                var split = new TxOut(splitValue, coinstakeContext.CoinstakeTx.Outputs[lastOutputIndex].ScriptPubKey);
-                coinstakeContext.CoinstakeTx.Outputs.Add(split);
-            }
-
-            this.logger.LogTrace("Coinstake output value has been split into {0} outputs of {1} and a remainder of {2}.", SplitFactor - 1, splitValue, remainder);
-
+            coinstakeContext.CoinstakeTx.Outputs[lastOutputIndex].Value = coinstakeOutputValue;
             return coinstakeContext.CoinstakeTx;
         }
 
@@ -777,18 +736,18 @@ namespace Obsidian.Features.X1Wallet.Adapters
         /// <param name="block">Template of the block that we are trying to mine.</param>
         /// <param name="minimalAllowedTime">Minimal valid timestamp for new coinstake transaction.</param>
         /// <param name="searchInterval">Length of an unexplored block time space in seconds. It only makes sense to look for a solution within this interval.</param>
-        private void CoinstakeWorker(CoinstakeWorkerContext context, ChainedHeader chainTip, Block block, long minimalAllowedTime, long searchInterval)
+        private void CoinstakeWorker(WorkerContext context, ChainedHeader chainTip, Block block, long minimalAllowedTime, long searchInterval)
         {
             context.Logger.LogDebug("Going to process {0} UTXOs.", context.utxoStakeDescriptions.Count);
 
             // Sort staking UTXOs by amount, so that highest amounts are tried first
             // because they have greater chance to succeed and thus saving some work.
-            List<UtxoStakeDescription> orderedUtxoStakeDescriptions = context.utxoStakeDescriptions.OrderByDescending(o => o.TxOut.Value).ToList();
+            List<UtxoDescription> orderedUtxoStakeDescriptions = context.utxoStakeDescriptions.OrderByDescending(o => o.TxOut.Value).ToList();
 
             bool stopWork = false;
-            foreach (UtxoStakeDescription utxoStakeInfo in orderedUtxoStakeDescriptions)
+            foreach (UtxoDescription utxoStakeInfo in orderedUtxoStakeDescriptions)
             {
-                context.Logger.LogDebug("Trying UTXO from address '{0}', output amount {1}.", utxoStakeInfo.Address.Address, utxoStakeInfo.TxOut.Value);
+                context.Logger.LogDebug("Trying UTXO from address '{0}', output amount {1}.", utxoStakeInfo.Bech32Address, utxoStakeInfo.TxOut.Value);
 
                 // Script of the first coinstake input.
                 Script scriptPubKeyKernel = utxoStakeInfo.TxOut.ScriptPubKey;
@@ -800,7 +759,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
 
                 for (uint n = 0; n < searchInterval; n++)
                 {
-                    if (context.Result.KernelFoundIndex != CoinstakeWorkerResult.KernelNotFound)
+                    if (context.Result.KernelFoundIndex != WorkerResult.KernelNotFound)
                     {
                         context.Logger.LogDebug("Different worker #{0} already found kernel, stopping work.", context.Result.KernelFoundIndex);
                         stopWork = true;
@@ -850,8 +809,13 @@ namespace Obsidian.Features.X1Wallet.Adapters
                         {
                             context.Logger.LogDebug("Kernel found with solution hash '{0}'.", contextInformation.HashProofOfStake);
 
-                            Stratis.Bitcoin.Features.Wallet.Wallet wallet = this.walletManager.GetWalletByName(utxoStakeInfo.Secret.WalletName);
-                            context.CoinstakeContext.Key = wallet.GetExtendedPrivateKeyForAddress(utxoStakeInfo.Secret.WalletPassword, utxoStakeInfo.Address).PrivateKey;
+                            using (var walletContext = GetWalletContext())
+                            {
+                                context.CoinstakeContext.Key =  walletContext.WalletManager.StakingManager.GetPrivateKey(utxoStakeInfo.Bech32Address);
+                            }
+                           
+
+
                             utxoStakeInfo.Key = context.CoinstakeContext.Key;
 
                             context.CoinstakeContext.CoinstakeTx.Time = txTime;
@@ -877,7 +841,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
 
                             context.CoinstakeContext.CoinstakeTx.Outputs.Add(new TxOut(0, scriptPubKeyOut));
                             context.Result.KernelCoin = utxoStakeInfo;
-                            
+
                             context.Logger.LogDebug("Kernel accepted, coinstake input is '{0}', stopping work.", prevoutStake);
                         }
                         else context.Logger.LogDebug("Kernel found, but worker #{0} announced its kernel earlier, stopping work.", context.Result.KernelFoundIndex);
@@ -904,7 +868,7 @@ namespace Obsidian.Features.X1Wallet.Adapters
         /// <param name="input">Transaction input.</param>
         /// <param name="transaction">Transaction being built.</param>
         /// <returns><c>true</c> if the function succeeds, <c>false</c> otherwise.</returns>
-        private bool SignTransactionInput(UtxoStakeDescription input, Transaction transaction)
+        private bool SignTransactionInput(UtxoDescription input, Transaction transaction)
         {
             bool res = false;
             try
@@ -913,8 +877,12 @@ namespace Obsidian.Features.X1Wallet.Adapters
                     .AddKeys(input.Key)
                     .AddCoins(new Coin(input.OutPoint, input.TxOut));
 
-                foreach (BuilderExtension extension in this.walletManager.GetTransactionBuilderExtensionsForStaking())
-                    transactionBuilder.Extensions.Add(extension);
+                using (var context = GetWalletContext())
+                {
+                    foreach (BuilderExtension extension in context.WalletManager.StakingManager.GetTransactionBuilderExtensionsForStaking())
+                        transactionBuilder.Extensions.Add(extension);
+                }
+              
 
                 transactionBuilder.SignTransactionInPlace(transaction);
 
@@ -929,12 +897,12 @@ namespace Obsidian.Features.X1Wallet.Adapters
         }
 
         /// <inheritdoc/>
-        public async Task<(Money balance, Money immature)> GetMatureBalanceAsync(List<UtxoStakeDescription> utxoStakeDescriptions)
+        public async Task<(Money balance, Money immature)> GetMatureBalanceAsync(List<UtxoDescription> utxoStakeDescriptions)
         {
             var money = new Money(0);
             var immature = new Money(0);
 
-            foreach (UtxoStakeDescription utxoStakeDescription in utxoStakeDescriptions)
+            foreach (UtxoDescription utxoStakeDescription in utxoStakeDescriptions)
             {
                 // Must wait until coinbase is safely deep enough in the chain before valuing it.
                 if ((utxoStakeDescription.UtxoSet.IsCoinbase || utxoStakeDescription.UtxoSet.IsCoinstake) && (await this.GetBlocksCountToMaturityAsync(utxoStakeDescription).ConfigureAwait(false) > 0))
@@ -961,13 +929,13 @@ namespace Obsidian.Features.X1Wallet.Adapters
         /// <param name="spendTime">Timestamp of the coinstake transaction.</param>
         /// <param name="targetValue">Target money amount of UTXOs that can be used for staking.</param>
         /// <returns>List of UTXO descriptions that meet the requirements for staking.</returns>
-        internal async Task<List<UtxoStakeDescription>> GetUtxoStakeDescriptionsSuitableForStakingAsync(List<UtxoStakeDescription> utxoStakeDescriptions, ChainedHeader chainTip, uint spendTime, long targetValue)
+        internal async Task<List<UtxoDescription>> GetUtxoStakeDescriptionsSuitableForStakingAsync(List<UtxoDescription> utxoStakeDescriptions, ChainedHeader chainTip, uint spendTime, long targetValue)
         {
-            var res = new List<UtxoStakeDescription>();
+            var res = new List<UtxoDescription>();
 
             long currentValue = 0;
             long requiredDepth = ((PosConsensusOptions)this.network.Consensus.Options).GetStakeMinConfirmations(chainTip.Height + 1, this.network) - 1;
-            foreach (UtxoStakeDescription utxoStakeDescription in utxoStakeDescriptions.OrderByDescending(x => x.TxOut.Value))
+            foreach (UtxoDescription utxoStakeDescription in utxoStakeDescriptions.OrderByDescending(x => x.TxOut.Value))
             {
                 int depth = await this.GetDepthInMainChainAsync(utxoStakeDescription).ConfigureAwait(false);
                 this.logger.LogDebug("Checking if UTXO '{0}' value {1} can be added, its depth is {2}.", utxoStakeDescription.OutPoint, utxoStakeDescription.TxOut.Value, depth);
@@ -1012,31 +980,31 @@ namespace Obsidian.Features.X1Wallet.Adapters
         /// <summary>
         /// Calculates blocks count till UTXO is considered mature for staking.
         /// </summary>
-        /// <param name="utxoStakeDescription">The UTXO stake description.</param>
+        /// <param name="utxoDescription">The UTXO stake description.</param>
         /// <returns>How many blocks are left till UTXO is considered mature for staking.</returns>
-        private async Task<int> GetBlocksCountToMaturityAsync(UtxoStakeDescription utxoStakeDescription)
+        private async Task<int> GetBlocksCountToMaturityAsync(UtxoDescription utxoDescription)
         {
-            if (!(utxoStakeDescription.UtxoSet.IsCoinbase || utxoStakeDescription.UtxoSet.IsCoinstake))
+            if (!(utxoDescription.UtxoSet.IsCoinbase || utxoDescription.UtxoSet.IsCoinstake))
                 return 0;
 
-            return Math.Max(0, (int)this.network.Consensus.CoinbaseMaturity + 1 - await this.GetDepthInMainChainAsync(utxoStakeDescription).ConfigureAwait(false));
+            return Math.Max(0, (int)this.network.Consensus.CoinbaseMaturity + 1 - await this.GetDepthInMainChainAsync(utxoDescription).ConfigureAwait(false));
         }
 
         /// <summary>
         /// Gets depth of transaction in blockchain.
         /// </summary>
-        /// <param name="utxoStakeDescription">The UTXO stake description.</param>
+        /// <param name="utxoDescription">The UTXO stake description.</param>
         /// <returns>
         /// <c>-1</c> if not in blockchain, and not in memory pool (conflicted transaction).
         /// <c>0</c> if in memory pool, waiting to be included in a block.
         /// Value greater than <c>1</c> if included in a block. Shows how many blocks deep in the main chain.
         /// </returns>
-        private async Task<int> GetDepthInMainChainAsync(UtxoStakeDescription utxoStakeDescription)
+        private async Task<int> GetDepthInMainChainAsync(UtxoDescription utxoDescription)
         {
-            ChainedHeader chainedBlock = this.chainIndexer.GetHeader(utxoStakeDescription.HashBlock);
+            ChainedHeader chainedBlock = this.chainIndexer.GetHeader(utxoDescription.HashBlock);
 
             if (chainedBlock == null)
-                return await this.mempoolLock.ReadAsync(() => this.mempool.Exists(utxoStakeDescription.UtxoSet.TransactionId) ? 0 : -1).ConfigureAwait(false);
+                return await this.mempoolLock.ReadAsync(() => this.mempool.Exists(utxoDescription.UtxoSet.TransactionId) ? 0 : -1).ConfigureAwait(false);
 
             return this.chainIndexer.Tip.Height - chainedBlock.Height + 1;
         }
@@ -1122,48 +1090,22 @@ namespace Obsidian.Features.X1Wallet.Adapters
         }
 
         /// <inheritdoc/>
-        public Stratis.Bitcoin.Features.Miner.Models.GetStakingInfoModel GetGetStakingInfoModel()
+        public GetStakingInfoModel GetGetStakingInfoModel()
         {
-            return (Stratis.Bitcoin.Features.Miner.Models.GetStakingInfoModel)this.rpcGetStakingInfoModel.Clone();
+            return (GetStakingInfoModel)this.rpcGetStakingInfoModel.Clone();
         }
 
-        /// <summary>
-        /// Checks whether the coinstake should be split or not.
-        /// </summary>
-        /// <param name="stakedUtxosCount">Number of UTXOs that the wallet could stake, if coin base maturity and stake minimum confirmations were not taken into account.</param>
-        /// <param name="amountStaked">Total amount currently at stake.</param>
-        /// <param name="coinValue">Value of the coin we are considering to split.</param>
-        /// <param name="chainHeight">Current height of the chain.</param>
-        /// <returns><c>true</c> if the coinstake should be split, <c>false</c> otherwise.</returns>
-        /// <remarks>
-        /// We do not split a coin if the value of new coins after the split would be less than <see cref="MinimumSplitCoinValue" />. Because we split the coin to multiple outputs defined by split factor, we only consider coins with value at least <see cref="MinimumSplitCoinValue" /> * <see cref="SplitFactor" />.
-        /// <para>
-        /// If the above-mentioned criteria is satisfied, then we split the coin if its value is greater than an expected average value of coins that we would have if we have perfect distribution of the value among all our coins while having a specific number of coins that we aim for. The optimal number of coins we are looking for is calculated based on consensus settings of coin maturity and minimum required coin age for staking.
-        /// </para>
-        /// </remarks>
-        /// <seealso cref="CoinstakeSplitLimitMultiplier" />
-        /// <seealso cref="SplitFactor" />
-        internal bool ShouldSplitStake(int stakedUtxosCount, long amountStaked, long coinValue, int chainHeight)
+       
+
+        WalletContext GetWalletContext()
         {
-            if (!this.CoinstakeSplitEnabled)
-            {
-                this.logger.LogTrace("(-)[SPLITTING_DISABLED]:{0}", false);
-                return false;
-            }
+            return this.walletManagerFactory.GetWalletContext(this.walletName);
+        }
 
-            long coinAgeLimit = ((PosConsensusOptions)this.network.Consensus.Options).GetStakeMinConfirmations(chainHeight + 1, this.network);
-            long coinMaturityLimit = this.network.Consensus.CoinbaseMaturity;
-            long requiredCoinAgeForStaking = Math.Max(coinMaturityLimit, coinAgeLimit);
-            this.logger.LogDebug("Required coin age for staking is {0}.", requiredCoinAgeForStaking);
-
-            long targetCoinDistributionSize = (requiredCoinAgeForStaking + 1) * CoinstakeSplitLimitMultiplier;
-
-            bool coinAboveMinValue = coinValue > SplitFactor * (long)this.MinimumSplitCoinValue;
-            bool coinAboveTargetAverage = coinValue > (amountStaked / targetCoinDistributionSize) + Money.COIN;
-
-            bool shouldSplitCoin = coinAboveMinValue && coinAboveTargetAverage;
-
-            return shouldSplitCoin;
+        public void SetWalletManagerWrapper(WalletManagerFactory factory, string name)
+        {
+            this.walletManagerFactory = factory;
+            this.walletName = name;
         }
     }
 }

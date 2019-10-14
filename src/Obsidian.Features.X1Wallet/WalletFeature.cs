@@ -13,18 +13,18 @@ namespace Obsidian.Features.X1Wallet
     /// <inheritdoc />
     public class WalletFeature : BaseWalletFeature
     {
-        readonly WalletManagerWrapper walletManagerWrapper;
+        readonly WalletManagerFactory walletManagerFactory;
         readonly IConnectionManager connectionManager;
         readonly BroadcasterBehavior broadcasterBehavior;
         readonly Network network;
 
         public WalletFeature(
-            WalletManagerWrapper walletManagerWrapper,
+            WalletManagerFactory walletManagerFactory,
             IConnectionManager connectionManager,
             BroadcasterBehavior broadcasterBehavior,
             INodeStats nodeStats, Network network)
         {
-            this.walletManagerWrapper = walletManagerWrapper;
+            this.walletManagerFactory = walletManagerFactory;
             this.connectionManager = connectionManager;
             this.broadcasterBehavior = broadcasterBehavior;
             this.network = network;
@@ -44,7 +44,7 @@ namespace Obsidian.Features.X1Wallet
 
         public override void Dispose()
         {
-            this.walletManagerWrapper.Dispose();
+            this.walletManagerFactory.Dispose();
         }
 
         void AddInlineStats(StringBuilder log)
@@ -53,7 +53,7 @@ namespace Obsidian.Features.X1Wallet
             string hash = "n/a";
             string walletName = null;
 
-            using (var context = this.walletManagerWrapper.GetWalletContext(null, true))
+            using (var context = this.walletManagerFactory.GetWalletContext(null, true))
             {
                 if (context != null)
                 {
@@ -78,7 +78,7 @@ namespace Obsidian.Features.X1Wallet
             string walletName = null;
             var balance = new Balance { AmountConfirmed = Money.Zero, AmountUnconfirmed = Money.Zero, SpendableAmount = Money.Zero };
 
-            using (var context = this.walletManagerWrapper.GetWalletContext(null, true))
+            using (var context = this.walletManagerFactory.GetWalletContext(null, true))
             {
                 if (context != null)
                 {

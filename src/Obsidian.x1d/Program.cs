@@ -64,7 +64,7 @@ namespace Obsidian.x1d
                 _ = Task.Run(async () =>
                   {
                       await Task.Delay(7500);
-                      TestBench.RunTestCodeAsync((FullNode)node);  // start mining to the wallet
+                      //TestBench.RunTestCodeAsync((FullNode)node);  // start mining to the wallet
                   });
 #endif
 

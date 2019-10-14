@@ -8,17 +8,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
-using NBitcoin.BuilderExtensions;
 using NBitcoin.DataEncoders;
 using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.EventBus;
 using Stratis.Bitcoin.EventBus.CoreEvents;
-using Stratis.Bitcoin.Features.Miner.Interfaces;
-using Stratis.Bitcoin.Features.Miner.Staking;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
@@ -50,7 +48,7 @@ namespace Obsidian.Features.X1Wallet
         readonly IBlockStore blockStore;
 
         // for staking
-        readonly IPosMinting posMinting;
+        readonly StakingCore posMinting;
         readonly ITimeSyncBehaviorState timeSyncBehaviorState;
 
         X1WalletFile X1WalletFile { get; }
@@ -69,7 +67,7 @@ namespace Obsidian.Features.X1Wallet
         public WalletManager(string x1WalletFilePath, ChainIndexer chainIndexer, Network network, DataFolder dataFolder,
             IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
             IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime,
-            IAsyncProvider asyncProvider, IPosMinting posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
+            IAsyncProvider asyncProvider, StakingCore posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
             ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore)
         {
             AddressHelper.Init(network);
@@ -141,6 +139,8 @@ namespace Obsidian.Features.X1Wallet
 
             if (this.blockConnectedSubscription != null)
                 this.signals.Unsubscribe(this.blockConnectedSubscription);
+
+            this.StakingManager?.Dispose();
         }
 
         internal LoadWalletResponse LoadWallet()
@@ -161,6 +161,8 @@ namespace Obsidian.Features.X1Wallet
         public int WalletLastBlockSyncedHeight => this.Metadata.SyncedHeight;
 
         public uint256 WalletLastBlockSyncedHash => this.Metadata.SyncedHash;
+
+        public StakingManager StakingManager { get; private set; }
 
         #endregion
 
@@ -511,10 +513,10 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        public List<Coin> GetBudget(out Balance balance)
+        public StakingCoin[] GetBudget(out Balance balance)
         {
-            var receivedAndMature = new Dictionary<string, UtxoMetadata>();
-            var spent = new Dictionary<string, UtxoMetadata>();
+            var receivedAndMature = new Dictionary<string, StakingCoin>();
+            var spent = new HashSet<string>();
 
             long totalReceived = 0;
             long immatureReceived = 0;
@@ -537,17 +539,22 @@ namespace Obsidian.Features.X1Wallet
 
                     if (tx.Received != null)
                     {
-                        foreach (var r in tx.Received)
+                        foreach (UtxoMetadata utxo in tx.Received.Values)
                         {
-                            totalReceived += r.Value.Satoshis;
+                            totalReceived += utxo.Satoshis;
 
                             if (!isImmature)
                             {
-                                receivedAndMature.Add(r.Key, r.Value);
+                                var coin = new StakingCoin(utxo.HashTx,
+                                    utxo.Index,
+                                    Money.Satoshis(utxo.Satoshis),
+                                    this.X1WalletFile.Addresses[utxo.Address].ScriptPubKeyFromPublicKey(),
+                                    utxo.Address, height, block.HashBlock);
+                                receivedAndMature.Add(utxo.GetKey(), coin);
                             }
                             else
                             {
-                                immatureReceived += r.Value.Satoshis;
+                                immatureReceived += utxo.Satoshis;
                             }
                         }
                     }
@@ -556,27 +563,17 @@ namespace Obsidian.Features.X1Wallet
                         foreach (var s in tx.Spent)
                         {
                             totalSent += s.Value.Satoshis;
-                            spent.Add(s.Key, s.Value);
-
+                            spent.Add(s.Key);
                         }
                     }
-
                 }
-
-
-
-
             }
 
-            foreach (var item in spent)
+            foreach (string utxoId in spent)
             {
-                if (receivedAndMature.ContainsKey(item.Key))
-                    receivedAndMature.Remove(item.Key);
+                if (receivedAndMature.ContainsKey(utxoId))
+                    receivedAndMature.Remove(utxoId);
             }
-
-            var coins = new List<Coin>();
-            foreach (var utxo in receivedAndMature.Values)
-                coins.Add(new Coin(new uint256(utxo.HashTx), (uint)utxo.Index, Money.Satoshis(utxo.Satoshis), this.X1WalletFile.Addresses[utxo.Address].ScriptPubKeyFromPublicKey()));
 
             balance = new Balance
             {
@@ -585,7 +582,7 @@ namespace Obsidian.Features.X1Wallet
                 SpendableAmount = Money.Satoshis(totalReceived - totalSent - immatureReceived) // todo: unconfirmed
             };
 
-            return coins;
+            return receivedAndMature.Values.ToArray();
         }
 
 
@@ -799,18 +796,19 @@ namespace Obsidian.Features.X1Wallet
                 throw new X1WalletException(HttpStatusCode.InternalServerError, errorMessage, null);
             }
 
+            this.StakingManager = new StakingManager(passphrase, this);
+
             this.logger.LogInformation("Enabling staking on wallet '{0}'.", this.WalletName);
 
-            this.posMinting.Stake(new WalletSecret
-            {
-                WalletPassword = passphrase,
-                WalletName = this.WalletName
-            });
+            this.posMinting.Stake();
+           
         }
 
         internal void StopStaking()
         {
             this.posMinting.StopStake();
+            this.StakingManager.Dispose();
+            this.StakingManager = null;
         }
 
 

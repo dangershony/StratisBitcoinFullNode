@@ -31,19 +31,19 @@ namespace Obsidian.Features.X1Wallet
 
         protected readonly StandardTransactionPolicy TransactionPolicy;
 
-        readonly WalletManagerWrapper walletManagerWrapper;
+        readonly WalletManagerFactory walletManagerFactory;
 
         private readonly IWalletFeePolicy walletFeePolicy;
 
         public TransactionHandler(
             ILoggerFactory loggerFactory,
-            WalletManagerWrapper walletManager,
+            WalletManagerFactory walletManager,
             IWalletFeePolicy walletFeePolicy,
             Network network,
             StandardTransactionPolicy transactionPolicy)
         {
             this.network = network;
-            this.walletManagerWrapper = (WalletManagerWrapper)walletManager;
+            this.walletManagerFactory = (WalletManagerFactory)walletManager;
             this.walletFeePolicy = walletFeePolicy;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
 
@@ -128,7 +128,7 @@ namespace Obsidian.Features.X1Wallet
             Guard.NotEmpty(accountReference.WalletName, nameof(accountReference.WalletName));
 
             long maxSpendableAmount;
-            using (var context = this.walletManagerWrapper.GetWalletContext(accountReference.WalletName))
+            using (var context = this.walletManagerFactory.GetWalletContext(accountReference.WalletName))
             {
                 // Get the total value of spendable coins in the account.
                 maxSpendableAmount = context.WalletManager.GetAllSpendableTransactions(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
@@ -213,7 +213,7 @@ namespace Obsidian.Features.X1Wallet
             if (!context.Sign)
                 return;
 
-            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            using (var context2 = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
             {
                 var addresses = context2.WalletManager.GetAllAddresses();
                 // TODO: only decrypt the keys needed
@@ -230,7 +230,7 @@ namespace Obsidian.Features.X1Wallet
       
         void FindChangeAddress(TransactionBuildContext context)
         {
-            using (var walletContext = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            using (var walletContext = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
             {
                 P2WpkhAddress changeAddress = walletContext.WalletManager.GetUnusedAddress();
                 
@@ -246,7 +246,7 @@ namespace Obsidian.Features.X1Wallet
 
         void AddCoins(TransactionBuildContext context)
         {
-            using (var walletContext = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            using (var walletContext = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
             {
                 var allSpendableCoins = walletContext.WalletManager.GetBudget(out Balance _);
                 context.TransactionBuilder.AddCoins(allSpendableCoins);

@@ -16,23 +16,26 @@ namespace Obsidian.Networks.ObsidianX.Rules
         public override Task RunAsync(RuleContext context)
         {
             var block = context.ValidationContext.BlockToValidate;
+            var isPosBlock = block.Transactions.Count >= 2 && block.Transactions[1].IsCoinStake;
 
-            for (var i = 0; i < block.Transactions.Count; i++)
+            foreach (var transaction in context.ValidationContext.BlockToValidate.Transactions)
             {
-                if (i == 1) // do not check the Coinstake tx
+                if (transaction.IsCoinStake)
                     continue;
 
-                var transaction = block.Transactions[i];
+                if (transaction.IsCoinBase && isPosBlock)
+                    continue; // do not check the coinbase tx in a PoS block
 
                 foreach (var output in transaction.Outputs)
                 {
+                   
                     if (PayToWitTemplate.Instance.CheckScriptPubKey(output.ScriptPubKey))
                         continue; // allowed are P2WPKH and P2WSH
                     if (TxNullDataTemplate.Instance.CheckScriptPubKey(output.ScriptPubKey))
                         continue; // allowed are also all kinds of valid OP_RETURN pushes
 
                     this.Logger.LogTrace("(-)[NOT_NATIVE_SEGWIT_OR_DATA]");
-                    new ConsensusError("legacy-tx", "Only P2PKH, P2WSH is allowed outside Coinstake transactions.").Throw();
+                    new ConsensusError("legacy-tx", "Only P2WPKH, P2WSH is allowed outside Coinstake transactions.").Throw();
                 }
             }
 
