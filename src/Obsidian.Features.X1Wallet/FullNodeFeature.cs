@@ -51,7 +51,7 @@ namespace Obsidian.Features.X1Wallet
                         //services.AddSingleton<IWalletSyncManager>(x => x.GetRequiredService<WalletManagerWrapper>());
                         services.AddSingleton<IWalletManager, IWalletManagerStakingAdapter>();
                         services.AddSingleton<IPowMining, PowMining>();
-                        services.AddSingleton<IPosMinting, PosMinting>();
+                        services.AddSingleton<IPosMinting, Staking>();
                         services.AddSingleton<BlockDefinition, PowBlockDefinition>();
                         services.AddSingleton<BlockDefinition, PosBlockDefinition>();
                         services.AddSingleton<BlockDefinition, PosPowBlockDefinition>();

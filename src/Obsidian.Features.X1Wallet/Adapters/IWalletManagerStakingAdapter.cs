@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
 using Obsidian.Features.X1Wallet.Models;
@@ -49,16 +50,18 @@ namespace Obsidian.Features.X1Wallet.Adapters
         {
             Debug.Assert(walletName == this.walletName);
 
-            var utxos = new List<UnspentKeyAddressOutput>();
+            List<Coin> coins;
             using (var context = this.walletManagerWrapper.GetWalletContext(this.walletName))
             {
-                utxos.AddRange(context.WalletManager.GetAllSpendableTransactions(confirmations));
+                coins = context.WalletManager.GetBudget(out var _);
             }
 
+            
+
             var utxoReferences = new List<UnspentOutputReference>();
-            foreach (var utxo in utxos)
+            foreach (var utxo in coins)
             {
-                utxoReferences.Add(new UnspentOutputReference {Confirmations = utxo.Confirmations, Transaction = utxo.Transaction, Address = utxo.Address.ToFakeHdAddress()});
+               // utxoReferences.Add(new UnspentOutputReference {Confirmations = utxo.Confirmations, Transaction = utxo.Transaction, Address = utxo.Address.ToFakeHdAddress()});
             }
 
             return utxoReferences;

@@ -592,9 +592,6 @@ namespace Obsidian.Features.X1Wallet
 
         void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
-            if (chainedHeader.Height == 235 || chainedHeader.Height == 715)
-                ;
-
             foreach (Transaction transaction in block.Transactions)
             {
                 var received = ProcessTransaction(transaction, chainedHeader.Height, block);
