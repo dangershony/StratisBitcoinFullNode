@@ -7,12 +7,12 @@ using Stratis.Bitcoin.Consensus.Rules;
 namespace Obsidian.Networks.ObsidianX.Rules
 {
     /// <summary>
-    /// Checks if <see cref="ObsidianXMain"/> network's blocks contain legacy coinstake tx or P2PK outputs.
+    /// Checks if <see cref="ObsidianXMain"/> network's blocks confirm to the 'native-SegWit-only' white-listing criteria.
     /// </summary>
     public class ObsidianXNativeSegWitSpendsOnlyRule : PartialValidationConsensusRule
     {
         /// <inheritdoc />
-        /// <exception cref="ConsensusErrors.BadVersion">Thrown if block's version is outdated or otherwise invalid.</exception>
+        /// <exception cref="ConsensusErrorException">Thrown if a block's transactions confirm to the 'native-SegWit-only' white-listing criteria.</exception>
         public override Task RunAsync(RuleContext context)
         {
             var block = context.ValidationContext.BlockToValidate;
