@@ -85,7 +85,7 @@ namespace Obsidian.Networks.ObsidianX
                 bip34Hash: this.Genesis.GetHash(), // always active
                 ruleChangeActivationThreshold: 1916, // 95% of 2016
                 minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
-                maxReorgLength: 500,
+                maxReorgLength: 125,
                 // defaultAssumeValid: new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b"),  
                 defaultAssumeValid: uint256.Zero,  // verify all for now!
                 maxMoney: long.MaxValue,
@@ -101,7 +101,7 @@ namespace Obsidian.Networks.ObsidianX
                 powLimit: new Target(this.GenesisBits),
                 minimumChainWork: null,
                 isProofOfStake: true,
-                lastPowBlock: 50000,
+                lastPowBlock: 5000,
                 proofOfStakeLimit: new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeLimitV2: new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeReward: Money.Coins(15) 
