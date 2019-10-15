@@ -40,7 +40,7 @@ namespace Obsidian.Networks.ObsidianX
 
             var consensusFactory = new ObsidianXConsensusFactory();
             this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 10, 9, 19, 44, 00, DateTimeKind.Utc));
-            this.GenesisNonce = 365784;
+            this.GenesisNonce = 365785;
             this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
