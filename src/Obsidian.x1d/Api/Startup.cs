@@ -20,7 +20,7 @@ namespace Obsidian.x1d.Api
 
         public void ConfigureServices(IServiceCollection services)
         {
-            // TODO: Check if this is required when the electron wallet is built for production, because this CORS policy allows requests from two more ports in addition to the api port (port 80 and 4200).
+            // TODO: Check if this is required when the electron wallet is built for production, because this CORS policy allows requests from two more ports in addition to the api port (port 80 and 4200).No 'Access-Control-Allow-Origin'
 
             services.AddCors
             (
@@ -32,16 +32,16 @@ namespace Obsidian.x1d.Api
 
                         builder =>
                         {
-                            var allowedDomains = new[] { "http://localhost", "http://localhost:4200", "http://localhost:3000", "http://localhost:1212" };
+                            var allowedDomains = new[] { "http://localhost:37777" };
 
                             builder.WithOrigins(allowedDomains)
-                                .AllowAnyHeader();
+                                .AllowAnyHeader().AllowAnyOrigin().AllowAnyMethod();
                         }
                     );
                 });
 
             services.AddMvc()
-                .SetCompatibilityVersion(CompatibilityVersion.Version_2_2)
+                .SetCompatibilityVersion(CompatibilityVersion.Version_2_1)
                 .AddJsonOptions(options => Serializer.RegisterFrontConverters(options.SerializerSettings))
                 .AddSecureApi(services);
         }
