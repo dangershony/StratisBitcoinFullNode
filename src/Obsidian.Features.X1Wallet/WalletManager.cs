@@ -531,7 +531,7 @@ namespace Obsidian.Features.X1Wallet
                 foreach (var tx in block.Transactions)
                 {
                     bool isImmature = false;
-                    if (tx.TxType == TxType.Coinbase)
+                    if (tx.TxType == TxType.Coinbase || tx.TxType == TxType.Coinstake || tx.TxType == TxType.CoinstakeLegacy)
                     {
                         var confirmations = this.Metadata.SyncedHeight - height + 1; // if the tip is at 100 and my tx is height 90, it's 11 confirmations
                         isImmature = confirmations < this.network.Consensus.CoinbaseMaturity; // ok
