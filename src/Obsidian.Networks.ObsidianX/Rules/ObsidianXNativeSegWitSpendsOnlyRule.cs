@@ -28,7 +28,7 @@ namespace Obsidian.Networks.ObsidianX.Rules
 
                 foreach (var output in transaction.Outputs)
                 {
-                   
+
                     if (PayToWitTemplate.Instance.CheckScriptPubKey(output.ScriptPubKey))
                         continue; // allowed are P2WPKH and P2WSH
                     if (TxNullDataTemplate.Instance.CheckScriptPubKey(output.ScriptPubKey))

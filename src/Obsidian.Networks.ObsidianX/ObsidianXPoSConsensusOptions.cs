@@ -43,7 +43,7 @@ namespace Obsidian.Networks.ObsidianX
             if (network.IsTest() || network.IsRegTest())
                 throw new NotImplementedException();
 
-            Debug.Assert(network.Consensus.MaxReorgLength == 500);
+            Debug.Assert(network.Consensus.MaxReorgLength == 125);
 
             // StakeMinConfirmations must equal MaxReorgLength so that nobody can stake in isolation and then force a reorg
             return (int)network.Consensus.MaxReorgLength; 
