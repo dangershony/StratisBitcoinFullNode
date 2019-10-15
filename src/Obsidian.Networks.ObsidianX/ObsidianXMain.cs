@@ -85,14 +85,14 @@ namespace Obsidian.Networks.ObsidianX
                 bip34Hash: this.Genesis.GetHash(), // always active
                 ruleChangeActivationThreshold: 1916, // 95% of 2016
                 minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
-                maxReorgLength: 500,
+                maxReorgLength: 125,
                 // defaultAssumeValid: new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b"),  
                 defaultAssumeValid: uint256.Zero,  // verify all for now!
                 maxMoney: long.MaxValue,
                 coinbaseMaturity: 50,
                 premineHeight: 2,
                 premineReward: Money.Coins(110000000), 
-                proofOfWorkReward: Money.Coins(10),
+                proofOfWorkReward: Money.Coins(5),
                 powTargetTimespan: TimeSpan.FromSeconds(14 * 24 * 60 * 60), // two weeks
                 powTargetSpacing: TimeSpan.FromSeconds(10 * 60),
                 powAllowMinDifficultyBlocks: false,
@@ -101,10 +101,10 @@ namespace Obsidian.Networks.ObsidianX
                 powLimit: new Target(this.GenesisBits),
                 minimumChainWork: null,
                 isProofOfStake: true,
-                lastPowBlock: 50000,
+                lastPowBlock: 5000,
                 proofOfStakeLimit: new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeLimitV2: new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
-                proofOfStakeReward: Money.Coins(15) 
+                proofOfStakeReward: Money.Coins(20) 
                 );
 
             this.Consensus.PosEmptyCoinbase = false;
@@ -207,7 +207,7 @@ namespace Obsidian.Networks.ObsidianX
                 // rules that require the store to be loaded (coinview)
                 .Register<LoadCoinviewRule>()
                 .Register<TransactionDuplicationActivationRule>()
-                .Register<PosCoinviewRule>() // implements BIP68, MaxSigOps and BlockReward calculation
+                .Register<ObsidianXPosCoinviewRule>() // implements BIP68, MaxSigOps and BlockReward calculation
                                              // Place the PosColdStakingRule after the PosCoinviewRule to ensure that all input scripts have been evaluated
                                              // and that the "IsColdCoinStake" flag would have been set by the OP_CHECKCOLDSTAKEVERIFY opcode if applicable.
                 .Register<PosColdStakingRule>()
