@@ -446,13 +446,21 @@ namespace Obsidian.Features.X1Wallet.Staking
 
             foreach (var c in coins)
             {
-                var item = new Obsidian.Features.X1Wallet.Staking.UtxoDescription
+                UnspentOutputs coinSet = utxoByTransaction.TryGet(c.Outpoint.Hash);
+                if ((coinSet == null) || (c.Outpoint.N >= coinSet.Outputs.Length))
+                    continue;
+
+                TxOut utxo = coinSet.Outputs[c.Outpoint.N];
+                if ((utxo == null) || (utxo.Value < this.MinimumStakingCoinValue))
+                    continue;
+
+                var item = new UtxoDescription
                 {
                     TxOut = c.TxOut,
                     OutPoint = c.Outpoint,
                     Bech32Address = c.Address,
                     HashBlock = c.BlockHash,
-                    UtxoSet = utxoByTransaction.TryGet(c.Outpoint.Hash)
+                    UtxoSet = coinSet
                 };
 
                 if (item.UtxoSet == null)
