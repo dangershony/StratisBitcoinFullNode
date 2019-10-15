@@ -12,16 +12,16 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
     /// <summary>
     /// Proof of stake override for the coinview rules - BIP68, MaxSigOps and BlockReward checks.
     /// </summary>
-    public sealed class PosCoinviewRule : CoinViewRule
+    public class PosCoinviewRule : CoinViewRule
     {
         /// <summary>Provides functionality for checking validity of PoS blocks.</summary>
-        private IStakeValidator stakeValidator;
+        protected IStakeValidator stakeValidator;
 
         /// <summary>Database of stake related data for the current blockchain.</summary>
-        private IStakeChain stakeChain;
+        protected IStakeChain stakeChain;
 
         /// <summary>The consensus of the parent Network.</summary>
-        private IConsensus consensus;
+        protected IConsensus consensus;
 
         /// <inheritdoc />
         public override void Initialize()
@@ -199,7 +199,7 @@ namespace Stratis.Bitcoin.Features.Consensus.Rules.CommonRules
         /// </summary>
         /// <param name="height">Target block height.</param>
         /// <returns>Miner's coin stake reward.</returns>
-        public Money GetProofOfStakeReward(int height)
+        public virtual Money GetProofOfStakeReward(int height)
         {
             if (this.IsPremine(height))
                 return this.consensus.PremineReward;

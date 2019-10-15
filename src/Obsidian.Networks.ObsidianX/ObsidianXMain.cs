@@ -92,7 +92,7 @@ namespace Obsidian.Networks.ObsidianX
                 coinbaseMaturity: 50,
                 premineHeight: 2,
                 premineReward: Money.Coins(110000000), 
-                proofOfWorkReward: Money.Coins(10),
+                proofOfWorkReward: Money.Coins(5),
                 powTargetTimespan: TimeSpan.FromSeconds(14 * 24 * 60 * 60), // two weeks
                 powTargetSpacing: TimeSpan.FromSeconds(10 * 60),
                 powAllowMinDifficultyBlocks: false,
@@ -104,7 +104,7 @@ namespace Obsidian.Networks.ObsidianX
                 lastPowBlock: 5000,
                 proofOfStakeLimit: new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeLimitV2: new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
-                proofOfStakeReward: Money.Coins(15) 
+                proofOfStakeReward: Money.Coins(20) 
                 );
 
             this.Consensus.PosEmptyCoinbase = false;
@@ -207,7 +207,7 @@ namespace Obsidian.Networks.ObsidianX
                 // rules that require the store to be loaded (coinview)
                 .Register<LoadCoinviewRule>()
                 .Register<TransactionDuplicationActivationRule>()
-                .Register<PosCoinviewRule>() // implements BIP68, MaxSigOps and BlockReward calculation
+                .Register<ObsidianXPosCoinviewRule>() // implements BIP68, MaxSigOps and BlockReward calculation
                                              // Place the PosColdStakingRule after the PosCoinviewRule to ensure that all input scripts have been evaluated
                                              // and that the "IsColdCoinStake" flag would have been set by the OP_CHECKCOLDSTAKEVERIFY opcode if applicable.
                 .Register<PosColdStakingRule>()
