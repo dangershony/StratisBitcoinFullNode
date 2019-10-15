@@ -141,6 +141,8 @@ namespace Obsidian.Features.X1Wallet
             if (string.IsNullOrWhiteSpace(walletCreateRequest.Password))
                 throw new InvalidOperationException("A passphrase is required.");
 
+            AddressHelper.Init(this.network);
+
             var now = DateTime.UtcNow;
 
             // Create the passphrase challenge
