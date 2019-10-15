@@ -533,8 +533,8 @@ namespace Obsidian.Features.X1Wallet
                     bool isImmature = false;
                     if (tx.TxType == TxType.Coinbase)
                     {
-                        var confirmations = this.Metadata.SyncedHeight - height + 1;
-                        isImmature = confirmations < this.network.Consensus.CoinbaseMaturity;
+                        var confirmations = this.Metadata.SyncedHeight - height + 1; // if the tip is at 100 and my tx is height 90, it's 11 confirmations
+                        isImmature = confirmations < this.network.Consensus.CoinbaseMaturity; // ok
                     }
 
                     if (tx.Received != null)
@@ -658,7 +658,7 @@ namespace Obsidian.Features.X1Wallet
 
         Dictionary<string, UtxoMetadata> ExtractOutgoingFunds(Transaction transaction, out long amountSpent)
         {
-            if (transaction.IsCoinStake || transaction.IsCoinBase)
+            if (transaction.IsCoinBase)
             {
                 amountSpent = 0;
                 return null;
