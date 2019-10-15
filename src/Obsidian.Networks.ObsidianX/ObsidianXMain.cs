@@ -22,7 +22,7 @@ namespace Obsidian.Networks.ObsidianX
             this.RootFolderName = "obsidianx";
             this.DefaultConfigFilename = "obsidianx.conf";
 
-            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX2"), 0); 
+            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX3"), 0); 
             this.DefaultPort = 46660;
             this.DefaultRPCPort = 46661;
             this.DefaultAPIPort = 47221;
