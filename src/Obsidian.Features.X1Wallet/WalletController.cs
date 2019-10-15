@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Base;
@@ -17,18 +18,13 @@ using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Connection;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Controllers.Models;
-using Stratis.Bitcoin.Features.Miner.Interfaces;
-using Stratis.Bitcoin.Features.Miner.Models;
-using Stratis.Bitcoin.Features.Miner.Staking;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
-using Stratis.Bitcoin.Features.Wallet.Helpers;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.P2P.Peer;
 using Stratis.Bitcoin.Utilities;
-using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet
 {
@@ -36,7 +32,7 @@ namespace Obsidian.Features.X1Wallet
     {
         const int MaxHistoryItemsPerAccount = 500;
 
-        readonly WalletManagerWrapper walletManagerWrapper;
+        readonly WalletManagerFactory walletManagerFactory;
         readonly TransactionHandler walletTransactionHandler;
         readonly CoinType coinType;
         readonly Network network;
@@ -50,18 +46,18 @@ namespace Obsidian.Features.X1Wallet
         readonly IChainState chainState;
         readonly INetworkDifficulty networkDifficulty;
 
-        readonly IPosMinting posMinting;
+        readonly StakingCore posMinting;
 
         string walletName;
 
 
         WalletContext GetWalletContext()
         {
-            return this.walletManagerWrapper.GetWalletContext(this.walletName);
+            return this.walletManagerFactory.GetWalletContext(this.walletName);
         }
 
         public WalletController(
-            WalletManagerWrapper walletManagerFacade,
+            WalletManagerFactory walletManagerFacade,
             IWalletTransactionHandler walletTransactionHandler,
             IConnectionManager connectionManager,
             Network network,
@@ -72,10 +68,10 @@ namespace Obsidian.Features.X1Wallet
             NodeSettings nodeSettings,
             IChainState chainState,
             INetworkDifficulty networkDifficulty,
-            IPosMinting posMinting
+            StakingCore posMinting
             )
         {
-            this.walletManagerWrapper = (WalletManagerWrapper)walletManagerFacade;
+            this.walletManagerFactory = (WalletManagerFactory)walletManagerFacade;
             this.walletTransactionHandler = (TransactionHandler)walletTransactionHandler;
             this.connectionManager = connectionManager;
             this.network = network;
@@ -117,7 +113,7 @@ namespace Obsidian.Features.X1Wallet
 
         public async Task CreateKeyWalletAsync(WalletCreateRequest walletCreateRequest)
         {
-            await this.walletManagerWrapper.CreateKeyWalletAsync(walletCreateRequest);
+            await this.walletManagerFactory.CreateKeyWalletAsync(walletCreateRequest);
         }
 
         public async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
@@ -183,7 +179,8 @@ namespace Obsidian.Features.X1Wallet
         {
             using (var context = GetWalletContext())
             {
-                return context.WalletManager.GetConfirmedWalletBalance();
+                context.WalletManager.GetBudget(out var balance);
+                return balance;
             }
         }
 
@@ -216,7 +213,7 @@ namespace Obsidian.Features.X1Wallet
                         Amount = st.Transaction.Amount,
                         Address = st.Address.Address,
                         Index = st.Transaction.Index,
-                        IsChange = st.Address.IsChange,
+                        IsChange = false,
                         CreationTime = st.Transaction.CreationTime,
                         Confirmations = st.Confirmations
                     }).ToList()
@@ -231,12 +228,14 @@ namespace Obsidian.Features.X1Wallet
             var recipients = new List<Recipient>();
             foreach (RecipientModel recipientModel in request.Recipients)
             {
-                var address = P2WpkhAddress.FromString(recipientModel.DestinationAddress, this.network);
-                if (address == null)
+                var scriptPubKey = recipientModel.DestinationAddress.ScriptPubKeyFromBech32();
+
+                if (scriptPubKey == null)
                     throw new NotSupportedException($"Only {nameof(P2WpkhAddress)}es are supported at this time.");
+
                 recipients.Add(new Recipient
                 {
-                    ScriptPubKey = address.GetScriptPubKey(),
+                    ScriptPubKey = scriptPubKey,
                     Amount = recipientModel.Amount
                 });
             }
@@ -345,7 +344,7 @@ namespace Obsidian.Features.X1Wallet
 
         public async Task<WalletFileModel> ListWalletsFilesAsync()
         {
-            (string folderPath, IEnumerable<string> filesNames) result = this.walletManagerWrapper.GetWalletsFiles();
+            (string folderPath, IEnumerable<string> filesNames) result = this.walletManagerFactory.GetWalletsFiles();
             var model = new WalletFileModel
             {
                 WalletsPath = result.folderPath,
@@ -383,13 +382,13 @@ namespace Obsidian.Features.X1Wallet
                 throw new X1WalletException(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", new Exception());
             }
 
-            await this.walletManagerWrapper.WalletSyncManagerSyncFromHeightAsync(block.Height);
+            await this.walletManagerFactory.WalletSyncManagerSyncFromHeightAsync(block.Height);
         }
 
 
         public async Task SyncFromDate(WalletSyncFromDateRequest request)
         {
-            await this.walletManagerWrapper.WalletSyncManagerSyncFromDateAsync(request.Date);
+            await this.walletManagerFactory.WalletSyncManagerSyncFromDateAsync(request.Date);
         }
 
 

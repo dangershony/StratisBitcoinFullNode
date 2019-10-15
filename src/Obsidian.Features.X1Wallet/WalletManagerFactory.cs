@@ -8,14 +8,12 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
-using Stratis.Bitcoin.EventBus;
-using Stratis.Bitcoin.EventBus.CoreEvents;
 using Stratis.Bitcoin.Features.BlockStore;
-using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
@@ -25,7 +23,7 @@ using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet
 {
-    public class WalletManagerWrapper : IDisposable
+    public class WalletManagerFactory : IDisposable
     {
         readonly object lockObject = new object();
         readonly DataFolder dataFolder;
@@ -47,23 +45,22 @@ namespace Obsidian.Features.X1Wallet
 
         // for staking
         // for staking
-        readonly IPosMinting posMinting;
+        readonly StakingCore posMinting;
         readonly ITimeSyncBehaviorState timeSyncBehaviorState;
-        readonly IWalletManagerStakingAdapter walletManagerStakingAdapter;
 
         static readonly RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
 
         WalletManager walletManager;
 
-        public WalletManagerWrapper(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
-            IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider, ISignals signals, IBlockStore blockStore, StoreSettings storeSettings, IPosMinting posMinting, ITimeSyncBehaviorState timeSyncBehaviorState, IWalletManager walletManagerStakingAdapter, IInitialBlockDownloadState initialBlockDownloadState)
+        public WalletManagerFactory(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
+            IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime, IAsyncProvider asyncProvider, ISignals signals, IBlockStore blockStore, StoreSettings storeSettings, StakingCore posMinting, ITimeSyncBehaviorState timeSyncBehaviorState, IInitialBlockDownloadState initialBlockDownloadState)
         {
             this.dataFolder = dataFolder;
             this.chainIndexer = chainIndexer;
             this.network = network;
             this.broadcasterManager = broadcasterManager;
             this.loggerFactory = loggerFactory;
-            this.logger = loggerFactory.CreateLogger(typeof(WalletManagerWrapper).FullName);
+            this.logger = loggerFactory.CreateLogger(typeof(WalletManagerFactory).FullName);
             this.scriptAddressReader = scriptAddressReader;
             this.dateTimeProvider = dateTimeProvider;
             this.nodeLifetime = nodeLifetime;
@@ -76,7 +73,6 @@ namespace Obsidian.Features.X1Wallet
 
             this.posMinting = posMinting;
             this.timeSyncBehaviorState = timeSyncBehaviorState;
-            this.walletManagerStakingAdapter = (IWalletManagerStakingAdapter)walletManagerStakingAdapter;
 
         }
 
@@ -104,7 +100,7 @@ namespace Obsidian.Features.X1Wallet
                 {
                     LoadWalletAndCreateWalletManagerInstance(walletName);
                     Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
-                    this.walletManagerStakingAdapter.SetWalletManagerWrapper(this, walletName);
+                    ((StakingCore)this.posMinting).SetWalletManagerWrapper(this, walletName);
                 }
             }
             return new WalletContext(this.walletManager);
@@ -130,7 +126,7 @@ namespace Obsidian.Features.X1Wallet
                     throw new NotSupportedException(
                         "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
-            this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader, 
+            this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory, this.scriptAddressReader,
                 this.dateTimeProvider, this.nodeLifetime, this.asyncProvider, this.posMinting, this.timeSyncBehaviorState, this.signals, this.initialBlockDownloadState, this.blockStore);
         }
 
@@ -145,37 +141,42 @@ namespace Obsidian.Features.X1Wallet
             if (string.IsNullOrWhiteSpace(walletCreateRequest.Password))
                 throw new InvalidOperationException("A passphrase is required.");
 
-            var x1WalletFile = new X1WalletFile { P2WPKHAddresses = new Dictionary<string, P2WpkhAddress>() };
-
-            x1WalletFile.WalletGuid = Guid.NewGuid();
-            x1WalletFile.WalletName = walletName;
+            var now = DateTime.UtcNow;
 
             // Create the passphrase challenge
             var challengePlaintext = new byte[32];
             rng.GetBytes(challengePlaintext);
-            x1WalletFile.PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Password, challengePlaintext);
 
-            x1WalletFile.Comment = $"Created on {DateTime.UtcNow} with filename {filePath}";
-            x1WalletFile.Version = 1;
-
-            const int witnessVersion = 0;
-            var bech32Prefix = this.network.CoinTicker.ToLowerInvariant();  // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
+            var x1WalletFile = new X1WalletFile
+            {
+                Addresses = new Dictionary<string, P2WpkhAddress>(),
+                WalletGuid = Guid.NewGuid(),
+                WalletName = walletName,
+                CoinTicker = this.network.CoinTicker,
+                CoinType = this.network.Consensus.CoinType,
+                CreatedUtc = now,
+                ModifiedUtc = now,
+                SyncFromHeight = 0, // TODO
+                Comment = "Your notes here!",
+                Version = 1,
+                PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Password, challengePlaintext)
+            };
 
             const int addressPoolSize = 1000;
+
             for (var i = 0; i < addressPoolSize; i++)
             {
                 var bytes = new byte[32];
                 rng.GetBytes(bytes);
-                var isChange = i % 4 != 0; // 75% change addresses
-                var address = P2WpkhAddress.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase, isChange, this.network.Consensus.CoinType, witnessVersion, bech32Prefix, this.network.CoinTicker);
-                x1WalletFile.P2WPKHAddresses.Add(address.HashHex, address);
+                var address = AddressHelper.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase);
+                x1WalletFile.Addresses.Add(address.Address, address);
             }
-            if (x1WalletFile.P2WPKHAddresses.Count != addressPoolSize)
+            if (x1WalletFile.Addresses.Count != addressPoolSize)
                 throw new Exception("Something is seriously wrong, collision of random numbers detected. Do not use this wallet.");
 
             x1WalletFile.SaveX1WalletFile(filePath);
 
-            X1WalletMetadataFile x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile(WalletManager.ExpectedMetadataVersion, this.network.GenesisHash.ToString());
+            X1WalletMetadataFile x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile(WalletManager.ExpectedMetadataVersion, this.network.GenesisHash);
             var x1WalletMetadataFilename = walletName.GetX1WalletMetaDataFilepath(this.network, this.dataFolder);
             x1WalletMetadataFile.SaveX1WalletMetadataFile(x1WalletMetadataFilename);
 

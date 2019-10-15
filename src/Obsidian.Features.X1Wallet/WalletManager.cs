@@ -3,30 +3,27 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
-using NBitcoin.BuilderExtensions;
 using NBitcoin.DataEncoders;
 using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Storage;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.EventBus;
 using Stratis.Bitcoin.EventBus.CoreEvents;
-using Stratis.Bitcoin.Features.Miner.Interfaces;
-using Stratis.Bitcoin.Features.Miner.Staking;
-using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
+using static Obsidian.Features.X1Wallet.Extensions.Tools;
 
 namespace Obsidian.Features.X1Wallet
 {
@@ -51,7 +48,7 @@ namespace Obsidian.Features.X1Wallet
         readonly IBlockStore blockStore;
 
         // for staking
-        readonly IPosMinting posMinting;
+        readonly StakingCore posMinting;
         readonly ITimeSyncBehaviorState timeSyncBehaviorState;
 
         X1WalletFile X1WalletFile { get; }
@@ -70,17 +67,17 @@ namespace Obsidian.Features.X1Wallet
         public WalletManager(string x1WalletFilePath, ChainIndexer chainIndexer, Network network, DataFolder dataFolder,
             IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
             IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime,
-            IAsyncProvider asyncProvider, IPosMinting posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
+            IAsyncProvider asyncProvider, StakingCore posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
             ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore)
         {
+            AddressHelper.Init(network);
             this.CurrentX1WalletFilePath = x1WalletFilePath;
 
             this.X1WalletFile = WalletHelper.LoadX1WalletFile(x1WalletFilePath);
             this.CurrentX1WalletMetadataFilePath =
                 this.X1WalletFile.WalletName.GetX1WalletMetaDataFilepath(network, dataFolder);
             this.Metadata = WalletHelper.LoadOrCreateX1WalletMetadataFile(this.CurrentX1WalletMetadataFilePath,
-                this.X1WalletFile, ExpectedMetadataVersion, network.GenesisHash.ToString());
-            P2WPKHAddressExtensions.Metadata = this.Metadata;
+                this.X1WalletFile, ExpectedMetadataVersion, network.GenesisHash);
 
             this.chainIndexer = chainIndexer;
             this.network = network;
@@ -142,6 +139,8 @@ namespace Obsidian.Features.X1Wallet
 
             if (this.blockConnectedSubscription != null)
                 this.signals.Unsubscribe(this.blockConnectedSubscription);
+
+            this.StakingManager?.Dispose();
         }
 
         internal LoadWalletResponse LoadWallet()
@@ -161,7 +160,9 @@ namespace Obsidian.Features.X1Wallet
 
         public int WalletLastBlockSyncedHeight => this.Metadata.SyncedHeight;
 
-        public string WalletLastBlockSyncedHash => this.Metadata.SyncedHash;
+        public uint256 WalletLastBlockSyncedHash => this.Metadata.SyncedHash;
+
+        public StakingManager StakingManager { get; private set; }
 
         #endregion
 
@@ -248,7 +249,7 @@ namespace Obsidian.Features.X1Wallet
             else
             {
                 // check if the wallet tip hash is in the current consensus chain
-                isOnBestChain = this.chainIndexer.GetHeader(this.Metadata.SyncedHash.ToUInt256()) != null;
+                isOnBestChain = this.chainIndexer.GetHeader(this.Metadata.SyncedHash) != null;
             }
 
             return isOnBestChain;
@@ -262,7 +263,7 @@ namespace Obsidian.Features.X1Wallet
             ChainedHeader checkpointHeader = null;
             if (!this.Metadata.CheckpointHash.IsDefault())
             {
-                var header = this.chainIndexer.GetHeader(this.Metadata.CheckpointHash.ToUInt256());
+                var header = this.chainIndexer.GetHeader(this.Metadata.CheckpointHash);
                 if (header != null && this.Metadata.CheckpointHeight == header.Height)
                     checkpointHeader = header;  // the checkpoint header is in the correct chain and the the checkpoint height in the wallet is consistent
             }
@@ -295,9 +296,9 @@ namespace Obsidian.Features.X1Wallet
 
             // Update last block synced height
             this.Metadata.SyncedHeight = checkpointHeader.Height;
-            this.Metadata.SyncedHash = checkpointHeader.HashBlock.ToString();
+            this.Metadata.SyncedHash = checkpointHeader.HashBlock;
             this.Metadata.CheckpointHeight = checkpointHeader.Height;
-            this.Metadata.CheckpointHash = checkpointHeader.HashBlock.ToString();
+            this.Metadata.CheckpointHash = checkpointHeader.HashBlock;
             SaveMetadata();
         }
 
@@ -353,12 +354,10 @@ namespace Obsidian.Features.X1Wallet
                 {
                     var secret = new BitcoinSecret(candidate, obsidianNetwork);
                     var privateKey = secret.PrivateKey.ToBytes();
-                    var address = P2WpkhAddress.CreateWithPrivateKey(privateKey, importKeysRequest.WalletPassphrase,
-                        VCL.EncryptWithPassphrase, false, this.network.Consensus.CoinType, 0, this.network.CoinTicker.ToLowerInvariant(), this.network.CoinTicker);
+                    var address = AddressHelper.CreateWithPrivateKey(privateKey, importKeysRequest.WalletPassphrase, VCL.EncryptWithPassphrase);
 
-                    this.X1WalletFile.P2WPKHAddresses.Add(address.HashHex, address);
-                    secret.GetAddress().ToString();
-                    importedAddresses.Add($"{secret.GetAddress().ToString()} -> {address.Address}");
+                    this.X1WalletFile.Addresses.Add(address.Address, address);
+                    importedAddresses.Add($"{secret.GetAddress()} -> {address.Address}");
                 }
                 catch (Exception e)
                 {
@@ -386,8 +385,8 @@ namespace Obsidian.Features.X1Wallet
             int successCount = 0;
             try
             {
-                var addresses = this.X1WalletFile.P2WPKHAddresses.Values;
-                header.AppendLine($"{this.X1WalletFile.P2WPKHAddresses.Count} found in wallet.");
+                var addresses = this.X1WalletFile.Addresses.Values;
+                header.AppendLine($"{this.X1WalletFile.Addresses.Count} found in wallet.");
 
                 var enc = new Bech32Encoder($"{this.network.CoinTicker.ToLowerInvariant()}key");
 
@@ -405,7 +404,7 @@ namespace Obsidian.Features.X1Wallet
                         else
                         {
                             var privateKey = enc.Encode(0, decryptedKey);
-                            success.AppendLine($"{privateKey}; {a.IsChange}; {a.Address}");
+                            success.AppendLine($"{privateKey};{a.Address}");
                             successCount++;
                         }
                     }
@@ -438,7 +437,7 @@ namespace Obsidian.Features.X1Wallet
 
         internal Dictionary<string, P2WpkhAddress> GetAllAddresses()
         {
-            return this.X1WalletFile.P2WPKHAddresses;
+            return this.X1WalletFile.Addresses;
         }
 
         /// <summary>
@@ -448,7 +447,7 @@ namespace Obsidian.Features.X1Wallet
         internal void ResetMetadata()
         {
             this.Metadata.MetadataVersion = ExpectedMetadataVersion;
-            this.Metadata.SyncedHash = this.network.GenesisHash.ToString();
+            this.Metadata.SyncedHash = this.network.GenesisHash;
             this.Metadata.SyncedHeight = 0;
             this.Metadata.CheckpointHash = this.Metadata.SyncedHash;
             this.Metadata.CheckpointHeight = 0;
@@ -464,11 +463,11 @@ namespace Obsidian.Features.X1Wallet
             var coins = new List<Coin>();
             foreach (var block in this.Metadata.Blocks)
             {
-                foreach (KeyValuePair<string, TransactionMetadata> tx in block.Value.ConfirmedTransactions)
+                foreach (var tx in block.Value.Transactions)
                 {
-                    foreach (UtxoMetadata o in tx.Value.ReceivedUtxos)
+                    foreach (UtxoMetadata o in tx.Received.Values)
                     {
-                        coins.Add(new Coin(new uint256(tx.Key), (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.P2WPKHAddresses[o.HashHex].GetScriptPubKey()));
+                        coins.Add(new Coin(tx.HashTx, (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.Addresses[o.Address].ScriptPubKeyFromPublicKey()));
                     }
 
                 }
@@ -476,37 +475,13 @@ namespace Obsidian.Features.X1Wallet
             return res;
         }
 
-        public List<Coin> GetAllSpendableCoins()
-        {
-            var coins = new List<Coin>();
-            foreach (KeyValuePair<int, BlockMetadata> block in this.Metadata.Blocks)
-            {
-                foreach (KeyValuePair<string, TransactionMetadata> tx in block.Value.ConfirmedTransactions)
-                {
-                    if (tx.Value.IsCoinbase)
-                    {
-                        var txAge = this.chainIndexer.Tip.Height - block.Key;
-
-                        if (txAge < this.network.Consensus.CoinbaseMaturity)
-                            continue;
-                    }
-
-                    foreach (UtxoMetadata o in tx.Value.ReceivedUtxos)
-                    {
-                        coins.Add(new Coin(new uint256(tx.Key), (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.P2WPKHAddresses[o.HashHex].GetScriptPubKey()));
-                    }
-
-                }
-            }
-            return coins;
-        }
 
 
 
 
         public P2WpkhAddress GetUnusedAddress()
         {
-            foreach (P2WpkhAddress address in this.X1WalletFile.P2WPKHAddresses.Values)
+            foreach (P2WpkhAddress address in this.X1WalletFile.Addresses.Values)
             {
                 if (IsAddressUsedInConfirmedTransactions(address))
                     continue;
@@ -520,11 +495,11 @@ namespace Obsidian.Features.X1Wallet
             // slow version
             foreach (BlockMetadata block in this.Metadata.Blocks.Values)
             {
-                foreach (TransactionMetadata tx in block.ConfirmedTransactions.Values)
+                foreach (TransactionMetadata tx in block.Transactions)
                 {
-                    foreach (var utxo in tx.ReceivedUtxos)
+                    foreach (var utxo in tx.Received.Values)
                     {
-                        if (utxo.HashHex == address.HashHex)
+                        if (utxo.Address == address.Address)
                             return true;
                     }
 
@@ -535,60 +510,90 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        public Balance GetConfirmedWalletBalance()
+
+
+
+        public StakingCoin[] GetBudget(out Balance balance)
         {
-            Dictionary<string, TransactionMetadata> confirmedTransactions = new Dictionary<string, TransactionMetadata>();
-
-            foreach (BlockMetadata block in this.Metadata.Blocks.Values)
-            {
-                foreach (TransactionMetadata tx in block.ConfirmedTransactions.Values)
-                {
-                    foreach (UtxoMetadata utxo in tx.ReceivedUtxos)
-                    {
-                        if (this.X1WalletFile.P2WPKHAddresses.ContainsKey(utxo.HashHex))
-                        {
-                            confirmedTransactions.Add(tx.HashTx, tx);
-                            break;
-                        }
-                    }
-
-                }
-            }
+            var receivedAndMature = new Dictionary<string, StakingCoin>();
+            var spent = new HashSet<string>();
 
             long totalReceived = 0;
+            long immatureReceived = 0;
+            long totalSent = 0;
 
-            foreach (var tx in confirmedTransactions.Values)
+
+            foreach (var b in this.Metadata.Blocks)
             {
-                foreach (var utxo in tx.ReceivedUtxos)
+                var height = b.Key;
+                var block = b.Value;
+
+                foreach (var tx in block.Transactions)
                 {
-                    if (this.X1WalletFile.P2WPKHAddresses.ContainsKey(utxo.HashHex))
+                    bool isImmature = false;
+                    if (tx.TxType == TxType.Coinbase || tx.TxType == TxType.Coinstake || tx.TxType == TxType.CoinstakeLegacy)
                     {
-                        totalReceived += utxo.Satoshis;
-                        break;
+                        var confirmations = this.Metadata.SyncedHeight - height + 1; // if the tip is at 100 and my tx is height 90, it's 11 confirmations
+                        isImmature = confirmations < this.network.Consensus.CoinbaseMaturity; // ok
+                    }
+
+                    if (tx.Received != null)
+                    {
+                        foreach (UtxoMetadata utxo in tx.Received.Values)
+                        {
+                            totalReceived += utxo.Satoshis;
+
+                            if (!isImmature)
+                            {
+                                var coin = new StakingCoin(utxo.HashTx,
+                                    utxo.Index,
+                                    Money.Satoshis(utxo.Satoshis),
+                                    this.X1WalletFile.Addresses[utxo.Address].ScriptPubKeyFromPublicKey(),
+                                    utxo.Address, height, block.HashBlock);
+                                receivedAndMature.Add(utxo.GetKey(), coin);
+                            }
+                            else
+                            {
+                                immatureReceived += utxo.Satoshis;
+                            }
+                        }
+                    }
+                    if (tx.Spent != null)
+                    {
+                        foreach (var s in tx.Spent)
+                        {
+                            totalSent += s.Value.Satoshis;
+                            spent.Add(s.Key);
+                        }
                     }
                 }
-
             }
 
-            var balance = new Balance
+            foreach (string utxoId in spent)
             {
-                AmountConfirmed = Money.Satoshis(totalReceived),
-                AmountUnconfirmed = Money.Zero,
-                SpendableAmount = totalReceived / 10
-            };
-            return balance;
-        }
+                if (receivedAndMature.ContainsKey(utxoId))
+                    receivedAndMature.Remove(utxoId);
+            }
 
+            balance = new Balance
+            {
+                AmountConfirmed = Money.Satoshis(totalReceived - totalSent),
+                AmountUnconfirmed = Money.Zero,
+                SpendableAmount = Money.Satoshis(totalReceived - totalSent - immatureReceived) // todo: unconfirmed
+            };
+
+            return receivedAndMature.Values.ToArray();
+        }
 
 
 
         void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
-
             foreach (Transaction transaction in block.Transactions)
             {
-                if (ProcessTransaction(transaction, chainedHeader.Height, block))
-                    this.logger.LogInformation($"Transaction {transaction.GetHash()} in block {chainedHeader.Height} added to wallet.");
+                var received = ProcessTransaction(transaction, chainedHeader.Height, block);
+                if (received.HasValue)
+                    this.logger.LogInformation($"Transaction {transaction.GetHash()} in block {chainedHeader.Height} added {Money.Satoshis(received.Value)} {this.network.CoinTicker} to the wallet.");
             }
 
             UpdateLastBlockSyncedAndCheckpoint(chainedHeader);
@@ -597,157 +602,181 @@ namespace Obsidian.Features.X1Wallet
                 SaveMetadata();
         }
 
-        TransactionMetadata ExtractWalletTransaction(Transaction transaction)
+        Dictionary<string, UtxoMetadata> ExtractIncomingFunds(Transaction transaction, bool didSpend, out long amountReceived, out Dictionary<string, UtxoMetadata> destinations)
         {
-            List<UtxoMetadata> receivedUtxos = null;
+            Dictionary<string, UtxoMetadata> received = null;
+            Dictionary<string, UtxoMetadata> notInWallet = null;
+            long sum = 0;
             int index = 0;
+
             foreach (var output in transaction.Outputs)
             {
                 P2WpkhAddress ownAddress = FindAddressByScriptPubKey(output.ScriptPubKey);
                 if (ownAddress != null)
                 {
-                    if (receivedUtxos == null)
-                        receivedUtxos = new List<UtxoMetadata>();
-                    receivedUtxos.Add(new UtxoMetadata { HashHex = ownAddress.HashHex, HashTx = transaction.GetHash().ToString(), Satoshis = output.Value.Satoshi, Index = index });
+                    NotNull(ref received, transaction.Outputs.Count);
+
+                    var item = new UtxoMetadata
+                    {
+                        Address = ownAddress.Address,
+                        HashTx = transaction.GetHash(),
+                        Satoshis = output.Value.Satoshi,
+                        Index = index
+                    };
+                    received.Add(item.GetKey(), item);
+                    sum += item.Satoshis;
+                }
+                else
+                {   // For protocol tx, we are not interested in the other outputs.
+                    // If we spent, the save the destinations, because the wallet wants to show where we sent coins to.
+                    // if we did not spent, we do not save the destinations, because they are the other parties change address
+                    // and we only received coins.
+                    if (!transaction.IsCoinBase && !transaction.IsCoinStake && didSpend)
+                    {
+                        NotNull(ref notInWallet, transaction.Outputs.Count);
+                        var dest = new UtxoMetadata
+                        {
+                            Address = CreateDestinationStringFromScriptPubKey(output.ScriptPubKey),
+                            HashTx = transaction.GetHash(),
+                            Satoshis = output.Value != null ? output.Value.Satoshi : 0,
+                            Index = index
+                        };
+                        notInWallet.Add(dest.GetKey(), dest);
+                    }
+
                 }
                 index++;
             }
-            if (receivedUtxos != null)
+
+            destinations = received != null
+                ? notInWallet
+                : null;
+
+            amountReceived = sum;
+            return received;
+        }
+
+        Dictionary<string, UtxoMetadata> ExtractOutgoingFunds(Transaction transaction, out long amountSpent)
+        {
+            if (transaction.IsCoinBase)
             {
-                // so this transaction funds this wallet, we could also save information about the other outputs, so that we can provide a better display, but not now...
-                var tx = new TransactionMetadata
-                {
-                    HashTx = transaction.GetHash().ToString(),
-                    IsCoinbase = transaction.IsCoinBase,
-                    IsCoinstake = transaction.IsCoinStake,
-                    ReceivedUtxos = receivedUtxos
-                };
-                return tx;
-            }
-            return null;
-        }
-
-        bool AreInputsInWallet(Transaction transaction)
-        {
-            return false;
-        }
-
-        bool AreOutputsInWallet(Transaction transaction)
-        {
-            return false;
-        }
-
-        bool ProcessTransaction(Transaction transaction, int blockHeight, Block block)
-        {
-
-            var tx = ExtractWalletTransaction(transaction);
-            if (tx != null)
-            {
-                if (!this.Metadata.Blocks.ContainsKey(blockHeight))
-                    this.Metadata.Blocks.Add(blockHeight, new BlockMetadata { HashBlock = block.GetHash().ToString(), ConfirmedTransactions = new Dictionary<string, TransactionMetadata>() });
-
-                this.Metadata.Blocks[blockHeight].ConfirmedTransactions.Add(tx.HashTx, tx);
-                return true;
+                amountSpent = 0;
+                return null;
             }
 
-            return false;
+            List<OutPoint> prevOuts = GetPrevOuts(transaction);
+            Dictionary<string, UtxoMetadata> spends = null;
+            long sum = 0;
 
-
-            Guard.NotNull(transaction, nameof(transaction));
-            uint256 hash = transaction.GetHash();
-
-            bool foundReceivingTrx = false, foundSendingTrx = false;
-
-            if (block != null)
+            foreach (var b in this.Metadata.Blocks.Values) // iterate ovr the large collection in outer loop (only once)
             {
-                // Do a pre-scan of the incoming transaction's inputs to see if they're used in other Wallet transactions already.
-                foreach (TxIn input in transaction.Inputs)
+                findOutPointInBlock:
+                foreach (OutPoint prevOut in prevOuts)
                 {
-                    // See if this input is being used by another Wallet transaction present in the index.
-                    // The inputs themselves may not belong to the Wallet, but the transaction data in the index has to be for a Wallet transaction.
-                    //if (this.inputLookup.TryGetValue(input.PrevOut, out TransactionData indexData))
-                    //{
-                    //    // It's the same transaction, which can occur if the transaction had been added to the Wallet previously. Ignore.
-                    //    if (indexData.Id == hash)
-                    //        continue;
+                    TransactionMetadata prevTx = b.Transactions.SingleOrDefault(x => x.HashTx == prevOut.Hash);
+                    if (prevTx != null)  // prevOut tx id is in the wallet
+                    {
+                        var prevWalletUtxo = prevTx.Received.Values.SingleOrDefault(x => x.Index == prevOut.N);  // do we have the indexed output?
+                        if (prevWalletUtxo != null)  // yes, it's a spend from this wallet
+                        {
+                            NotNull(ref spends, transaction.Inputs.Count); // ensure the return collection is initialized
+                            spends.Add(prevWalletUtxo.GetKey(), prevWalletUtxo);  // add the spend
+                            sum += prevWalletUtxo.Satoshis; // add amount
 
-                    //    if (indexData.BlockHash != null)
-                    //    {
-                    //        // This should not happen as pre checks are done in mempool and consensus.
-                    //        throw new WalletException("The same inputs were found in two different confirmed transactions");
-                    //    }
+                            if (spends.Count == transaction.Inputs.Count) // we will find no more spends than inputs, quick exit
+                            {
+                                amountSpent = sum;
+                                return spends;
+                            }
 
-                    //    // This is a double spend we remove the unconfirmed trx
-                    //    //this.RemoveTransactionsByIds(new[] { indexData.Id });
-
-                    //    this.inputLookup.Remove(input.PrevOut);
-                    //}
+                            prevOuts.Remove(prevOut); // do not search for this item any more
+                            goto findOutPointInBlock; // we need a new enumerator for the shortened collection
+                        }
+                    }  // is the next prvOut also in this block? That's definitely possible!
                 }
             }
+            amountSpent = sum;
+            return spends; // might be null or contain less then the tx inputs in edge cases, e.g. if an private key was removed from the wallet and no more items than the tx inputs.
+        }
 
-            // Check the outputs, ignoring the ones with a 0 amount.
-            foreach (TxOut utxo in transaction.Outputs.Where(o => o.Value != Money.Zero))
-            {
-                var address = FindAddressByScriptPubKey(utxo.ScriptPubKey);
-                if (address != null)
-                {
-                    //AddTransactionToWallet(transaction, utxo, address, this.Metadata, blockHeight, block, isPropagated);
-                    foundReceivingTrx = true;
-                    this.logger.LogDebug("Transaction '{0}' contained funds received by the user's Wallet(s).", hash);
-                }
-            }
-
-            // Check the inputs - include those that have a reference to a transaction containing one of our scripts and the same index.
+        List<OutPoint> GetPrevOuts(Transaction transaction)
+        {
+            var prevOuts = new List<OutPoint>(transaction.Inputs.Count);
             foreach (TxIn input in transaction.Inputs)
             {
-                //if (!this.outpointLookup.TryGetValue(input.PrevOut, out TransactionData tTx))
-                //{
-                //    continue;
-                //}
-
-                // Get the details of the outputs paid out.
-                IEnumerable<TxOut> paidOutTo = transaction.Outputs.Where(o =>
-                {
-                    // If script is empty ignore it.
-                    if (o.IsEmpty)
-                    {
-                        return false;
-                    }
-
-
-                    // Check if the destination script is one of the Wallet's.
-                    //bool found = this.scriptToAddressLookup.TryGetValue(o.ScriptPubKey, out KeyAddress addr);
-                    bool found = false;
-                    var address = FindAddressByScriptPubKey(o.ScriptPubKey);
-                    if (address != null)
-                    {
-                        //AddTransactionToWallet(transaction, o, address, this.Metadata, blockHeight, block, isPropagated);
-                        foundReceivingTrx = true;
-                        this.logger.LogDebug("Transaction '{0}' contained funds received by the user's Wallet(s).", hash);
-                        found = true;
-                    }
-                    else
-                    {
-                        // Include the keys not included in our wallets (external payees).
-                        //if (!found)
-                        //    return true;
-                        return true;
-                    }
-
-                    // Include the keys that are in the Wallet but that are for receiving
-                    // addresses (which would mean the user paid itself).
-                    // We also exclude the keys involved in a staking transaction.
-                    return !address.IsChange && !transaction.IsCoinStake;
-                });
-
-                //this.AddSpendingTransactionToWallet(transaction, paidOutTo, tTx.Id, tTx.Index, blockHeight, block);
-                foundSendingTrx = true;
-                this.logger.LogDebug("Transaction '{0}' contained funds sent by the user's Wallet(s).", hash);
+                prevOuts.Add(input.PrevOut);
             }
-            return foundSendingTrx || foundReceivingTrx;
+
+            return prevOuts;
         }
 
 
+
+        long? ProcessTransaction(Transaction transaction, int blockHeight, Block block)
+        {
+            var spent = ExtractOutgoingFunds(transaction, out var amountSpent);
+            var received = ExtractIncomingFunds(transaction, spent != null, out var amountReceived, out var destinations);
+
+
+            if (received == null && spent == null)
+                return null;
+
+            var walletTransaction = new TransactionMetadata
+            {
+                TxType = GetTxType(transaction, received, destinations, spent, null),
+                HashTx = transaction.GetHash(),
+                Received = received,
+                Destinations = destinations,
+                Spent = spent,
+            };
+
+            if (!this.Metadata.Blocks.TryGetValue(blockHeight, out BlockMetadata walletBlock))
+            {
+                walletBlock = new BlockMetadata { HashBlock = block.GetHash(), Transactions = new HashSet<TransactionMetadata>() };
+                this.Metadata.Blocks.Add(blockHeight, walletBlock);
+            }
+
+            walletBlock.Transactions.Add(walletTransaction);
+
+
+            return amountReceived - amountSpent;
+
+        }
+
+        TxType GetTxType(Transaction transaction, Dictionary<string, UtxoMetadata> received, Dictionary<string, UtxoMetadata> destinations, Dictionary<string, UtxoMetadata> spent, Dictionary<string, UtxoMetadata> sources)
+        {
+            if (transaction.IsCoinBase)
+                return TxType.Coinbase;
+            if (transaction.IsCoinStake)
+            {
+                if (transaction.Outputs.Count == 2)
+                    return TxType.CoinstakeLegacy;
+                if (transaction.Outputs.Count == 3)
+                    return TxType.Coinstake;
+            }
+
+            bool didReceive = received != null && received.Count > 0;
+            bool didSpend = spent != null && spent.Count > 0;
+            bool hasDestinations = destinations != null && destinations.Count > 0;
+
+            if (didReceive)
+            {
+                if (!didSpend)
+                    return TxType.Receive;
+
+                // if we are here we also spent something
+                if (!hasDestinations)
+                    return TxType.WithinWallet;
+                return TxType.Spend;
+            }
+
+            if (didSpend)
+                return TxType.SpendWithoutChange; // we spent with no change to out wallet
+
+            // if we are here, we neither spent or received and that should never happen for transactions that affect the wallet.
+            throw new ArgumentException(
+                $"{nameof(GetTxType)} cant't determine {nameof(TxType)} for transaction {transaction.GetHash()}.");
+        }
 
         public void StartStaking(string passphrase)
         {
@@ -767,72 +796,21 @@ namespace Obsidian.Features.X1Wallet
                 throw new X1WalletException(HttpStatusCode.InternalServerError, errorMessage, null);
             }
 
+            this.StakingManager = new StakingManager(passphrase, this);
+
             this.logger.LogInformation("Enabling staking on wallet '{0}'.", this.WalletName);
 
-            this.posMinting.Stake(new WalletSecret
-            {
-                WalletPassword = passphrase,
-                WalletName = this.WalletName
-            });
+            this.posMinting.Stake();
+           
         }
 
         internal void StopStaking()
         {
             this.posMinting.StopStake();
+            this.StakingManager.Dispose();
+            this.StakingManager = null;
         }
 
-        //public HashSet<(uint256, DateTimeOffset)> RemoveTransactionsByIds(IEnumerable<uint256> transactionsIds)
-        //{
-        //    List<uint256> idsToRemove = transactionsIds.ToList();
-        //    var result = new HashSet<(uint256, DateTimeOffset)>();
-
-        //    foreach (P2WpkhAddress addr in this.X1WalletFile.P2WPKHAddresses.Values)
-        //    {
-        //        var txs = addr.GetTransactionsByAddress();
-
-        //        for (int i = 0; i < txs.Count; i++)
-        //        {
-        //            TransactionData transaction = txs.ElementAt(i);
-
-        //            // Remove the transaction from the list of transactions affecting an address.
-        //            // Only transactions that haven't been confirmed in a block can be removed.
-        //            if (!transaction.IsConfirmed() && idsToRemove.Contains(transaction.Id))
-        //            {
-        //                result.Add((transaction.Id, transaction.CreationTime));
-        //                txs = txs.Except(new[] { transaction }).ToList();
-        //                i--;
-        //            }
-
-        //            // Remove the spending transaction object containing this transaction id.
-        //            if (transaction.SpendingDetails != null && !transaction.SpendingDetails.IsSpentConfirmed() && idsToRemove.Contains(transaction.SpendingDetails.TransactionId))
-        //            {
-        //                result.Add((transaction.SpendingDetails.TransactionId, transaction.SpendingDetails.CreationTime));
-        //                txs.ElementAt(i).SpendingDetails = null;
-        //            }
-        //        }
-        //    }
-
-
-        //    if (result.Any())
-        //    {
-        //        // Reload the lookup dictionaries.
-        //        this.RefreshDictionary_OutpointTransactionData();
-
-        //        this.SaveMetadata();
-        //    }
-
-        //    return result;
-        //}
-
-        public Dictionary<string, ScriptTemplate> GetValidStakingTemplates()
-        {
-            return new Dictionary<string, ScriptTemplate>();
-        }
-
-        public IEnumerable<BuilderExtension> GetTransactionBuilderExtensionsForStaking()
-        {
-            throw new NotImplementedException();
-        }
 
 
         #endregion
@@ -858,110 +836,54 @@ namespace Obsidian.Features.X1Wallet
                 hash160 = scriptPubKey.Hash.ToBytes();
             }
 
-            Debug.Assert(hash160.Length == 20);
-            var key = hash160.ToHexString();
-            this.X1WalletFile.P2WPKHAddresses.TryGetValue(key, out P2WpkhAddress address);
+            var bech32P2WpkhFromHash160 = hash160.Bech32P2WpkhFromHash160();
+            this.X1WalletFile.Addresses.TryGetValue(bech32P2WpkhFromHash160, out P2WpkhAddress address);
             return address;
+        }
+
+        string CreateDestinationStringFromScriptPubKey(Script scriptPubKey)
+        {
+            try
+            {
+                byte[] raw = scriptPubKey.ToBytes();
+                var pubKey = scriptPubKey.GetDestinationPublicKeys(this.network).SingleOrDefault();
+
+                byte[] hash160;
+                if (pubKey != null)
+                {
+                    hash160 = pubKey.Hash.ToBytes();
+                }
+                else if (raw.Length == 22 && raw[0] == 0 && raw[1] == 20) // push 20 (x14) bytes
+                {
+                    hash160 = raw.Skip(2).Take(20).ToArray();
+                }
+                else
+                {
+                    hash160 = scriptPubKey.Hash.ToBytes();
+                }
+
+                return hash160.Bech32P2WpkhFromHash160();
+
+            }
+            catch (Exception e)
+            {
+                if (scriptPubKey != null)
+                {
+                    var dest = scriptPubKey.ToBytes().ToHexString();
+                    this.logger.LogWarning($"{nameof(CreateDestinationStringFromScriptPubKey)}: Unknown script {dest}. {e.Message}");
+                    return dest;
+                }
+                else
+                {
+                    this.logger.LogWarning($"{nameof(CreateDestinationStringFromScriptPubKey)}: ScriptPubKey: null. {e.Message}");
+                    return "ScriptPubKey: null";
+                }
+            }
+
         }
 
 
 
-
-        /// <summary>
-        /// Mark an output as spent, the credit of the output will not be used to calculate the balance.
-        /// The output will remain in the Wallet for history (and reorg).
-        /// </summary>
-        /// <param name="transaction">The transaction from which details are added.</param>
-        /// <param name="paidToOutputs">A list of payments made out</param>
-        /// <param name="spendingTransactionId">The id of the transaction containing the output being spent, if this is a spending transaction.</param>
-        /// <param name="spendingTransactionIndex">The index of the output in the transaction being referenced, if this is a spending transaction.</param>
-        /// <param name="blockHeight">Height of the block.</param>
-        /// <param name="block">The block containing the transaction to add.</param>
-        //void AddSpendingTransactionToWallet(Transaction transaction, IEnumerable<TxOut> paidToOutputs,
-        //    uint256 spendingTransactionId, int? spendingTransactionIndex, int? blockHeight = null, Block block = null)
-        //{
-        //    Guard.NotNull(transaction, nameof(transaction));
-        //    Guard.NotNull(paidToOutputs, nameof(paidToOutputs));
-
-        //    uint256 transactionHash = transaction.GetHash();
-
-        //    IEnumerable<TransactionData> allTransactionData = this.X1WalletFile.P2WPKHAddresses.Values.SelectMany(v => v.GetTransactionsByAddress());
-        //    var spentTransaction = allTransactionData.SingleOrDefault(t => (t.Id == spendingTransactionId) && (t.Index == spendingTransactionIndex));
-
-        //    if (spentTransaction == null)
-        //    {
-        //        // Strange, why would it be null?
-        //        this.logger.LogTrace("(-)[TX_NULL]");
-        //        return;
-        //    }
-
-        //    // If the details of this spending transaction are seen for the first time.
-        //    if (spentTransaction.SpendingDetails == null)
-        //    {
-        //        this.logger.LogTrace("Spending UTXO '{0}-{1}' is new.", spendingTransactionId, spendingTransactionIndex);
-
-        //        var payments = new List<PaymentDetails>();
-        //        foreach (TxOut paidToOutput in paidToOutputs)
-        //        {
-        //            // Figure out how to retrieve the destination address.
-        //            string destinationAddress = this.scriptAddressReader.GetAddressFromScriptPubKey(this.network, paidToOutput.ScriptPubKey);
-        //            if (string.IsNullOrEmpty(destinationAddress))
-        //            {
-        //                var destination = FindAddressByScriptPubKey(paidToOutput.ScriptPubKey);
-        //                if (destination != null)
-        //                {
-        //                    destinationAddress = destination.Address;
-        //                }
-        //            }
-
-
-        //            payments.Add(new PaymentDetails
-        //            {
-        //                DestinationScriptPubKey = paidToOutput.ScriptPubKey,
-        //                DestinationAddress = destinationAddress,
-        //                Amount = paidToOutput.Value,
-        //                OutputIndex = transaction.Outputs.IndexOf(paidToOutput)
-        //            });
-        //        }
-
-        //        var spendingDetails = new SpendingDetails
-        //        {
-        //            TransactionId = transactionHash,
-        //            Payments = payments,
-        //            CreationTime = DateTimeOffset.FromUnixTimeSeconds(block?.Header.Time ?? transaction.Time),
-        //            BlockHeight = blockHeight,
-        //            BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash),
-        //            Hex = transaction.ToHex(),
-        //            IsCoinStake = transaction.IsCoinStake == false ? (bool?)null : true
-        //        };
-
-        //        spentTransaction.SpendingDetails = spendingDetails;
-        //        spentTransaction.MerkleProof = null;
-        //    }
-        //    else // If this spending transaction is being confirmed in a block.
-        //    {
-        //        this.logger.LogTrace("Spending transaction ID '{0}' is being confirmed, updating.", spendingTransactionId);
-
-        //        // Update the block height.
-        //        if (spentTransaction.SpendingDetails.BlockHeight == null && blockHeight != null)
-        //        {
-        //            spentTransaction.SpendingDetails.BlockHeight = blockHeight;
-        //        }
-
-        //        // Update the block time to be that of the block in which the transaction is confirmed.
-        //        if (block != null)
-        //        {
-        //            spentTransaction.SpendingDetails.CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time);
-        //            spentTransaction.BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash);
-        //        }
-        //    }
-
-        //    // If the transaction is spent and confirmed, we remove the UTXO from the lookup dictionary.
-        //    if (spentTransaction.SpendingDetails.BlockHeight != null)
-        //    {
-        //        this.outpointLookup.Remove(new OutPoint(spentTransaction.Id, spentTransaction.Index));
-        //    }
-        //}
 
         void SaveMetadata()
         {
@@ -993,130 +915,26 @@ namespace Obsidian.Features.X1Wallet
         void UpdateLastBlockSyncedAndCheckpoint(ChainedHeader lastBlockSynced)
         {
             this.Metadata.SyncedHeight = lastBlockSynced.Height;
-            this.Metadata.SyncedHash = lastBlockSynced.HashBlock.ToString();
+            this.Metadata.SyncedHash = lastBlockSynced.HashBlock;
 
             const int minCheckpointHeight = 500;
             if (lastBlockSynced.Height > minCheckpointHeight)
             {
                 var checkPoint = this.chainIndexer.GetHeader(lastBlockSynced.Height - minCheckpointHeight);
-                this.Metadata.CheckpointHash = checkPoint.HashBlock.ToString();
+                this.Metadata.CheckpointHash = checkPoint.HashBlock;
                 this.Metadata.CheckpointHeight = checkPoint.Height;
             }
             else
             {
-                this.Metadata.CheckpointHash = this.network.GenesisHash.ToString();
+                this.Metadata.CheckpointHash = this.network.GenesisHash;
                 this.Metadata.CheckpointHeight = 0;
             }
         }
 
         internal P2WpkhAddress GetAddress(string address)
         {
-            return this.X1WalletFile.P2WPKHAddresses.Values.Single(x => x.Address == address);
+            return this.X1WalletFile.Addresses[address];
         }
-
-        /// <summary>
-        /// Adds a transaction that credits the Wallet with new coins.
-        /// This method is can be called many times for the same transaction (idempotent).
-        /// </summary>
-        /// <param name="transaction">The transaction from which details are added.</param>
-        /// <param name="utxo">The unspent output to add to the Wallet.</param>
-        /// <param name="blockHeight">Height of the block.</param>
-        /// <param name="block">The block containing the transaction to add.</param>
-        /// <param name="isPropagated">Propagation state of the transaction.</param>
-        //void AddTransactionToWallet(Transaction transaction, TxOut utxo, P2WpkhAddress address,  int? blockHeight = null, Block block = null, bool isPropagated = true)
-        //{
-
-        //    uint256 transactionHash = transaction.GetHash();
-
-        //    // Get the collection of transactions to add to.
-        //    Script script = utxo.ScriptPubKey;
-        //    if (Metadata.Transactions.TryGetValue(address.HashHex, out List<TransactionData> txs))
-        //    {
-        //        // Check if a similar UTXO exists or not (same transaction ID and same index).
-        //        // New UTXOs are added, existing ones are updated.
-        //        int index = transaction.Outputs.IndexOf(utxo);
-        //        Money amount = utxo.Value;
-        //        TransactionData foundTransaction = txs.FirstOrDefault(t => (t.Id == transactionHash) && (t.Index == index));
-        //        if (foundTransaction == null)
-        //        {
-        //            this.logger.LogTrace("UTXO '{0}-{1}' not found, creating.", transactionHash, index);
-        //            var newTransaction = new TransactionData
-        //            {
-        //                Amount = amount,
-        //                IsCoinBase = transaction.IsCoinBase == false ? (bool?)null : true,
-        //                IsCoinStake = transaction.IsCoinStake == false ? (bool?)null : true,
-        //                BlockHeight = blockHeight,
-        //                BlockHash = block?.GetHash(),
-        //                BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash),
-        //                Id = transactionHash,
-        //                CreationTime = DateTimeOffset.FromUnixTimeSeconds(block?.Header.Time ?? transaction.Time),
-        //                Index = index,
-        //                ScriptPubKey = script,
-        //                Hex = transaction.ToHex(),
-        //                IsPropagated = isPropagated,
-        //            };
-
-        //            // Add the Merkle proof to the (non-spending) transaction.
-        //            if (block != null)
-        //            {
-        //                newTransaction.MerkleProof = new MerkleBlock(block, new[] { transactionHash }).PartialMerkleTree;
-        //            }
-
-        //            txs.Add(newTransaction);
-        //            this.outpointLookup[new OutPoint(newTransaction.Id, newTransaction.Index)] = newTransaction;
-
-        //            if (block == null)
-        //            {
-        //                // Unconfirmed inputs track for double spends.
-        //                foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
-        //                {
-        //                    this.inputLookup[input] = newTransaction;
-        //                }
-        //            }
-        //        }
-        //        else
-        //        {
-        //            this.logger.LogTrace("Transaction ID '{0}' found, updating.", transactionHash);
-
-        //            // Update the block height and block hash.
-        //            if ((foundTransaction.BlockHeight == null) && (blockHeight != null))
-        //            {
-        //                foundTransaction.BlockHeight = blockHeight;
-        //                foundTransaction.BlockHash = block?.GetHash();
-        //                foundTransaction.BlockIndex = block?.Transactions.FindIndex(t => t.GetHash() == transactionHash);
-        //            }
-
-        //            // Update the block time.
-        //            if (block != null)
-        //            {
-        //                foundTransaction.CreationTime = DateTimeOffset.FromUnixTimeSeconds(block.Header.Time);
-        //            }
-
-        //            // Add the Merkle proof now that the transaction is confirmed in a block.
-        //            if ((block != null) && (foundTransaction.MerkleProof == null))
-        //            {
-        //                foundTransaction.MerkleProof = new MerkleBlock(block, new[] { transactionHash }).PartialMerkleTree;
-        //            }
-
-        //            if (isPropagated)
-        //                foundTransaction.IsPropagated = true;
-
-        //            if (block != null)
-        //            {
-        //                // Inputs are in a block no need to track them anymore.
-        //                foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
-        //                {
-        //                    this.inputLookup.Remove(input);
-        //                }
-        //            }
-        //        }
-
-
-        //    }
-
-
-
-        //}
 
 
 

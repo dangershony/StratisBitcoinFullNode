@@ -31,19 +31,19 @@ namespace Obsidian.Features.X1Wallet
 
         protected readonly StandardTransactionPolicy TransactionPolicy;
 
-        readonly WalletManagerWrapper walletManagerWrapper;
+        readonly WalletManagerFactory walletManagerFactory;
 
         private readonly IWalletFeePolicy walletFeePolicy;
 
         public TransactionHandler(
             ILoggerFactory loggerFactory,
-            WalletManagerWrapper walletManager,
+            WalletManagerFactory walletManager,
             IWalletFeePolicy walletFeePolicy,
             Network network,
             StandardTransactionPolicy transactionPolicy)
         {
             this.network = network;
-            this.walletManagerWrapper = (WalletManagerWrapper)walletManager;
+            this.walletManagerFactory = (WalletManagerFactory)walletManager;
             this.walletFeePolicy = walletFeePolicy;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
 
@@ -128,7 +128,7 @@ namespace Obsidian.Features.X1Wallet
             Guard.NotEmpty(accountReference.WalletName, nameof(accountReference.WalletName));
 
             long maxSpendableAmount;
-            using (var context = this.walletManagerWrapper.GetWalletContext(accountReference.WalletName))
+            using (var context = this.walletManagerFactory.GetWalletContext(accountReference.WalletName))
             {
                 // Get the total value of spendable coins in the account.
                 maxSpendableAmount = context.WalletManager.GetAllSpendableTransactions(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
@@ -208,16 +208,12 @@ namespace Obsidian.Features.X1Wallet
                 context.TransactionBuilder.SetTimeStamp(context.Time.Value);
         }
 
-        /// <summary>
-        /// Loads all the private keys for each of the <see cref="HdAddress"/> in <see cref="TransactionBuildContext.UnspentOutputs"/>
-        /// </summary>
-        /// <param name="context">The context associated with the current transaction being built.</param>
-        protected void AddSecrets(TransactionBuildContext context)
+        void AddSecrets(TransactionBuildContext context)
         {
             if (!context.Sign)
                 return;
 
-            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            using (var context2 = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
             {
                 var addresses = context2.WalletManager.GetAllAddresses();
                 // TODO: only decrypt the keys needed
@@ -229,184 +225,41 @@ namespace Obsidian.Features.X1Wallet
                 context.TransactionBuilder.AddKeys(keys);
             }
 
-
-
-            //Wallet wallet = this.walletManager.GetWalletByName(context.AccountReference.WalletName);
-            //ExtKey seedExtKey = this.walletManager.GetExtKey(context.AccountReference, context.WalletPassword, context.CacheSecret);
-
-            //var signingKeys = new HashSet<ISecret>();
-            //var added = new HashSet<HdAddress>();
-            //foreach (UnspentOutputReference unspentOutputsItem in context.UnspentOutputs)
-            //{
-            //    if (added.Contains(unspentOutputsItem.Address))
-            //        continue;
-
-            //    HdAddress address = unspentOutputsItem.Address;
-            //    ExtKey addressExtKey = seedExtKey.Derive(new KeyPath(address.HdPath));
-            //    BitcoinExtKey addressPrivateKey = addressExtKey.GetWif(wallet.Network);
-            //    signingKeys.Add(addressPrivateKey);
-            //    added.Add(unspentOutputsItem.Address);
-            //}
-
-            //context.TransactionBuilder.AddKeys(signingKeys.ToArray());
         }
 
-        /// <summary>
-        /// Find the next available change address.
-        /// </summary>
-        /// <param name="context">The context associated with the current transaction being built.</param>
-        protected void FindChangeAddress(TransactionBuildContext context)
+      
+        void FindChangeAddress(TransactionBuildContext context)
         {
-            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            using (var walletContext = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
             {
-                P2WpkhAddress changeAddress = context2.WalletManager.GetUnusedAddress();
-                // fall back to an unused address which is not a change address
+                P2WpkhAddress changeAddress = walletContext.WalletManager.GetUnusedAddress();
+                
                 if(changeAddress == null)
                 {
                     throw new X1WalletException(System.Net.HttpStatusCode.BadRequest,
                         $"The wallet doesn't have any unused addresses left to provide an unused change address for this transaction.",
                         null);
                 }
-                context.TransactionBuilder.SetChange(changeAddress.GetPaymentScript());
+                context.TransactionBuilder.SetChange(changeAddress.ScriptPubKeyFromPublicKey());
             }
         }
 
-        /// <summary>
-        /// Find all available outputs (UTXO's) that belong to <see cref="WalletAccountReference.AccountName"/>.
-        /// Then add them to the <see cref="TransactionBuildContext.UnspentOutputs"/>.
-        /// </summary>
-        /// <param name="context">The context associated with the current transaction being built.</param>
-        protected void AddCoins(TransactionBuildContext context)
+        void AddCoins(TransactionBuildContext context)
         {
-            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
+            using (var walletContext = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
             {
-                var allSpendableCoins = context2.WalletManager.GetAllSpendableCoins();
-
-                // All the UTXOs are added to the builder without filtering.
-                // The builder then has its own coin selection mechanism
-                // to select the best UTXO set for the corresponding amount.
-                // To add a custom implementation of a coin selection override
-                // the builder using builder.SetCoinSelection().
+                var allSpendableCoins = walletContext.WalletManager.GetBudget(out Balance _);
                 context.TransactionBuilder.AddCoins(allSpendableCoins);
             }
-
-            return;
-
-            var unspentOutputs = new List<UnspentKeyAddressOutput>();
-            using (var context2 = this.walletManagerWrapper.GetWalletContext(context.AccountReference.WalletName))
-            {
-                unspentOutputs.AddRange(context2.WalletManager.GetAllSpendableTransactions(context.MinConfirmations));
-            }
-               
-            if (unspentOutputs.Count == 0)
-            {
-                throw new WalletException("No spendable transactions found.");
-            }
-
-            context.UnspentOutputs = new List<UnspentOutputReference>();  // let's see if we can get away with a local var instead
-
-            foreach (var uo in unspentOutputs)
-            {
-                var ur = new UnspentOutputReference
-                {
-                    Transaction = uo.Transaction,
-                    Confirmations = uo.Confirmations,
-                    Account = null,
-                    Address = null
-                };
-                context.UnspentOutputs.Add(ur);
-            }
-
-            // Get total spendable balance in the account.
-            long balance = unspentOutputs.Sum(t => t.Transaction.Amount);
-            long totalToSend = context.Recipients.Sum(s => s.Amount);
-            if (balance < totalToSend)
-                throw new WalletException("Not enough funds.");
-
-            Money sum = 0;
-            var coins = new List<Coin>();
-
-            if (context.SelectedInputs != null && context.SelectedInputs.Any())
-            {
-                // 'SelectedInputs' are inputs that must be included in the
-                // current transaction. At this point we check the given
-                // input is part of the UTXO set and filter out UTXOs that are not
-                // in the initial list if 'context.AllowOtherInputs' is false.
-
-                Dictionary<OutPoint, UnspentKeyAddressOutput> availableHashList = unspentOutputs.ToDictionary(item => item.ToOutPoint(), item => item);
-
-                if (!context.SelectedInputs.All(input => availableHashList.ContainsKey(input)))
-                    throw new WalletException("Not all the selected inputs were found on the wallet.");
-
-                if (!context.AllowOtherInputs)
-                {
-                    foreach (KeyValuePair<OutPoint, UnspentKeyAddressOutput> unspentOutputsItem in availableHashList)
-                    {
-                        if (!context.SelectedInputs.Contains(unspentOutputsItem.Key))
-                            unspentOutputs.Remove(unspentOutputsItem.Value);
-                    }
-                }
-
-                foreach (OutPoint outPoint in context.SelectedInputs)
-                {
-                    UnspentKeyAddressOutput item = availableHashList[outPoint];
-
-                    coins.Add(new Coin(item.Transaction.Id, (uint)item.Transaction.Index, item.Transaction.Amount, item.Transaction.ScriptPubKey));
-                    sum += item.Transaction.Amount;
-                }
-            }
-
-            foreach (UnspentKeyAddressOutput item in unspentOutputs
-                .OrderByDescending(a => a.Confirmations > 0)
-                .ThenByDescending(a => a.Transaction.Amount))
-            {
-                if (context.SelectedInputs?.Contains(item.ToOutPoint()) ?? false)
-                    continue;
-
-                // If the total value is above the target
-                // then it's safe to stop adding UTXOs to the coin list.
-                // The primary goal is to reduce the time it takes to build a trx
-                // when the wallet is bloated with UTXOs.
-                if (sum > totalToSend)
-                    break;
-
-                coins.Add(new Coin(item.Transaction.Id, (uint)item.Transaction.Index, item.Transaction.Amount, item.Transaction.ScriptPubKey));
-                sum += item.Transaction.Amount;
-            }
-            // All the UTXOs are added to the builder without filtering.
-            // The builder then has its own coin selection mechanism
-            // to select the best UTXO set for the corresponding amount.
-            // To add a custom implementation of a coin selection override
-            // the builder using builder.SetCoinSelection().
-            context.TransactionBuilder.AddCoins(coins);
-            
-          
         }
 
-        /// <summary>
-        /// Add recipients to the <see cref="TransactionBuilder"/>.
-        /// </summary>
-        /// <param name="context">The context associated with the current transaction being built.</param>
-        /// <remarks>
-        /// Add outputs to the <see cref="TransactionBuilder"/> based on the <see cref="Recipient"/> list.
-        /// </remarks>
         protected virtual void AddRecipients(TransactionBuildContext context)
         {
-            if (context.Recipients.Any(a => a.Amount == Money.Zero))
-                throw new WalletException("No amount specified.");
-
-            if (context.Recipients.Any(a => a.SubtractFeeFromAmount))
-                throw new NotImplementedException("Substracting the fee from the recipient is not supported yet.");
-
             foreach (Recipient recipient in context.Recipients)
                 context.TransactionBuilder.Send(recipient.ScriptPubKey, recipient.Amount);
         }
 
-        /// <summary>
-        /// Use the <see cref="FeeRate"/> from the <see cref="walletFeePolicy"/>.
-        /// </summary>
-        /// <param name="context">The context associated with the current transaction being built.</param>
-        protected void AddFee(TransactionBuildContext context)
+        void AddFee(TransactionBuildContext context)
         {
             Money fee;
             Money minTrxFee = new Money(this.network.MinTxFee, MoneyUnit.Satoshi);
@@ -434,16 +287,12 @@ namespace Obsidian.Features.X1Wallet
             context.TransactionFee = fee;
         }
 
-        /// <summary>
-        /// Add extra unspendable output to the transaction if there is anything in OpReturnData.
-        /// </summary>
-        /// <param name="context">The context associated with the current transaction being built.</param>
-        protected void AddOpReturnOutput(TransactionBuildContext context)
+        void AddOpReturnOutput(TransactionBuildContext context)
         {
-            if (string.IsNullOrEmpty(context.OpReturnData)) return;
+            if (string.IsNullOrWhiteSpace(context.OpReturnData))
+                return;
 
             byte[] bytes = Encoding.UTF8.GetBytes(context.OpReturnData);
-            // TODO: Get the template from the network standard scripts instead
             Script opReturnScript = TxNullDataTemplate.Instance.GenerateScriptPubKey(bytes);
             context.TransactionBuilder.Send(opReturnScript, context.OpReturnAmount ?? Money.Zero);
         }
