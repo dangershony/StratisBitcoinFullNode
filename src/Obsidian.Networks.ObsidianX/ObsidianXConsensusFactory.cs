@@ -12,6 +12,11 @@ namespace Obsidian.Networks.ObsidianX
             return new ObsidianXBlockHeader();
         }
 
+        public override ProvenBlockHeader CreateProvenBlockHeader()
+        {
+            return new ObsidianXProvenBlockHeader();
+        }
+
         public Block CreateObsidianGenesisBlock(uint genesisTime, uint genesisNonce, uint genesisBits, int genesisVersion, Money genesisReward, bool? mine = false)
         {
             if (mine == true)
