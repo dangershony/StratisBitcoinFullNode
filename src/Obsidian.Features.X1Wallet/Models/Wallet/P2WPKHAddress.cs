@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Obsidian.Features.X1Wallet.Storage
+namespace Obsidian.Features.X1Wallet.Models.Wallet
 {
     public class P2WpkhAddress : IEquatable<P2WpkhAddress>
     {

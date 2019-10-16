@@ -1,24 +1,25 @@
 ﻿using System.Text;
 using System.Threading.Tasks;
 using NBitcoin;
-using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.Configuration.Logging;
 using Stratis.Bitcoin.Connection;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.Features.X1Wallet
+namespace Obsidian.Features.X1Wallet.Feature
 {
     /// <inheritdoc />
-    public class WalletFeature : BaseWalletFeature
+    public class X1WalletFeature : BaseWalletFeature
     {
         readonly WalletManagerFactory walletManagerFactory;
         readonly IConnectionManager connectionManager;
         readonly BroadcasterBehavior broadcasterBehavior;
         readonly Network network;
 
-        public WalletFeature(
+        public X1WalletFeature(
             WalletManagerFactory walletManagerFactory,
             IConnectionManager connectionManager,
             BroadcasterBehavior broadcasterBehavior,
@@ -35,7 +36,7 @@ namespace Obsidian.Features.X1Wallet
 
         public override Task InitializeAsync()
         {
-            HashStringExtensions.Init(this.network);
+            IsDefaultBlockHashExtension.Init(this.network);
 
             this.connectionManager.Parameters.TemplateBehaviors.Add(this.broadcasterBehavior);
 

@@ -4,7 +4,7 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
-using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.SecureApi.Models;
 using VisualCrypt.VisualCryptLight;
 using VisualCrypt.VisualCryptLight.VisualCryptLib.ECC;

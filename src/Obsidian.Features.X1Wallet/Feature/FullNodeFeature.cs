@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using NBitcoin.Policy;
 using Obsidian.Features.X1Wallet.Staking;
+using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration.Logging;
 using Stratis.Bitcoin.Consensus;
@@ -16,7 +17,7 @@ using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Mining;
 
-namespace Obsidian.Features.X1Wallet
+namespace Obsidian.Features.X1Wallet.Feature
 {
     /// <summary>
     /// A class providing extension methods for <see cref="IFullNodeBuilder"/>.
@@ -32,12 +33,12 @@ namespace Obsidian.Features.X1Wallet
             // Register the cold staking script template.
             fullNodeBuilder.Network.StandardScriptsRegistry.RegisterStandardScriptTemplate(ColdStakingScriptTemplate.Instance);
 
-            LoggingConfiguration.RegisterFeatureNamespace<WalletFeature>(nameof(WalletFeature));
+            LoggingConfiguration.RegisterFeatureNamespace<X1WalletFeature>(nameof(X1WalletFeature));
 
             fullNodeBuilder.ConfigureFeature(features =>
             {
                 features
-                    .AddFeature<WalletFeature>()
+                    .AddFeature<X1WalletFeature>()
                     .DependOn<MempoolFeature>()
                     .DependOn<BlockStoreFeature>()
                     .FeatureServices(services =>

@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
-using Stratis.Bitcoin.Utilities.JsonConverters;
 
-namespace Obsidian.Features.X1Wallet.Storage
+namespace Obsidian.Features.X1Wallet.Models.Wallet
 {
     public class X1WalletFile
     {

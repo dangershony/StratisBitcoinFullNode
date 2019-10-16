@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Obsidian.Features.X1Wallet.Models
+﻿namespace Obsidian.Features.X1Wallet.Models.Api
 {
     public class ImportKeysRequest
     {

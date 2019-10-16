@@ -4,10 +4,11 @@ using System.IO;
 using NBitcoin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using Obsidian.Features.X1Wallet.Models.Wallet;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Utilities.JsonConverters;
 
-namespace Obsidian.Features.X1Wallet.Storage
+namespace Obsidian.Features.X1Wallet.Tools
 {
     public static class WalletHelper
     {

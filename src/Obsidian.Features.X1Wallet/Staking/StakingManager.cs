@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
-using Obsidian.Features.X1Wallet.Storage;
+using Obsidian.Features.X1Wallet.Models.Wallet;
 using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.Staking

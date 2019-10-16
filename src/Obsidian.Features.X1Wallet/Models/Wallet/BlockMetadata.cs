@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using NBitcoin;
 
-namespace Obsidian.Features.X1Wallet.Storage
+namespace Obsidian.Features.X1Wallet.Models.Wallet
 {
     public class BlockMetadata
     {

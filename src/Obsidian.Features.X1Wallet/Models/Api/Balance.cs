@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace Obsidian.Features.X1Wallet.Models
+namespace Obsidian.Features.X1Wallet.Models.Api
 {
     public class Balance
     {

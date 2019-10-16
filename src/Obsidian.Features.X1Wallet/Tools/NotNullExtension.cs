@@ -1,9 +1,8 @@
 ﻿using System.Collections.Generic;
-using NBitcoin;
 
-namespace Obsidian.Features.X1Wallet.Extensions
+namespace Obsidian.Features.X1Wallet.Tools
 {
-    public static class Tools
+    public static class NotNullExtension
     {
         public static void NotNull<K, T>(ref Dictionary<K, T> list, int capacity)
         {

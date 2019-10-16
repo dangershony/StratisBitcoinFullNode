@@ -4,7 +4,7 @@ using NBitcoin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
-namespace Obsidian.Features.X1Wallet.Storage
+namespace Obsidian.Features.X1Wallet.Models.Wallet
 {
     public class TransactionMetadata : IEquatable<TransactionMetadata>
     {

@@ -1,8 +1,6 @@
-﻿using System;
-using System.Text;
-using Obsidian.Features.X1Wallet.Storage;
+﻿using Obsidian.Features.X1Wallet.Models.Wallet;
 
-namespace Obsidian.Features.X1Wallet.Models
+namespace Obsidian.Features.X1Wallet.Models.Api
 {
     public class KeyAddressModel
     {

@@ -5,14 +5,16 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.Policy;
-using Obsidian.Features.X1Wallet.Models;
-using Obsidian.Features.X1Wallet.Storage;
+using Obsidian.Features.X1Wallet.Feature;
+using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Wallet;
+using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
 
-namespace Obsidian.Features.X1Wallet
+namespace Obsidian.Features.X1Wallet.Transactions
 {
     /// <summary>
     /// A handler with functionality related to transaction operations.
@@ -130,8 +132,8 @@ namespace Obsidian.Features.X1Wallet
             long maxSpendableAmount;
             using (var context = this.walletManagerFactory.GetWalletContext(accountReference.WalletName))
             {
-                // Get the total value of spendable coins in the account.
-                maxSpendableAmount = context.WalletManager.GetAllSpendableTransactions(allowUnconfirmed ? 0 : 1).Sum(x => x.Transaction.Amount);
+                context.WalletManager.GetBudget(out var balance);
+                maxSpendableAmount = balance.SpendableAmount;
             }
 
 

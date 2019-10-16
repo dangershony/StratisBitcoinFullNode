@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Net;
 
-namespace Obsidian.Features.X1Wallet.Models
+namespace Obsidian.Features.X1Wallet.Feature
 {
     public class X1WalletException : Exception
     {
-        public HttpStatusCode HttpStatusCode;
+        public readonly HttpStatusCode HttpStatusCode;
 
-        public X1WalletException(HttpStatusCode httpStatusCode, string message, Exception innerException) : base(message,innerException)
+        public X1WalletException(HttpStatusCode httpStatusCode, string message, Exception innerException = null) : base(message,innerException)
         {
             this.HttpStatusCode = httpStatusCode;
         }

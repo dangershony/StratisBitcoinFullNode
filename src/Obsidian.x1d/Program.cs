@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using NBitcoin;
 using NBitcoin.Protocol;
 using Obsidian.Features.X1Wallet;
+using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Networks.ObsidianX;
 using Obsidian.x1d.Api;
@@ -64,7 +65,7 @@ namespace Obsidian.x1d
                 _ = Task.Run(async () =>
                   {
                       await Task.Delay(7500);
-                      TestBench.RunTestCodeAsync((FullNode)node);  // start mining to the wallet
+                 TestBench.RunTestCodeAsync((FullNode)node);  // start mining to the wallet
                   });
 //#endif
 
