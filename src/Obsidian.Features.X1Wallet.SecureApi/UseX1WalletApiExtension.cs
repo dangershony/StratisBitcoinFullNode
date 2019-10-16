@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Obsidian.Features.X1Wallet.Feature;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration.Logging;
 
@@ -14,7 +15,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
             {
                 features
                     .AddFeature<X1WalletApiFeature>()
-                    .DependOn<WalletFeature>()
+                    .DependOn<X1WalletFeature>()
                     .FeatureServices(services =>
                     {
                         services.AddTransient<SecureApiController>();

@@ -53,6 +53,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Obsidian.DroidD", "Obsidian
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.x1d", "Obsidian.x1d\Obsidian.x1d.csproj", "{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FodyNlogAdapter", "FodyNlogAdapter\FodyNlogAdapter.csproj", "{E0200816-8040-40B0-80E6-0AFD4006DC29}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -147,6 +149,10 @@ Global
 		{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{25B6933E-2ACC-43D9-BA85-7B5CAFDB6578}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E0200816-8040-40B0-80E6-0AFD4006DC29}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E0200816-8040-40B0-80E6-0AFD4006DC29}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E0200816-8040-40B0-80E6-0AFD4006DC29}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E0200816-8040-40B0-80E6-0AFD4006DC29}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

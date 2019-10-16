@@ -9,9 +9,11 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.DataEncoders;
-using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Feature;
+using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Staking;
-using Obsidian.Features.X1Wallet.Storage;
+using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
@@ -23,7 +25,7 @@ using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
-using static Obsidian.Features.X1Wallet.Extensions.Tools;
+using static Obsidian.Features.X1Wallet.Tools.NotNullExtension;
 
 namespace Obsidian.Features.X1Wallet
 {
@@ -239,7 +241,7 @@ namespace Obsidian.Features.X1Wallet
         bool IsOnBestChain()
         {
             bool isOnBestChain;
-            if (this.Metadata.SyncedHeight == 0 || this.Metadata.SyncedHash.IsDefault())
+            if (this.Metadata.SyncedHeight == 0 || this.Metadata.SyncedHash.IsDefaultBlockHash())
             {
                 // if the height is 0, we cannot be on the wrong chain
                 ResetMetadata();
@@ -261,7 +263,7 @@ namespace Obsidian.Features.X1Wallet
         void MoveToBestChain()
         {
             ChainedHeader checkpointHeader = null;
-            if (!this.Metadata.CheckpointHash.IsDefault())
+            if (!this.Metadata.CheckpointHash.IsDefaultBlockHash())
             {
                 var header = this.chainIndexer.GetHeader(this.Metadata.CheckpointHash);
                 if (header != null && this.Metadata.CheckpointHeight == header.Height)
@@ -457,23 +459,6 @@ namespace Obsidian.Features.X1Wallet
             SaveMetadata();
         }
 
-        public List<UnspentKeyAddressOutput> GetAllSpendableTransactions(int confirmations = 0)
-        {
-            var res = new List<UnspentKeyAddressOutput>();
-            var coins = new List<Coin>();
-            foreach (var block in this.Metadata.Blocks)
-            {
-                foreach (var tx in block.Value.Transactions)
-                {
-                    foreach (UtxoMetadata o in tx.Received.Values)
-                    {
-                        coins.Add(new Coin(tx.HashTx, (uint)o.Index, Money.Satoshis(o.Satoshis), this.X1WalletFile.Addresses[o.Address].ScriptPubKeyFromPublicKey()));
-                    }
-
-                }
-            }
-            return res;
-        }
 
 
 

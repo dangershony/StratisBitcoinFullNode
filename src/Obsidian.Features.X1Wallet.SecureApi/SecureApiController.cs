@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
-using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.SecureApi.Models;
 using Obsidian.Features.X1Wallet.Staking;
 using Stratis.Bitcoin.Controllers.Models;

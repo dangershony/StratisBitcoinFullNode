@@ -8,9 +8,12 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
-using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Feature;
+using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Staking;
-using Obsidian.Features.X1Wallet.Storage;
+using Obsidian.Features.X1Wallet.Tools;
+using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Builder.Feature;
@@ -199,36 +202,13 @@ namespace Obsidian.Features.X1Wallet
         }
 
 
-        public async Task<SpendableTransactionsModel> GetSpendableTransactionsAsync(SpendableTransactionsRequest request)
-        {
-            using (var context = GetWalletContext())
-            {
-                var spendableTransactions = context.WalletManager.GetAllSpendableTransactions(request.MinConfirmations);
-
-                return new SpendableTransactionsModel
-                {
-                    SpendableTransactions = spendableTransactions.Select(st => new SpendableTransactionModel
-                    {
-                        Id = st.Transaction.Id,
-                        Amount = st.Transaction.Amount,
-                        Address = st.Address.Address,
-                        Index = st.Transaction.Index,
-                        IsChange = false,
-                        CreationTime = st.Transaction.CreationTime,
-                        Confirmations = st.Confirmations
-                    }).ToList()
-                };
-            }
-
-        }
-
 
         public async Task<Money> GetTransactionFeeEstimateAsync(TxFeeEstimateRequest request)
         {
             var recipients = new List<Recipient>();
             foreach (RecipientModel recipientModel in request.Recipients)
             {
-                var scriptPubKey = recipientModel.DestinationAddress.ScriptPubKeyFromBech32();
+                var scriptPubKey = recipientModel.DestinationAddress.ScriptPubKeyFromBech32Safe();
 
                 if (scriptPubKey == null)
                     throw new NotSupportedException($"Only {nameof(P2WpkhAddress)}es are supported at this time.");
@@ -254,6 +234,56 @@ namespace Obsidian.Features.X1Wallet
             return model;
         }
 
+
+        public async Task<WalletBuildTransactionModel> BuildSplitTransactionAsync(BuildTransactionRequest request)
+        {
+            var count = 100;
+            var recipients = new List<Recipient>(count);
+
+            using (var walletContext = GetWalletContext())
+            {
+                walletContext.WalletManager.GetBudget(out Balance balance);
+                var singleAmount = balance.SpendableAmount.Satoshi / (count + 1); // leave a rest, therefore +1
+                IEnumerable<NBitcoin.Script> destinations = walletContext.WalletManager.GetAllAddresses().Select(kvp => kvp.Value.ScriptPubKeyFromPublicKey()).Take(100);
+                foreach (var d in destinations)
+                {
+                    recipients.Add(new Recipient
+                        {ScriptPubKey = d, Amount = Money.Satoshis(singleAmount), SubtractFeeFromAmount = false});
+                }
+            }
+
+            
+
+            var context = new TransactionBuildContext(this.network)
+            {
+                AccountReference = new WalletAccountReference(this.walletName, this.walletName),
+                TransactionFee = string.IsNullOrEmpty(request.FeeAmount) ? null : Money.Parse(request.FeeAmount),
+                MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
+                Shuffle = request.ShuffleOutputs ?? true, // We shuffle transaction outputs by default as it's better for anonymity.
+                OpReturnData = request.OpReturnData,
+                OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
+                WalletPassword = request.Password,
+                SelectedInputs = request.Outpoints?.Select(u => new OutPoint(uint256.Parse(u.TransactionId), u.Index)).ToList(),
+                AllowOtherInputs = false,
+                Recipients = recipients
+            };
+
+            if (!string.IsNullOrEmpty(request.FeeType))
+            {
+                context.FeeType = FeeParser.Parse(request.FeeType);
+            }
+
+            Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
+
+            var model = new WalletBuildTransactionModel
+            {
+                Hex = transactionResult.ToHex(),
+                Fee = context.TransactionFee,
+                TransactionId = transactionResult.GetHash()
+            };
+
+            return model;
+        }
 
         public async Task<WalletBuildTransactionModel> BuildTransactionAsync(BuildTransactionRequest request)
         {

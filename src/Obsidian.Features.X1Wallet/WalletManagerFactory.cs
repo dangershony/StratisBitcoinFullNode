@@ -7,9 +7,10 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
-using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Staking;
-using Obsidian.Features.X1Wallet.Storage;
+using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
@@ -140,6 +141,8 @@ namespace Obsidian.Features.X1Wallet
 
             if (string.IsNullOrWhiteSpace(walletCreateRequest.Password))
                 throw new InvalidOperationException("A passphrase is required.");
+
+            AddressHelper.Init(this.network);
 
             var now = DateTime.UtcNow;
 

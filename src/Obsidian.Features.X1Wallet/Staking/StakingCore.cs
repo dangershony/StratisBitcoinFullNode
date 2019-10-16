@@ -264,8 +264,6 @@ namespace Obsidian.Features.X1Wallet.Staking
 
         }
 
-
-        /// <inheritdoc/>
         public void Stake()
         {
 
@@ -282,8 +280,7 @@ namespace Obsidian.Features.X1Wallet.Staking
             {
                 try
                 {
-                    await this.GenerateBlocksAsync(token)
-                        .ConfigureAwait(false);
+                    await GenerateBlocksAsync(token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -319,7 +316,6 @@ namespace Obsidian.Features.X1Wallet.Staking
             Interlocked.CompareExchange(ref this.currentState, (int)CurrentState.StakingInProgress, (int)CurrentState.StakingRequested);
         }
 
-        /// <inheritdoc/>
         public void StopStake()
         {
             if (Interlocked.CompareExchange(ref this.currentState, (int)CurrentState.StopStakingRequested, (int)CurrentState.StakingInProgress) != (int)CurrentState.StakingInProgress)
@@ -341,7 +337,6 @@ namespace Obsidian.Features.X1Wallet.Staking
 
         async Task GenerateBlocksAsync(CancellationToken cancellationToken)
         {
-
             BlockTemplate blockTemplate = null;
 
             while (!cancellationToken.IsCancellationRequested)
@@ -636,8 +631,8 @@ namespace Obsidian.Features.X1Wallet.Staking
             // Create worker tasks that will look for kernel.
             // Run task in parallel using the default task scheduler.
             int coinIndex = 0;
-            int workerCount = (stakingUtxoDescriptions.Count + UtxoStakeDescriptionsPerCoinstakeWorker - 1) / UtxoStakeDescriptionsPerCoinstakeWorker;
-            var workers = new Task[workerCount];
+            //int workerCount = (stakingUtxoDescriptions.Count + UtxoStakeDescriptionsPerCoinstakeWorker - 1) / UtxoStakeDescriptionsPerCoinstakeWorker;
+            int workerCount = stakingUtxoDescriptions.Count;
             var workerContexts = new WorkerContext[workerCount];
 
             var workersResult = new WorkerResult();
@@ -657,6 +652,7 @@ namespace Obsidian.Features.X1Wallet.Staking
                 coinIndex += stakingUtxoCount;
                 workerContexts[workerIndex] = cwc;
             }
+
 
             await Task.Run(() => Parallel.ForEach(workerContexts, cwc =>
             {
