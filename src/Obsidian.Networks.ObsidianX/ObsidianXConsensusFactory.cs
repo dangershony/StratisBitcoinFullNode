@@ -68,6 +68,5 @@ namespace Obsidian.Networks.ObsidianX
                 throw new Exception($"Found: Nonce:{nonce}, Hash: {genesisBlock.GetHash()}, Hash Merkle Root: {genesisBlock.Header.HashMerkleRoot}");
             });
         }
-
     }
 }
