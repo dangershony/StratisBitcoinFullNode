@@ -1,28 +1,32 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
+using Stratis.Bitcoin.Interfaces;
 
 namespace Obsidian.x1d.Temp
 {
     public static class TestBench
     {
+        static ILogger _logger;
 
         public static async void RunTestCodeAsync(FullNode fullNode)
         {
             try
             {
-               //await  MineAsync(fullNode);
+                _logger = fullNode.NodeService<ILoggerFactory>().CreateLogger("Miner");
+                await  MineAsync(fullNode);
                //await SplitAsync(fullNode);
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                _logger.LogError(e.ToString());
             }
 
         }
@@ -54,6 +58,7 @@ namespace Obsidian.x1d.Temp
             const string walletName = "new1";
 
             var controller = fullNode.NodeService<WalletController>();
+            var ibd = fullNode.NodeService<IInitialBlockDownloadState>();
             try
             {
                 controller.SetWalletName(walletName);
@@ -75,14 +80,17 @@ namespace Obsidian.x1d.Temp
             var address = model.Addresses[0].FullAddress;
 
             var script = new ReserveScript { ReserveFullNodeScript = address.ScriptPubKeyFromPublicKey() };
-            _ = Task.Run(async () => 
+            _ = Task.Run(async () =>
             {
+                while (ibd.IsInitialBlockDownload())
+                    await Task.Delay(1000);
+
+                _logger.LogInformation("Starting Miner...");
+
                 while (!fullNode.NodeLifetime.ApplicationStopping.IsCancellationRequested)
                 {
-                    Console.WriteLine("Starting Miner...");
-                    fullNode.NodeService<IPowMining>().GenerateBlocks(script, 50, uint.MaxValue);
-                    await Task.Delay(1000);
-                  
+                    fullNode.NodeService<IPowMining>().GenerateBlocks(script, 1, 1000*1000);
+                    _logger.LogInformation("Mining...");
                 }
             }, fullNode.NodeLifetime.ApplicationStopping);
         }
