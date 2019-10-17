@@ -37,11 +37,8 @@ namespace Obsidian.x1d
             }
         }
 
-       
         static async Task MainAsync(string[] args)
         {
-            PosBlockHeader.CustomPoWHash = ObsidianXHash.GetObsidianXPoWHash;
-
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianXNetworksSelector.Obsidian,
