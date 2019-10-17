@@ -12,6 +12,21 @@ namespace Obsidian.Networks.ObsidianX
             return new ObsidianXBlockHeader();
         }
 
+        public override ProvenBlockHeader CreateProvenBlockHeader()
+        {
+            return new ObsidianXProvenBlockHeader();
+        }
+
+        public override ProvenBlockHeader CreateProvenBlockHeader(PosBlock block)
+        {
+            var provenBlockHeader = new ObsidianXProvenBlockHeader(block);
+
+            // Serialize the size.
+            provenBlockHeader.ToBytes(this);
+
+            return provenBlockHeader;
+        }
+
         public Block CreateObsidianGenesisBlock(uint genesisTime, uint genesisNonce, uint genesisBits, int genesisVersion, Money genesisReward, bool? mine = false)
         {
             if (mine == true)
@@ -63,6 +78,5 @@ namespace Obsidian.Networks.ObsidianX
                 throw new Exception($"Found: Nonce:{nonce}, Hash: {genesisBlock.GetHash()}, Hash Merkle Root: {genesisBlock.Header.HashMerkleRoot}");
             });
         }
-
     }
 }

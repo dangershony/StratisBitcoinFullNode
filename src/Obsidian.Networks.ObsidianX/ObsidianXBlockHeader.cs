@@ -1,3 +1,4 @@
+using System.IO;
 using NBitcoin;
 
 namespace Obsidian.Networks.ObsidianX
@@ -6,8 +7,39 @@ namespace Obsidian.Networks.ObsidianX
     {
 	    public override uint256 GetPoWHash()
         {
-            var blockHeaderBytes = this.ToBytes();
-		    return ObsidianXHash.GetObsidianXPoWHash(blockHeaderBytes);
+            byte[] serialized;
+
+            using (var ms = new MemoryStream())
+            {
+                this.ReadWriteHashingStream(new BitcoinStream(ms, true));
+                serialized = ms.ToArray();
+            }
+
+		    return ObsidianXHash.GetObsidianXPoWHash(serialized);
 	    }
+    }
+
+    public class ObsidianXProvenBlockHeader : ProvenBlockHeader
+    {
+        public ObsidianXProvenBlockHeader()
+        {
+        }
+
+        public ObsidianXProvenBlockHeader(PosBlock block) : base(block)
+        {
+        }
+
+        public override uint256 GetPoWHash()
+        {
+            byte[] serialized;
+
+            using (var ms = new MemoryStream())
+            {
+                this.ReadWriteHashingStream(new BitcoinStream(ms, true));
+                serialized = ms.ToArray();
+            }
+
+            return ObsidianXHash.GetObsidianXPoWHash(serialized);
+        }
     }
 }
