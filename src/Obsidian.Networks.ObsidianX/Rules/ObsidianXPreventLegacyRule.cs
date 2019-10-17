@@ -19,7 +19,7 @@ namespace Obsidian.Networks.ObsidianX.Rules
             if (block.Transactions.Count < 2)
                 return Task.CompletedTask;
 
-            if (block.Transactions[1].IsCoinStake && block.Transactions[1].Outputs.Count != 3)
+            if (block.Transactions[1].IsCoinStake && block.Transactions[1].Outputs.Count < 3)
             {
                 this.Logger.LogTrace("(-)[LEGACY_COINSSTAKE]");
                 new ConsensusError("legacy-coinstake", "Expected three outputs in coinstake tx but found two.").Throw();
