@@ -21,6 +21,14 @@ namespace Obsidian.Networks.ObsidianX
 
     public class ObsidianXProvenBlockHeader : ProvenBlockHeader
     {
+        public ObsidianXProvenBlockHeader()
+        {
+        }
+
+        public ObsidianXProvenBlockHeader(PosBlock block) : base(block)
+        {
+        }
+
         public override uint256 GetPoWHash()
         {
             byte[] serialized;

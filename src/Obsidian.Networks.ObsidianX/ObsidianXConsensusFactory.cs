@@ -17,6 +17,16 @@ namespace Obsidian.Networks.ObsidianX
             return new ObsidianXProvenBlockHeader();
         }
 
+        public override ProvenBlockHeader CreateProvenBlockHeader(PosBlock block)
+        {
+            var provenBlockHeader = new ObsidianXProvenBlockHeader(block);
+
+            // Serialize the size.
+            provenBlockHeader.ToBytes(this);
+
+            return provenBlockHeader;
+        }
+
         public Block CreateObsidianGenesisBlock(uint genesisTime, uint genesisNonce, uint genesisBits, int genesisVersion, Money genesisReward, bool? mine = false)
         {
             if (mine == true)
