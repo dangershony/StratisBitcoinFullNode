@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Consensus.Rules;
+using Stratis.Bitcoin.Features.ColdStaking;
 
 namespace Obsidian.Networks.ObsidianX.Rules
 {
@@ -33,6 +34,8 @@ namespace Obsidian.Networks.ObsidianX.Rules
                         continue; // allowed are P2WPKH and P2WSH
                     if (TxNullDataTemplate.Instance.CheckScriptPubKey(output.ScriptPubKey))
                         continue; // allowed are also all kinds of valid OP_RETURN pushes
+                    if (ColdStakingScriptTemplate.Instance.CheckScriptPubKey(output.ScriptPubKey))
+                        continue; // allowed cold staking setup trx
 
                     this.Logger.LogTrace("(-)[NOT_NATIVE_SEGWIT_OR_DATA]");
                     new ConsensusError("legacy-tx", "Only P2WPKH, P2WSH is allowed outside Coinstake transactions.").Throw();
