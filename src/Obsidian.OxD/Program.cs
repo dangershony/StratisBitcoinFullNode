@@ -20,8 +20,6 @@ namespace Obsidian.ObsidianxD
     {
         public static async Task Main(string[] args)
         {
-            PosBlockHeader.CustomPoWHash = ObsidianXHash.GetObsidianXPoWHash;
-
             try
             {
                 var nodeSettings = new NodeSettings(

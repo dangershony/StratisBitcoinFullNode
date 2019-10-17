@@ -279,11 +279,6 @@ namespace NBitcoin
     {
         /// <inheritdoc />
         public override int CurrentVersion => 7;
-        
-        /// <summary>
-        /// Optional injectable custom PoW hash function.
-        /// </summary>
-        public static Func<byte[], uint256> CustomPoWHash;
 
         /// <inheritdoc />
         public override uint256 GetHash()
@@ -329,7 +324,8 @@ namespace NBitcoin
                 this.ReadWriteHashingStream(new BitcoinStream(ms, true));
                 serialized = ms.ToArray();
             }
-            return CustomPoWHash == null ? HashX13.Instance.Hash(serialized) : CustomPoWHash(serialized);
+
+            return HashX13.Instance.Hash(serialized);
         }
     }
 
