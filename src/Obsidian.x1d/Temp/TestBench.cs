@@ -38,9 +38,9 @@ namespace Obsidian.x1d.Temp
                 _fullNode = fullNode;
 
                
-                //await  MineAsync();
+                await  StartMiningAsync();
                 //await SplitAsync();
-                await CheckStakingAsync();
+                await TryStakingAsync();
             }
             catch (Exception e)
             {
@@ -49,7 +49,7 @@ namespace Obsidian.x1d.Temp
 
         }
 
-        static async Task CheckStakingAsync()
+        static async Task TryStakingAsync()
         {
             await WC.LoadAsync();
 
@@ -96,18 +96,13 @@ namespace Obsidian.x1d.Temp
             });
         }
 
-        static async Task MineAsync()
+        static async Task StartMiningAsync()
         {
 
             var ibd = _fullNode.NodeService<IInitialBlockDownloadState>();
             try
             {
-                try
-                {
-                    await WC.LoadAsync();
-                }
-                catch (Exception) { } // already loaded
-               
+                await WC.LoadAsync();
             }
             catch (Exception e)
             {
@@ -117,7 +112,8 @@ namespace Obsidian.x1d.Temp
                 await WC.CreateKeyWalletAsync(new WalletCreateRequest
                 { Name = _walletName, Password = _passPhrase });
                 Console.WriteLine($"Created a new wallet {_walletName} for mining.");
-                await MineAsync();
+                await Task.Delay(2000);
+                await StartMiningAsync();
 
             }
 

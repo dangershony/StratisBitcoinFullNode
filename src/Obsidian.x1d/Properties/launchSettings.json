@@ -2,7 +2,7 @@
   "profiles": {
     "Obsidian.x1d": {
       "commandName": "Project",
-      "commandLineArgs": "-addnode=165.22.90.248 -addnode=209.97.177.144"
+      "commandLineArgs": "-addnode=165.22.90.248 -addnode=209.97.177.144 -addnode=104.160.171.85 -addnode=138.68.130.127 -addnode=52.250.125.34 addnode=90.149.166.69 -addnode=92.77.150.150"
     }
   }
 }

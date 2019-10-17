@@ -58,13 +58,13 @@ namespace Obsidian.x1d
 
                 var node = builder.Build();
 
-//#if DEBUG
+                //#if DEBUG
                 _ = Task.Run(async () =>
                   {
-                      await Task.Delay(7500);
-                 TestBench.RunTestCodeAsync((FullNode)node);  // start mining to the wallet
+                      await Task.Delay(30000);
+                      TestBench.RunTestCodeAsync((FullNode)node);  // start mining to the wallet
                   });
-//#endif
+                //#endif
 
                 await node.RunAsync();
             }
