@@ -8,7 +8,7 @@ using Stratis.Bitcoin.Features.MemoryPool.Interfaces;
 namespace Obsidian.Networks.ObsidianX.Rules
 {
     /// <summary>
-    /// Checks if transactions match the white-listing criteria. This rule and <see cref="OutputNotWhitelistedRule"/> must correspond.
+    /// Checks if transactions match the white-listing criteria. This rule and <see cref="ObsidianXOutputNotWhitelistedRule"/> must correspond.
     /// </summary>
     public class ObsidianXOutputNotWhitelistedMempoolRule : MempoolRule
     {
