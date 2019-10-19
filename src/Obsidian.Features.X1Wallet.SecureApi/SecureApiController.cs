@@ -36,7 +36,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
             {
                 if (IsRequestForPublicKey(request))
                     return CreatePublicKey();
-                await Task.Delay(1000);
+
                 DecryptedRequest decryptedRequest = DecryptRequest(request, this.walletController);
                 CheckPermissions(decryptedRequest, this.secureApiSettings);
 
@@ -46,22 +46,22 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                     case "createWallet":
                         {
                             WalletCreateRequest walletCreateRequest = Deserialize<WalletCreateRequest>(decryptedRequest.Payload);
-                            await this.walletController.CreateKeyWalletAsync(walletCreateRequest);
+                            this.walletController.CreateWallet(walletCreateRequest);
                             return CreateOk(request);
                         }
                     case "getWalletFiles":
                         {
-                            WalletFileModel walletFileModel = await this.walletController.ListWalletsFilesAsync();
+                            WalletFileModel walletFileModel = this.walletController.ListWalletsFiles();
                             return CreateOk(walletFileModel, request);
                         }
                     case "loadWallet":
                         {
-                            LoadWalletResponse loadWalletResponse = await this.walletController.LoadAsync();
+                            LoadWalletResponse loadWalletResponse = this.walletController.LoadWallet();
                             return CreateOk(loadWalletResponse, request);
                         }
                     case "generalInfo":
                         {
-                            WalletGeneralInfoModel walletGeneralInfoModel = await this.walletController.GetGeneralInfoAsync();
+                            WalletGeneralInfoModel walletGeneralInfoModel = this.walletController.GetGeneralInfo();
                             return CreateOk(walletGeneralInfoModel, request);
                         }
                     case "nodeStatus":
@@ -72,7 +72,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                     case "balance":
                         {
-                            Balance balanceModel = await this.walletController.GetBalanceAsync();
+                            Balance balanceModel = this.walletController.GetBalance();
                             return CreateOk(balanceModel, request);
                         }
 
@@ -92,67 +92,66 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                     case "getReceiveAddresses":
                         {
                             // this command will only return one unused address or throw if the wallet is out of unused addresses
-                            var addressesModel = await this.walletController.GetUnusedReceiveAddresses();
+                            var addressesModel = this.walletController.GetUnusedReceiveAddresses();
                             return CreateOk(addressesModel, request);
                         }
 
                     case "estimateFee":
                         {
                             var txFeeEstimateRequest = Deserialize<TxFeeEstimateRequest>(decryptedRequest.Payload);
-                            Money fee = await this.walletController.GetTransactionFeeEstimateAsync(txFeeEstimateRequest);
+                            Money fee = this.walletController.EstimateFee(txFeeEstimateRequest);
                             return CreateOk(fee, request);
                         }
                     case "buildTransaction":
                         {
-                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
-                            WalletBuildTransactionModel walletBuildTransactionModel = await this.walletController.BuildTransactionAsync(buildTransactionRequest);
-                            return CreateOk(walletBuildTransactionModel, request);
+                            var buildTransactionRequest = Deserialize<X1Wallet.Models.Api.BuildTransactionRequest>(decryptedRequest.Payload);
+                            BuildTransactionResponse buildTransactionResponse = this.walletController.BuildTransaction(buildTransactionRequest);
+                            return CreateOk(buildTransactionResponse, request);
                         }
 
                     case "sendTransaction":
                         {
                             SendTransactionRequest sendTransactionRequest = Deserialize<SendTransactionRequest>(decryptedRequest.Payload);
-                            await this.walletController.SendTransactionAsync(sendTransactionRequest);
+                            this.walletController.SendTransaction(sendTransactionRequest);
                             return CreateOk(request);
                         }
 
                     case "buildAndSendTransaction":
                         {
-                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
-                            WalletBuildTransactionModel walletBuildTransactionModel = await this.walletController.BuildTransactionAsync(buildTransactionRequest);
-                            var sendTransactionRequest = new SendTransactionRequest { Hex = walletBuildTransactionModel.Hex };
-                            await this.walletController.SendTransactionAsync(sendTransactionRequest);
-                            return CreateOk(walletBuildTransactionModel, request);
+                            var buildTransactionRequest = Deserialize<X1Wallet.Models.Api.BuildTransactionRequest>(decryptedRequest.Payload);
+                            BuildTransactionResponse buildTransactionResponse = this.walletController.BuildTransaction(buildTransactionRequest);
+                            this.walletController.SendTransaction(new SendTransactionRequest { Hex = buildTransactionResponse.Transaction.ToHex() });
+                            return CreateOk(buildTransactionResponse, request);
                         }
 
                     case "syncFromDate":
                         {
                             var walletSyncFromDateRequest = Deserialize<WalletSyncFromDateRequest>(decryptedRequest.Payload);
-                            await this.walletController.SyncFromDate(walletSyncFromDateRequest);
+                            this.walletController.SyncFromDate(walletSyncFromDateRequest);
                             return CreateOk(request);
                         }
 
                     case "importKeys":
                         {
                             var importKeysRequest = Deserialize<ImportKeysRequest>(decryptedRequest.Payload);
-                            var importKeysResponse = await this.walletController.ImportKeysAsync(importKeysRequest);
+                            var importKeysResponse = this.walletController.ImportKeys(importKeysRequest);
                             return CreateOk(importKeysResponse, request);
                         }
                     case "exportKeys":
                         {
                             var exportKeysRequest = Deserialize<ExportKeysRequest>(decryptedRequest.Payload);
-                            var exportKeysResponse = await this.walletController.ExportKeysAsync(exportKeysRequest);
+                            var exportKeysResponse = this.walletController.ExportKeys(exportKeysRequest);
                             return CreateOk(exportKeysResponse, request);
                         }
                     case "startStaking":
                         {
                             var startStakingRequest = Deserialize<StartStakingRequest>(decryptedRequest.Payload);
-                            await this.walletController.StartStaking(startStakingRequest);
+                            this.walletController.StartStaking(startStakingRequest);
                             return CreateOk(request);
                         }
                     case "stopStaking":
                         {
-                            await this.walletController.StopStaking();
+                            this.walletController.StopStaking();
                             return CreateOk(request);
                         }
                     default:

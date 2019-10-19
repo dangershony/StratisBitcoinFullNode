@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Obsidian.Features.X1Wallet;
@@ -20,7 +19,7 @@ namespace Obsidian.x1d.Temp
         static string _walletName = "new1";
         static string _passPhrase = "passwordpassword";
 
-        static WalletController WC
+        static WalletController Controller
         {
             get
             {
@@ -37,10 +36,10 @@ namespace Obsidian.x1d.Temp
                 _logger = fullNode.NodeService<ILoggerFactory>().CreateLogger("Miner");
                 _fullNode = fullNode;
 
-               
-               await StartMiningAsync();
-               //await SplitAsync();
-               await TryStakingAsync();
+
+                await StartMiningAsync();
+                //await SplitAsync();
+                await TryStakingAsync();
             }
             catch (Exception e)
             {
@@ -51,19 +50,19 @@ namespace Obsidian.x1d.Temp
 
         static async Task TryStakingAsync()
         {
-            await WC.LoadAsync();
+            Controller.LoadWallet();
 
             while (!_fullNode.NodeService<INodeLifetime>().ApplicationStopping.IsCancellationRequested)
             {
                 try
                 {
-                    var info = WC.GetStakingInfo();
+                    var info = Controller.GetStakingInfo();
                     if (info != null && info.Enabled)
                         _logger.LogInformation($"Staking: Enabled: {info.Enabled}, Staking: {info.Staking}.");
                     else
                     {
                         _logger.LogInformation($"Staking: Trying to start staking....");
-                        await WC.StartStaking(new Features.X1Wallet.Staking.StartStakingRequest
+                        Controller.StartStaking(new Features.X1Wallet.Staking.StartStakingRequest
                         { Name = _walletName, Password = _passPhrase });
                     }
                 }
@@ -75,22 +74,15 @@ namespace Obsidian.x1d.Temp
             }
         }
 
-       
+
 
         static async Task SplitAsync()
         {
-            await WC.LoadAsync();
+            Controller.LoadWallet();
 
-            var changeAddress = await WC.GetUnusedReceiveAddresses();
-            var model = await WC.BuildSplitTransactionAsync(
-                new Stratis.Bitcoin.Features.Wallet.Models.BuildTransactionRequest
-                {
-                    Password =_passPhrase,
-                    ChangeAddress = changeAddress.Addresses.First().Address,
-
-                });
+            BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Password = _passPhrase });
             await Task.Delay(15000); // wait for connections
-            await WC.SendTransactionAsync(new Stratis.Bitcoin.Features.Wallet.Models.SendTransactionRequest
+            Controller.SendTransaction(new Stratis.Bitcoin.Features.Wallet.Models.SendTransactionRequest
             {
                 Hex = model.Hex
             });
@@ -102,14 +94,14 @@ namespace Obsidian.x1d.Temp
             var ibd = _fullNode.NodeService<IInitialBlockDownloadState>();
             try
             {
-                await WC.LoadAsync();
+                Controller.LoadWallet();
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 if (!e.Message.StartsWith("No wallet file found"))
                     throw;
-                await WC.CreateKeyWalletAsync(new WalletCreateRequest
+                Controller.CreateWallet(new WalletCreateRequest
                 { Name = _walletName, Password = _passPhrase });
                 Console.WriteLine($"Created a new wallet {_walletName} for mining.");
                 await Task.Delay(2000);
@@ -117,11 +109,11 @@ namespace Obsidian.x1d.Temp
 
             }
 
-            var model = await WC.GetUnusedReceiveAddresses();
+            var model = Controller.GetUnusedReceiveAddresses();
             var address = model.Addresses[0].FullAddress;
 
             var script = new ReserveScript { ReserveFullNodeScript = address.ScriptPubKeyFromPublicKey() };
-            _ = Task.Run(async () =>
+            _ = Task.Run(() =>
             {
                 _logger.LogInformation("Starting Miner...");
 

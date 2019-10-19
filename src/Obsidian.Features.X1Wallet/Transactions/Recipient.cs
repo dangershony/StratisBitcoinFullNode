@@ -1,5 +1,4 @@
 ﻿using NBitcoin;
-using Stratis.Bitcoin.Features.Wallet;
 
 namespace Obsidian.Features.X1Wallet.Transactions
 {
@@ -8,6 +7,5 @@ namespace Obsidian.Features.X1Wallet.Transactions
         public Script ScriptPubKey { get; set; }
       
         public Money Amount { get; set; }
-       
     }
 }

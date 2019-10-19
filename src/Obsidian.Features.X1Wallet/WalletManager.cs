@@ -5,7 +5,6 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.DataEncoders;
@@ -14,7 +13,6 @@ using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
-using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.EventBus;
@@ -34,17 +32,11 @@ namespace Obsidian.Features.X1Wallet
         public const int ExpectedMetadataVersion = 1;
         public readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
 
-        static readonly TimeSpan AutoSaveInterval = new TimeSpan(0, 1, 0);
-
         readonly Network network;
-        readonly DataFolder dataFolder;
-        readonly IScriptAddressReader scriptAddressReader;
         readonly ILogger logger;
-        readonly IDateTimeProvider dateTimeProvider;
         readonly IBroadcasterManager broadcasterManager;
         readonly ChainIndexer chainIndexer;
         readonly INodeLifetime nodeLifetime;
-        readonly IAsyncProvider asyncProvider;
         readonly ISignals signals;
         readonly IInitialBlockDownloadState initialBlockDownloadState;
         readonly IBlockStore blockStore;
@@ -68,8 +60,7 @@ namespace Obsidian.Features.X1Wallet
 
         public WalletManager(string x1WalletFilePath, ChainIndexer chainIndexer, Network network, DataFolder dataFolder,
             IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
-            IScriptAddressReader scriptAddressReader, IDateTimeProvider dateTimeProvider, INodeLifetime nodeLifetime,
-            IAsyncProvider asyncProvider, StakingCore posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
+            INodeLifetime nodeLifetime, StakingCore posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
             ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore)
         {
             AddressHelper.Init(network);
@@ -83,12 +74,8 @@ namespace Obsidian.Features.X1Wallet
 
             this.chainIndexer = chainIndexer;
             this.network = network;
-            this.dataFolder = dataFolder;
             this.logger = loggerFactory.CreateLogger(typeof(WalletManager).FullName);
-            this.scriptAddressReader = scriptAddressReader;
-            this.dateTimeProvider = dateTimeProvider;
             this.nodeLifetime = nodeLifetime;
-            this.asyncProvider = asyncProvider;
 
             this.posMinting = posMinting;
             this.timeSyncBehaviorState = timeSyncBehaviorState;
@@ -122,7 +109,7 @@ namespace Obsidian.Features.X1Wallet
             this.startupStopwatch.Stop();
             this.startupStopwatch = null;
             this.startupTimer = null;
-            this.SaveMetadata();
+            SaveMetadata();
 
             if (this.broadcasterManager != null)
                 this.broadcasterManager.TransactionStateChanged += OnTransactionStateChanged;
@@ -321,7 +308,7 @@ namespace Obsidian.Features.X1Wallet
 
         #region import/export keys
 
-        public async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
+        public ImportKeysResponse ImportKeys(ImportKeysRequest importKeysRequest)
         {
             if (importKeysRequest == null)
                 throw new ArgumentNullException(nameof(importKeysRequest));
@@ -340,12 +327,12 @@ namespace Obsidian.Features.X1Wallet
             var items = importKeysRequest.Keys.Split(delimiters.ToArray());
             var possibleKeys = items.Where(i => i.Length == 52).Distinct().ToList();
             if (possibleKeys.Count == 0)
-                throw new X1WalletException(HttpStatusCode.BadRequest, "Input material cointained no keys.", null);
+                throw new X1WalletException(HttpStatusCode.BadRequest, "Input material cointained no keys.");
 
             var test = VCL.DecryptWithPassphrase(importKeysRequest.WalletPassphrase, this.X1WalletFile.PassphraseChallenge);
             if (test == null)
-                throw new X1WalletException(System.Net.HttpStatusCode.Unauthorized,
-                    "Your passphrase is incorrect.", null);
+                throw new X1WalletException(HttpStatusCode.Unauthorized,
+                    "Your passphrase is incorrect.");
             var importedAddresses = new List<string>();
 
             var obsidianNetwork = new ObsidianNetwork();
@@ -363,7 +350,7 @@ namespace Obsidian.Features.X1Wallet
                 }
                 catch (Exception e)
                 {
-
+                    this.logger.LogWarning($"Could not import '{candidate}' as key or address. {e.Message}");
                 }
 
             }
@@ -375,7 +362,7 @@ namespace Obsidian.Features.X1Wallet
             return response;
         }
 
-        internal async Task<ExportKeysResponse> ExportKeysAsync(ExportKeysRequest exportKeysRequest)
+        internal ExportKeysResponse ExportKeys(ExportKeysRequest exportKeysRequest)
         {
             var header = new StringBuilder();
             header.AppendLine($"Starting export from wallet {this.X1WalletFile.WalletName}, network {this.network.Name} on {DateTime.UtcNow} UTC.");
@@ -437,10 +424,7 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-        internal Dictionary<string, P2WpkhAddress> GetAllAddresses()
-        {
-            return this.X1WalletFile.Addresses;
-        }
+
 
         /// <summary>
         /// Clears and initializes the wallet Metadata file, and sets heights to 0 and the hashes to null,
@@ -475,28 +459,15 @@ namespace Obsidian.Features.X1Wallet
             return null;
         }
 
-        bool IsAddressUsedInConfirmedTransactions(P2WpkhAddress address)
+        internal P2WpkhAddress GetAddress(string address)
         {
-            // slow version
-            foreach (BlockMetadata block in this.Metadata.Blocks.Values)
-            {
-                foreach (TransactionMetadata tx in block.Transactions)
-                {
-                    foreach (var utxo in tx.Received.Values)
-                    {
-                        if (utxo.Address == address.Address)
-                            return true;
-                    }
-
-                }
-            }
-            return false;
+            return this.X1WalletFile.Addresses[address];
         }
 
-
-
-
-
+        internal Dictionary<string, P2WpkhAddress> GetAllAddresses()
+        {
+            return this.X1WalletFile.Addresses;
+        }
 
         public StakingCoin[] GetBudget(out Balance balance)
         {
@@ -572,8 +543,6 @@ namespace Obsidian.Features.X1Wallet
 
             return receivedAndMature.Values.ToArray();
         }
-
-
 
         void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
@@ -712,7 +681,7 @@ namespace Obsidian.Features.X1Wallet
 
             var walletTransaction = new TransactionMetadata
             {
-                TxType = GetTxType(transaction, received, destinations, spent, null),
+                TxType = GetTxType(transaction, received, destinations, spent),
                 HashTx = transaction.GetHash(),
                 Received = received,
                 Destinations = destinations,
@@ -732,7 +701,7 @@ namespace Obsidian.Features.X1Wallet
 
         }
 
-        TxType GetTxType(Transaction transaction, Dictionary<string, UtxoMetadata> received, Dictionary<string, UtxoMetadata> destinations, Dictionary<string, UtxoMetadata> spent, Dictionary<string, UtxoMetadata> sources)
+        TxType GetTxType(Transaction transaction, Dictionary<string, UtxoMetadata> received, Dictionary<string, UtxoMetadata> destinations, Dictionary<string, UtxoMetadata> spent)
         {
             if (transaction.IsCoinBase)
                 return TxType.Coinbase;
@@ -772,17 +741,17 @@ namespace Obsidian.Features.X1Wallet
             Guard.NotNull(passphrase, nameof(passphrase));
 
             if (VCL.DecryptWithPassphrase(passphrase, this.X1WalletFile.PassphraseChallenge) == null)
-                throw new X1WalletException(HttpStatusCode.Unauthorized, "The passphrase is not correct.", null);
+                throw new X1WalletException(HttpStatusCode.Unauthorized, "The passphrase is not correct.");
 
             if (!this.network.Consensus.IsProofOfStake)
-                throw new X1WalletException(HttpStatusCode.BadRequest, "Staking requires a Proof-of-Stake consensus.", null);
+                throw new X1WalletException(HttpStatusCode.BadRequest, "Staking requires a Proof-of-Stake consensus.");
 
             if (this.timeSyncBehaviorState.IsSystemTimeOutOfSync)
             {
                 string errorMessage = "Staking cannot start, your system time does not match that of other nodes on the network." + Environment.NewLine
                                                                                                                                   + "Please adjust your system time and restart the node.";
                 this.logger.LogError(errorMessage);
-                throw new X1WalletException(HttpStatusCode.InternalServerError, errorMessage, null);
+                throw new X1WalletException(HttpStatusCode.InternalServerError, errorMessage);
             }
 
             this.StakingManager = new StakingManager(passphrase, this);
@@ -790,7 +759,7 @@ namespace Obsidian.Features.X1Wallet
             this.logger.LogInformation("Enabling staking on wallet '{0}'.", this.WalletName);
 
             this.posMinting.Stake();
-           
+
         }
 
         internal void StopStaking()
@@ -828,6 +797,24 @@ namespace Obsidian.Features.X1Wallet
             var bech32P2WpkhFromHash160 = hash160.Bech32P2WpkhFromHash160();
             this.X1WalletFile.Addresses.TryGetValue(bech32P2WpkhFromHash160, out P2WpkhAddress address);
             return address;
+        }
+
+        bool IsAddressUsedInConfirmedTransactions(P2WpkhAddress address)
+        {
+            // slow version
+            foreach (BlockMetadata block in this.Metadata.Blocks.Values)
+            {
+                foreach (TransactionMetadata tx in block.Transactions)
+                {
+                    foreach (var utxo in tx.Received.Values)
+                    {
+                        if (utxo.Address == address.Address)
+                            return true;
+                    }
+
+                }
+            }
+            return false;
         }
 
         string CreateDestinationStringFromScriptPubKey(Script scriptPubKey)
@@ -871,17 +858,11 @@ namespace Obsidian.Features.X1Wallet
 
         }
 
-
-
-
         void SaveMetadata()
         {
             this.Metadata.SaveX1WalletMetadataFile(this.CurrentX1WalletMetadataFilePath);
             this.logger.LogInformation("Wallet saved.");
         }
-
-
-
 
         void OnTransactionStateChanged(object sender, TransactionBroadcastEntry transactionEntry)
         {
@@ -919,13 +900,6 @@ namespace Obsidian.Features.X1Wallet
                 this.Metadata.CheckpointHeight = 0;
             }
         }
-
-        internal P2WpkhAddress GetAddress(string address)
-        {
-            return this.X1WalletFile.Addresses[address];
-        }
-
-
 
         #endregion
 

@@ -14,7 +14,7 @@ using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.Transactions
 {
-    sealed class TransactionHandler
+    sealed class TransactionService
     {
         readonly ILogger logger;
         readonly Network network;
@@ -22,7 +22,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
         readonly string walletName;
         readonly FeeRate fixedFeeRate;
 
-        public TransactionHandler(
+        public TransactionService(
             ILoggerFactory loggerFactory,
             WalletManagerFactory walletManagerFactory, string walletName,
             Network network)
@@ -34,31 +34,34 @@ namespace Obsidian.Features.X1Wallet.Transactions
             this.fixedFeeRate = new FeeRate(Money.Satoshis(Math.Max(network.MinTxFee, network.MinRelayTxFee)));
         }
 
-
-        public Money EstimateFee(List<Recipient> recipients, Burn burn = null)
+        public BuildTransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
         {
-            var txb = CreateTransactionBuilder(recipients, false, burn: burn);
-            return txb.EstimateFees(this.fixedFeeRate);
-        }
-
-        public Transaction BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
-        {
-            var txb = CreateTransactionBuilder(recipients, sign, passphrase, transactionTimestamp, burn);
+            var txb = CreateTransactionBuilder(recipients, sign, out var fee, out var virtualSize, passphrase, transactionTimestamp, burn);
 
             var transaction = txb.BuildTransaction(sign);
 
             // this doesn't work if MinTxFee and MinRelaxTxFee are not equal
-            //if (!txb.Verify(transaction, this.fixedFeeRate, out TransactionPolicyError[] errors))
-            //{
-            //    string errorsMessage = string.Join(" - ", errors.Select(s => s.ToString()));
-            //    this.logger.LogError($"Build transaction failed: {errorsMessage}");
-            //    throw new X1WalletException(System.Net.HttpStatusCode.BadRequest, $"Transaction verification failed: {errorsMessage}");
-            //}
+            if (!txb.Verify(transaction, this.fixedFeeRate, out TransactionPolicyError[] errors))
+            {
+                string errorsMessage = string.Join(" - ", errors.Select(s => s.ToString()));
+                this.logger.LogError($"Build transaction failed: {errorsMessage}");
+                throw new X1WalletException(System.Net.HttpStatusCode.BadRequest, $"Transaction verification failed: {errorsMessage}");
+            }
 
-            return transaction;
+            var response = new BuildTransactionResponse
+            {
+                Transaction = transaction,
+                Hex = transaction.ToHex(),
+                Fee = fee,
+                VirtualSize = virtualSize,
+                SerializedSize = transaction.GetSerializedSize(),
+                TransactionId = transaction.GetHash()
+            };
+            
+            return response;
         }
 
-        TransactionBuilder CreateTransactionBuilder(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
+        TransactionBuilder CreateTransactionBuilder(List<Recipient> recipients, bool sign, out Money fee, out int virtualSize, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
         {
             var txb = new TransactionBuilder(this.network) { CoinSelector = new AllCoinsSelector() };
 
@@ -92,16 +95,16 @@ namespace Obsidian.Features.X1Wallet.Transactions
                 txb.SetChange(changeAddress.ScriptPubKeyFromPublicKey());
             }
 
-            Money fee = Money.Zero;
+            fee = Money.Zero;
 
             fundTx:
 
             // add outputs
-            var coins = AddCoins(recipients, burn, fee.Satoshi);
+            var coins = AddCoins(recipients, burn, fee.Satoshi).ToArray();
             txb.AddCoins(coins);
 
             var test = txb.BuildTransaction(false);
-            var virtualSize = txb.EstimateSize(test);
+            virtualSize = txb.EstimateSize(test);
             var currentFee = this.fixedFeeRate.GetFee(virtualSize);
             if (fee != currentFee)
             {
@@ -113,12 +116,14 @@ namespace Obsidian.Features.X1Wallet.Transactions
             // signing
             if (sign)
             {
-                txb.AddKeys(DecryptKeys(coins).ToArray());
+                txb.AddKeys(DecryptKeys(coins));
 
-                IEnumerable<Key> DecryptKeys(IEnumerable<StakingCoin> selectedCoins)
+                Key[] DecryptKeys(StakingCoin[] selectedCoins)
                 {
-                    foreach (var c in selectedCoins)
-                        yield return new Key(VCL.DecryptWithPassphrase(passphrase, c.EncryptedPrivateKey));
+                    var keys = new Key[selectedCoins.Length];
+                    for (var i= 0; i<keys.Length;i++)
+                      keys[i]= new Key(VCL.DecryptWithPassphrase(passphrase, selectedCoins[i].EncryptedPrivateKey));
+                    return keys;
                 }
             }
 
