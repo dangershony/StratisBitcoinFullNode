@@ -39,8 +39,8 @@ namespace Obsidian.x1d.Temp
 
                
                await StartMiningAsync();
-               await SplitAsync();
-               //await TryStakingAsync();
+               //await SplitAsync();
+               await TryStakingAsync();
             }
             catch (Exception e)
             {
