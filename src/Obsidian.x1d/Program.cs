@@ -1,15 +1,11 @@
 ﻿using System;
-using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using NBitcoin;
 using NBitcoin.Protocol;
-using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Networks.ObsidianX;
 using Obsidian.x1d.Api;
-using Obsidian.x1d.Cli;
 using Obsidian.x1d.Temp;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Builder;
@@ -25,16 +21,7 @@ namespace Obsidian.x1d
     {
         public static void Main(string[] args)
         {
-            if (args != null && args.Length > 0 && args[0] == "cli")
-            {
-                var argList = args.ToList();
-                argList.RemoveAt(0);
-                CliTool.CliMain(argList.ToArray());
-            }
-            else
-            {
-                MainAsync(args).Wait();
-            }
+            MainAsync(args).Wait();
         }
 
         static async Task MainAsync(string[] args)
@@ -79,6 +66,7 @@ namespace Obsidian.x1d
             var assembly = Assembly.GetExecutingAssembly().GetName();
             var name = assembly.Name;
             var version = assembly.Version;
+            // ReSharper disable once UnreachableCode
             var compilation = IsDebug ? " (Debug)" : "";
             return $"{name} {version}{compilation}";
 
