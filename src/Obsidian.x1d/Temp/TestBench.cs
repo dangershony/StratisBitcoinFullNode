@@ -38,9 +38,9 @@ namespace Obsidian.x1d.Temp
                 _fullNode = fullNode;
 
                
-                await  StartMiningAsync();
-                //await SplitAsync();
-                await TryStakingAsync();
+               await StartMiningAsync();
+               await SplitAsync();
+               //await TryStakingAsync();
             }
             catch (Exception e)
             {
@@ -123,9 +123,6 @@ namespace Obsidian.x1d.Temp
             var script = new ReserveScript { ReserveFullNodeScript = address.ScriptPubKeyFromPublicKey() };
             _ = Task.Run(async () =>
             {
-                while (ibd.IsInitialBlockDownload())
-                    await Task.Delay(1000);
-
                 _logger.LogInformation("Starting Miner...");
 
                 while (!_fullNode.NodeLifetime.ApplicationStopping.IsCancellationRequested)

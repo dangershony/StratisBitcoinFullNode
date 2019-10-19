@@ -8,297 +8,149 @@ using NBitcoin.Policy;
 using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Wallet;
+using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
-using Stratis.Bitcoin.Features.Wallet;
-using Stratis.Bitcoin.Features.Wallet.Interfaces;
-using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.Transactions
 {
-    /// <summary>
-    /// A handler with functionality related to transaction operations.
-    /// </summary>
-    /// <remarks>
-    /// This will uses the <see cref="IWalletFeePolicy"/> and the <see cref="TransactionBuilder"/>.
-    /// TODO: Move also the broadcast transaction to this class
-    /// TODO: Implement lockUnspents
-    /// TODO: Implement subtractFeeFromOutputs
-    /// </remarks>
-    public class TransactionHandler : IWalletTransactionHandler
+    sealed class TransactionHandler
     {
-        private readonly ILogger logger;
-
-        private readonly Network network;
-
-        protected readonly StandardTransactionPolicy TransactionPolicy;
-
+        readonly ILogger logger;
+        readonly Network network;
         readonly WalletManagerFactory walletManagerFactory;
-
-        private readonly IWalletFeePolicy walletFeePolicy;
+        readonly string walletName;
+        readonly FeeRate fixedFeeRate;
 
         public TransactionHandler(
             ILoggerFactory loggerFactory,
-            WalletManagerFactory walletManager,
-            IWalletFeePolicy walletFeePolicy,
-            Network network,
-            StandardTransactionPolicy transactionPolicy)
+            WalletManagerFactory walletManagerFactory, string walletName,
+            Network network)
         {
             this.network = network;
-            this.walletManagerFactory = (WalletManagerFactory)walletManager;
-            this.walletFeePolicy = walletFeePolicy;
-            this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
-
-            this.TransactionPolicy = transactionPolicy;
+            this.walletManagerFactory = walletManagerFactory;
+            this.walletName = walletName;
+            this.logger = loggerFactory.CreateLogger(GetType().FullName);
+            this.fixedFeeRate = new FeeRate(Money.Satoshis(Math.Max(network.MinTxFee, network.MinRelayTxFee)));
         }
 
 
-
-        /// <inheritdoc />
-        public Transaction BuildTransaction(TransactionBuildContext context)
+        public Money EstimateFee(List<Recipient> recipients, Burn burn = null)
         {
-            this.InitializeTransactionBuilder(context);
-
-            if (context.Shuffle)
-                context.TransactionBuilder.Shuffle();
-
-            Transaction transaction = context.TransactionBuilder.BuildTransaction(context.Sign);
-
-            if (context.TransactionBuilder.Verify(transaction, out TransactionPolicyError[] errors))
-                return transaction;
-
-            string errorsMessage = string.Join(" - ", errors.Select(s => s.ToString()));
-            this.logger.LogError($"Build transaction failed: {errorsMessage}");
-            throw new WalletException($"Could not build the transaction. Details: {errorsMessage}");
+            var txb = CreateTransactionBuilder(recipients, false, burn: burn);
+            return txb.EstimateFees(this.fixedFeeRate);
         }
 
-        /// <inheritdoc />
-        public void FundTransaction(TransactionBuildContext context, Transaction transaction)
+        public Transaction BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
         {
-            if (context.Recipients.Any())
-                throw new WalletException("Adding outputs is not allowed.");
+            var txb = CreateTransactionBuilder(recipients, sign, passphrase, transactionTimestamp, burn);
 
-            // Turn the txout set into a Recipient array
-            context.Recipients.AddRange(transaction.Outputs
-                .Select(s => new Recipient
-                {
-                    ScriptPubKey = s.ScriptPubKey,
-                    Amount = s.Value,
-                    SubtractFeeFromAmount = false // default for now
-                }));
+            var transaction = txb.BuildTransaction(sign);
 
-            context.AllowOtherInputs = true;
+            // this doesn't work if MinTxFee and MinRelaxTxFee are not equal
+            //if (!txb.Verify(transaction, this.fixedFeeRate, out TransactionPolicyError[] errors))
+            //{
+            //    string errorsMessage = string.Join(" - ", errors.Select(s => s.ToString()));
+            //    this.logger.LogError($"Build transaction failed: {errorsMessage}");
+            //    throw new X1WalletException(System.Net.HttpStatusCode.BadRequest, $"Transaction verification failed: {errorsMessage}");
+            //}
 
-            foreach (TxIn transactionInput in transaction.Inputs)
-                context.SelectedInputs.Add(transactionInput.PrevOut);
-
-            Transaction newTransaction = this.BuildTransaction(context);
-
-            if (context.ChangeAddress != null)
-            {
-                // find the position of the change and move it over.
-                int index = 0;
-                foreach (TxOut newTransactionOutput in newTransaction.Outputs)
-                {
-                    if (newTransactionOutput.ScriptPubKey == context.ChangeAddress.ScriptPubKey)
-                    {
-                        transaction.Outputs.Insert(index, newTransactionOutput);
-                    }
-
-                    index++;
-                }
-            }
-
-            // TODO: copy the new output amount size (this also includes spreading the fee over all outputs)
-
-            // copy all the inputs from the new transaction.
-            foreach (TxIn newTransactionInput in newTransaction.Inputs)
-            {
-                if (!context.SelectedInputs.Contains(newTransactionInput.PrevOut))
-                {
-                    transaction.Inputs.Add(newTransactionInput);
-
-                    // TODO: build a mechanism to lock inputs
-                }
-            }
+            return transaction;
         }
 
-        /// <inheritdoc />
-        public (Money maximumSpendableAmount, Money Fee) GetMaximumSpendableAmount(WalletAccountReference accountReference, FeeType feeType, bool allowUnconfirmed)
+        TransactionBuilder CreateTransactionBuilder(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
         {
-            Guard.NotNull(accountReference, nameof(accountReference));
-            Guard.NotEmpty(accountReference.WalletName, nameof(accountReference.WalletName));
+            var txb = new TransactionBuilder(this.network) { CoinSelector = new AllCoinsSelector() };
 
-            long maxSpendableAmount;
-            using (var context = this.walletManagerFactory.GetWalletContext(accountReference.WalletName))
+            // time
+            if (transactionTimestamp.HasValue)
+                txb.SetTimeStamp(transactionTimestamp.Value);
+
+            // add recipients
+            foreach (Recipient recipient in recipients)
+                txb.Send(recipient.ScriptPubKey, recipient.Amount);
+
+            // op_return data
+            if (burn != null)
             {
-                context.WalletManager.GetBudget(out var balance);
-                maxSpendableAmount = balance.SpendableAmount;
+                byte[] bytes = Encoding.UTF8.GetBytes(burn.Utf8String);
+                Script opReturnScript = TxNullDataTemplate.Instance.GenerateScriptPubKey(bytes);
+                txb.Send(opReturnScript, burn.Amount ?? Money.Zero);
             }
 
-
-            // Return 0 if the user has nothing to spend.
-            if (maxSpendableAmount == Money.Zero)
-            {
-                return (Money.Zero, Money.Zero);
-            }
-
-            // Create a recipient with a dummy destination address as it's required by NBitcoin's transaction builder.
-            List<Recipient> recipients = new[] { new Recipient { Amount = new Money(maxSpendableAmount), ScriptPubKey = new Key().ScriptPubKey } }.ToList();
-            Money fee;
-
-            try
-            {
-                // Here we try to create a transaction that contains all the spendable coins, leaving no room for the fee.
-                // When the transaction builder throws an exception informing us that we have insufficient funds,
-                // we use the amount we're missing as the fee.
-                var context = new TransactionBuildContext(this.network)
-                {
-                    FeeType = feeType,
-                    MinConfirmations = allowUnconfirmed ? 0 : 1,
-                    Recipients = recipients,
-                    AccountReference = accountReference
-                };
-
-                this.AddRecipients(context);
-                this.AddCoins(context);
-                this.AddFee(context);
-
-                // Throw an exception if this code is reached, as building a transaction without any funds for the fee should always throw an exception.
-                throw new WalletException("This should be unreachable; please find and fix the bug that caused this to be reached.");
-            }
-            catch (NotEnoughFundsException e)
-            {
-                fee = (Money)e.Missing;
-            }
-
-            return (maxSpendableAmount - fee, fee);
-        }
-
-        /// <inheritdoc />
-        public Money EstimateFee(TransactionBuildContext context)
-        {
-            this.InitializeTransactionBuilder(context);
-
-            return context.TransactionFee;
-        }
-
-        /// <summary>
-        /// Initializes the context transaction builder from information in <see cref="TransactionBuildContext"/>.
-        /// </summary>
-        /// <param name="context">Transaction build context.</param>
-        protected virtual void InitializeTransactionBuilder(TransactionBuildContext context)
-        {
-            Guard.NotNull(context, nameof(context));
-            Guard.NotNull(context.Recipients, nameof(context.Recipients));
-            Guard.NotNull(context.AccountReference, nameof(context.AccountReference));
-
-            // If inputs are selected by the user, we just choose them all.
-            if (context.SelectedInputs != null && context.SelectedInputs.Any())
-            {
-                context.TransactionBuilder.CoinSelector = new AllCoinsSelector();
-            }
-
-            this.AddRecipients(context);
-            this.AddOpReturnOutput(context);
-            this.AddCoins(context);
-            this.AddSecrets(context);
-            this.FindChangeAddress(context);
-            this.AddFee(context);
-
-            if (context.Time.HasValue)
-                context.TransactionBuilder.SetTimeStamp(context.Time.Value);
-        }
-
-        void AddSecrets(TransactionBuildContext context)
-        {
-            if (!context.Sign)
-                return;
-
-            using (var context2 = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
-            {
-                var addresses = context2.WalletManager.GetAllAddresses();
-                // TODO: only decrypt the keys needed
-                var keys = addresses
-                    .Select(a => VCL.DecryptWithPassphrase(context.WalletPassword, a.Value.EncryptedPrivateKey))
-                    .Select(privateKeyBytes => new Key(privateKeyBytes))
-                    .ToArray();
-
-                context.TransactionBuilder.AddKeys(keys);
-            }
-
-        }
-
-      
-        void FindChangeAddress(TransactionBuildContext context)
-        {
-            using (var walletContext = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
+            // set change address
+            using (var walletContext = GetWalletContext())
             {
                 P2WpkhAddress changeAddress = walletContext.WalletManager.GetUnusedAddress();
-                
-                if(changeAddress == null)
+
+                if (changeAddress == null)
                 {
-                    throw new X1WalletException(System.Net.HttpStatusCode.BadRequest,
-                        $"The wallet doesn't have any unused addresses left to provide an unused change address for this transaction.",
-                        null);
+                    changeAddress = walletContext.WalletManager.GetAllAddresses().First().Value;
+                    this.logger.LogWarning(
+                        "Caution, the wallet has run out off unused addressed, and will now use a used address as change address.");
                 }
-                context.TransactionBuilder.SetChange(changeAddress.ScriptPubKeyFromPublicKey());
+                txb.SetChange(changeAddress.ScriptPubKeyFromPublicKey());
             }
-        }
 
-        void AddCoins(TransactionBuildContext context)
-        {
-            using (var walletContext = this.walletManagerFactory.GetWalletContext(context.AccountReference.WalletName))
+            Money fee = Money.Zero;
+
+            fundTx:
+
+            // add outputs
+            var coins = AddCoins(recipients, burn, fee.Satoshi);
+            txb.AddCoins(coins);
+
+            var test = txb.BuildTransaction(false);
+            var virtualSize = txb.EstimateSize(test);
+            var currentFee = this.fixedFeeRate.GetFee(virtualSize);
+            if (fee != currentFee)
             {
-                var allSpendableCoins = walletContext.WalletManager.GetBudget(out Balance _);
-                context.TransactionBuilder.AddCoins(allSpendableCoins);
+                fee = currentFee;
+                goto fundTx;
             }
-        }
+            txb.SendFees(fee);
 
-        protected virtual void AddRecipients(TransactionBuildContext context)
-        {
-            foreach (Recipient recipient in context.Recipients)
-                context.TransactionBuilder.Send(recipient.ScriptPubKey, recipient.Amount);
-        }
-
-        void AddFee(TransactionBuildContext context)
-        {
-            Money fee;
-            Money minTrxFee = new Money(this.network.MinTxFee, MoneyUnit.Satoshi);
-
-            // If the fee hasn't been set manually, calculate it based on the fee type that was chosen.
-            if (context.TransactionFee == null)
+            // signing
+            if (sign)
             {
-                FeeRate feeRate = context.OverrideFeeRate ?? this.walletFeePolicy.GetFeeRate(context.FeeType.ToConfirmations());
-                fee = context.TransactionBuilder.EstimateFees(feeRate);
+                txb.AddKeys(DecryptKeys(coins).ToArray());
 
-                // Make sure that the fee is at least the minimum transaction fee.
-                fee = Math.Max(fee, minTrxFee);
-            }
-            else
-            {
-                if (context.TransactionFee < minTrxFee)
+                IEnumerable<Key> DecryptKeys(IEnumerable<StakingCoin> selectedCoins)
                 {
-                    throw new WalletException($"Not enough fees. The minimun fee is {minTrxFee}.");
+                    foreach (var c in selectedCoins)
+                        yield return new Key(VCL.DecryptWithPassphrase(passphrase, c.EncryptedPrivateKey));
                 }
-
-                fee = context.TransactionFee;
             }
 
-            context.TransactionBuilder.SendFees(fee);
-            context.TransactionFee = fee;
+            return txb;
         }
 
-        void AddOpReturnOutput(TransactionBuildContext context)
+        IEnumerable<StakingCoin> AddCoins(List<Recipient> recipients, Burn burn, long fee)
         {
-            if (string.IsNullOrWhiteSpace(context.OpReturnData))
-                return;
+            long requiredAmount = recipients.Sum(s => s.Amount) + fee;
+            if (burn != null && burn.Amount != null)
+                requiredAmount += burn.Amount.Satoshi;
 
-            byte[] bytes = Encoding.UTF8.GetBytes(context.OpReturnData);
-            Script opReturnScript = TxNullDataTemplate.Instance.GenerateScriptPubKey(bytes);
-            context.TransactionBuilder.Send(opReturnScript, context.OpReturnAmount ?? Money.Zero);
+            IReadOnlyList<StakingCoin> budget;
+            using (var walletContext = GetWalletContext())
+            {
+                budget = walletContext.WalletManager.GetBudget(out Balance _).OrderByDescending(o => o.Amount)
+                    .ToArray();
+            }
+
+            int pointer = 0;
+            long selectedAmount = 0;
+            while (selectedAmount < requiredAmount)
+            {
+                StakingCoin coin = budget[pointer++];
+                selectedAmount += coin.Amount.Satoshi;
+                yield return coin;
+            }
+        }
+
+        WalletContext GetWalletContext()
+        {
+            return this.walletManagerFactory.GetWalletContext(this.walletName);
         }
     }
-
-
 }

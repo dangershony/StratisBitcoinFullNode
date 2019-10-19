@@ -530,10 +530,13 @@ namespace Obsidian.Features.X1Wallet
 
                             if (!isImmature)
                             {
+                                var address = this.X1WalletFile.Addresses[utxo.Address];
+
                                 var coin = new StakingCoin(utxo.HashTx,
                                     utxo.Index,
                                     Money.Satoshis(utxo.Satoshis),
-                                    this.X1WalletFile.Addresses[utxo.Address].ScriptPubKeyFromPublicKey(),
+                                    address.ScriptPubKeyFromPublicKey(),
+                                    address.EncryptedPrivateKey,
                                     utxo.Address, height, block.HashBlock);
                                 receivedAndMature.Add(utxo.GetKey(), coin);
                             }
@@ -574,6 +577,7 @@ namespace Obsidian.Features.X1Wallet
 
         void ProcessBlock(Block block, ChainedHeader chainedHeader)
         {
+            // Block 777 has CS Setup tx
             foreach (Transaction transaction in block.Transactions)
             {
                 var received = ProcessTransaction(transaction, chainedHeader.Height, block);

@@ -32,7 +32,7 @@ namespace Obsidian.Networks.ObsidianX
 
             this.DefaultBanTimeSeconds = 16000; // 500 (MaxReorg) * 64 (TargetSpacing) / 2 = 4 hours, 26 minutes and 40 seconds
 
-            this.MaxTipAge = 2 * 60 * 60; // (120 minutes)
+            this.MaxTipAge = 2 * 60 * 60 *100; // (120 minutes)
             this.MinTxFee = 100;
             this.FallbackFee = 500;
             this.MinRelayTxFee = 100;

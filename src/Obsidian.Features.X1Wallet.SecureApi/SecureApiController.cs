@@ -72,7 +72,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                     case "balance":
                         {
-                            Balance balanceModel = await this.walletController.GetBalanceAsync(decryptedRequest.Target);
+                            Balance balanceModel = await this.walletController.GetBalanceAsync();
                             return CreateOk(balanceModel, request);
                         }
 

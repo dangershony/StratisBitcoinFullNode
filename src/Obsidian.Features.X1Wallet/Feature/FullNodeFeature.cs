@@ -51,7 +51,6 @@ namespace Obsidian.Features.X1Wallet.Feature
                         services.AddSingleton<IBlockProvider, BlockProvider>();
                         services.AddSingleton<MinerSettings>();
                         services.AddSingleton<IPowMining, PowMining>();
-                        services.AddSingleton<IWalletTransactionHandler, TransactionHandler>();
                         services.AddSingleton<IWalletFeePolicy, WalletFeePolicy>();
                         services.AddSingleton<WalletSettings>();
                         services.AddTransient<WalletController>();
