@@ -32,10 +32,10 @@ namespace Obsidian.Networks.ObsidianX
 
             this.DefaultBanTimeSeconds = 16000; // 500 (MaxReorg) * 64 (TargetSpacing) / 2 = 4 hours, 26 minutes and 40 seconds
 
-            this.MaxTipAge = 2 * 60 * 60 *100; // (120 minutes)
-            this.MinTxFee = 100;
-            this.FallbackFee = 500;
-            this.MinRelayTxFee = 100;
+            this.MaxTipAge = 2 * 60 * 60; // (120 minutes)
+            this.MinTxFee = Money.Coins(0.001m).Satoshi;
+            this.MinRelayTxFee = this.MinTxFee; // this should match MinTxFee, or it will break TransactionBuilder.Verify
+            this.FallbackFee = this.MinTxFee; // note: this seems to be unused and can also be set in configuration.
 
 
             var consensusFactory = new ObsidianXConsensusFactory();
@@ -50,7 +50,7 @@ namespace Obsidian.Networks.ObsidianX
             var consensusOptions = new ObsidianXPoSConsensusOptions(
                 maxBlockBaseSize: 1_000_000,
                 maxStandardVersion: 2,
-                maxStandardTxWeight: 100_000,
+                maxStandardTxWeight: 800_000, // one tx can use up to 80% of block space (maxBlockBaseSize)
                 maxBlockSigopsCost: 20_000,
                 maxStandardTxSigopsCost: 20_000 / 5,
                 witnessScaleFactor: 4
@@ -184,7 +184,7 @@ namespace Obsidian.Networks.ObsidianX
                 // rules to prevent legacy script types and force segwit
                 .Register<ObsidianXPreventLegacyRule>()
                 .Register<ObsidianXRequireNativeSegWitRule>()
-                .Register<OutputNotWhitelistedRule>()
+                .Register<ObsidianXNativeSegWitSpendsOnlyRule>()
 
                 // rules that are inside the method ContextualCheckBlock
                 .Register<TransactionLocktimeActivationRule>()
@@ -221,7 +221,6 @@ namespace Obsidian.Networks.ObsidianX
                 typeof(CheckConflictsMempoolRule),
                 typeof(CheckCoinViewMempoolRule),
                 typeof(CreateMempoolEntryMempoolRule),
-                typeof(ObsidianXOutputNotWhitelistedMempoolRule),
                 typeof(CheckSigOpsMempoolRule),
                 typeof(CheckFeeMempoolRule),
                 typeof(CheckRateLimitMempoolRule),
