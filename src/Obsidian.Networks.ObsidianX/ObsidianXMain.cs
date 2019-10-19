@@ -184,7 +184,7 @@ namespace Obsidian.Networks.ObsidianX
                 // rules to prevent legacy script types and force segwit
                 .Register<ObsidianXPreventLegacyRule>()
                 .Register<ObsidianXRequireNativeSegWitRule>()
-                .Register<ObsidianXNativeSegWitSpendsOnlyRule>()
+                .Register<OutputNotWhitelistedRule>()
 
                 // rules that are inside the method ContextualCheckBlock
                 .Register<TransactionLocktimeActivationRule>()
@@ -221,6 +221,7 @@ namespace Obsidian.Networks.ObsidianX
                 typeof(CheckConflictsMempoolRule),
                 typeof(CheckCoinViewMempoolRule),
                 typeof(CreateMempoolEntryMempoolRule),
+                typeof(ObsidianXOutputNotWhitelistedMempoolRule),
                 typeof(CheckSigOpsMempoolRule),
                 typeof(CheckFeeMempoolRule),
                 typeof(CheckRateLimitMempoolRule),
