@@ -37,7 +37,7 @@ namespace Obsidian.x1d.Temp
                 _fullNode = fullNode;
 
 
-                await StartMiningAsync();
+                //await StartMiningAsync();
                 //await SplitAsync();
                 await TryStakingAsync();
             }

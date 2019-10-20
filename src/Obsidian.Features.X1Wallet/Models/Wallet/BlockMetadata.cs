@@ -8,6 +8,6 @@ namespace Obsidian.Features.X1Wallet.Models.Wallet
         public uint256 HashBlock { get; set; }
 
         public HashSet<TransactionMetadata> Transactions { get; set; }
-       
+        public uint Time { get; set; }
     }
 }

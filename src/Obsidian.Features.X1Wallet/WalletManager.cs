@@ -15,11 +15,14 @@ using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
+using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.EventBus;
 using Stratis.Bitcoin.EventBus.CoreEvents;
+using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
+using Stratis.Bitcoin.Mining;
 using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
@@ -33,6 +36,7 @@ namespace Obsidian.Features.X1Wallet
         public readonly SemaphoreSlim WalletSemaphore = new SemaphoreSlim(1, 1);
 
         readonly Network network;
+        readonly ILoggerFactory loggerFactory;
         readonly ILogger logger;
         readonly IBroadcasterManager broadcasterManager;
         readonly ChainIndexer chainIndexer;
@@ -40,10 +44,14 @@ namespace Obsidian.Features.X1Wallet
         readonly ISignals signals;
         readonly IInitialBlockDownloadState initialBlockDownloadState;
         readonly IBlockStore blockStore;
+        readonly IStakeChain stakeChain;
 
         // for staking
         readonly StakingCore posMinting;
         readonly ITimeSyncBehaviorState timeSyncBehaviorState;
+
+        IBlockProvider blockProvider;
+        IConsensusManager consensusManager;
 
         X1WalletFile X1WalletFile { get; }
         X1WalletMetadataFile Metadata { get; }
@@ -55,13 +63,14 @@ namespace Obsidian.Features.X1Wallet
         Stopwatch startupStopwatch;
         long startupDuration;
         Timer startupTimer;
+        StakingService stakingService;
 
         #region c'tor and initialisation
 
         public WalletManager(string x1WalletFilePath, ChainIndexer chainIndexer, Network network, DataFolder dataFolder,
             IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
             INodeLifetime nodeLifetime, StakingCore posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
-            ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore)
+            ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain)
         {
             AddressHelper.Init(network);
             this.CurrentX1WalletFilePath = x1WalletFilePath;
@@ -74,16 +83,20 @@ namespace Obsidian.Features.X1Wallet
 
             this.chainIndexer = chainIndexer;
             this.network = network;
+            this.loggerFactory = loggerFactory;
             this.logger = loggerFactory.CreateLogger(typeof(WalletManager).FullName);
             this.nodeLifetime = nodeLifetime;
 
             this.posMinting = posMinting;
             this.timeSyncBehaviorState = timeSyncBehaviorState;
+            this.blockProvider = blockProvider;
+            this.consensusManager = consensusManager;
 
             this.broadcasterManager = broadcasterManager;
             this.signals = signals;
             this.initialBlockDownloadState = initialBlockDownloadState;
             this.blockStore = blockStore;
+            this.stakeChain = stakeChain;
 
             ScheduleSyncing();
         }
@@ -469,7 +482,7 @@ namespace Obsidian.Features.X1Wallet
             return this.X1WalletFile.Addresses;
         }
 
-        public StakingCoin[] GetBudget(out Balance balance)
+        public StakingCoin[] GetBudget(out Balance balance, bool forStaking = false)
         {
             var receivedAndMature = new Dictionary<string, StakingCoin>();
             var spent = new HashSet<string>();
@@ -487,11 +500,20 @@ namespace Obsidian.Features.X1Wallet
                 foreach (var tx in block.Transactions)
                 {
                     bool isImmature = false;
-                    if (tx.TxType == TxType.Coinbase || tx.TxType == TxType.Coinstake || tx.TxType == TxType.CoinstakeLegacy)
+                    if (!forStaking)
+                    {
+                        if (tx.TxType == TxType.Coinbase || tx.TxType == TxType.Coinstake || tx.TxType == TxType.CoinstakeLegacy)
+                        {
+                            var confirmations = this.Metadata.SyncedHeight - height + 1; // if the tip is at 100 and my tx is height 90, it's 11 confirmations
+                            isImmature = confirmations < this.network.Consensus.CoinbaseMaturity; // ok
+                        }
+                    }
+                    else
                     {
                         var confirmations = this.Metadata.SyncedHeight - height + 1; // if the tip is at 100 and my tx is height 90, it's 11 confirmations
-                        isImmature = confirmations < this.network.Consensus.CoinbaseMaturity; // ok
+                        isImmature = confirmations < this.network.Consensus.MaxReorgLength; // ok
                     }
+
 
                     if (tx.Received != null)
                     {
@@ -508,7 +530,7 @@ namespace Obsidian.Features.X1Wallet
                                     Money.Satoshis(utxo.Satoshis),
                                     address.ScriptPubKeyFromPublicKey(),
                                     address.EncryptedPrivateKey,
-                                    utxo.Address, height, block.HashBlock);
+                                    utxo.Address, height, block.HashBlock, block.Time);
                                 receivedAndMature.Add(utxo.GetKey(), coin);
                             }
                             else
@@ -690,7 +712,7 @@ namespace Obsidian.Features.X1Wallet
 
             if (!this.Metadata.Blocks.TryGetValue(blockHeight, out BlockMetadata walletBlock))
             {
-                walletBlock = new BlockMetadata { HashBlock = block.GetHash(), Transactions = new HashSet<TransactionMetadata>() };
+                walletBlock = new BlockMetadata { HashBlock = block.GetHash(), Time = block.Header.Time, Transactions = new HashSet<TransactionMetadata>() };
                 this.Metadata.Blocks.Add(blockHeight, walletBlock);
             }
 
@@ -754,6 +776,14 @@ namespace Obsidian.Features.X1Wallet
                 throw new X1WalletException(HttpStatusCode.InternalServerError, errorMessage);
             }
 
+            // new 
+            if (this.stakingService == null)
+            {
+                this.stakingService = new StakingService(this, passphrase, this.loggerFactory, this.network, this.blockProvider, this.consensusManager, this.chainIndexer, this.stakeChain);
+                this.stakingService.Start();
+            }
+
+            return;
             this.StakingManager = new StakingManager(passphrase, this);
 
             this.logger.LogInformation("Enabling staking on wallet '{0}'.", this.WalletName);
@@ -764,6 +794,16 @@ namespace Obsidian.Features.X1Wallet
 
         internal void StopStaking()
         {
+            // new
+            if (this.stakingService != null)
+            {
+                this.stakingService.Stop();
+                this.stakingService = null;
+            }
+
+            return;
+
+
             this.posMinting.StopStake();
             this.StakingManager.Dispose();
             this.StakingManager = null;

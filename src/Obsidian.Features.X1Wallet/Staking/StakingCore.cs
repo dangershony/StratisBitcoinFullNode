@@ -801,6 +801,7 @@ namespace Obsidian.Features.X1Wallet.Staking
                         var prevoutStake = new OutPoint(utxoStakeInfo.UtxoSet.TransactionId, utxoStakeInfo.OutPoint.N);
 
                         var contextInformation = new PosRuleContext(BlockStake.Load(block));
+                        
 
                         var validKernel = this.stakeValidator.CheckKernel(contextInformation, chainTip, block.Header.Bits, txTime, prevoutStake);
 
