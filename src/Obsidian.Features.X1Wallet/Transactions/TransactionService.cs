@@ -134,7 +134,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
             return response;
         }
 
-        public BuildTransactionResponse BuildTransaction3(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
+        public BuildTransactionResponse BuildTransactionWithTransactionBuilder(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
         {
             var txb = CreateTransactionBuilder(recipients, sign, out var fee, out var virtualSize, passphrase, transactionTimestamp, burn);
 
