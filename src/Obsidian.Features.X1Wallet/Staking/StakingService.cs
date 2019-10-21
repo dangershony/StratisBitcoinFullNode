@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -14,13 +12,15 @@ using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.Consensus.Rules.CommonRules;
 using Stratis.Bitcoin.Mining;
-using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.Staking
 {
-    class StakingService
+    sealed class StakingService
     {
+        public readonly StakingStatus Status;
+        public readonly PosV3 PosV3;
+        public readonly StakedBlock StakedBlock;
         readonly Task stakingTask;
         readonly CancellationTokenSource cts;
         readonly ILogger logger;
@@ -37,7 +37,7 @@ namespace Obsidian.Features.X1Wallet.Staking
         public StakingService(WalletManager walletManager, string passphrase, ILoggerFactory loggerFactory, Network network, IBlockProvider blockProvider, IConsensusManager consensusManager, ChainIndexer chainIndexer, IStakeChain stakeChain)
         {
             this.cts = new CancellationTokenSource();
-            this.stakingTask = new Task(DoWork, this.cts.Token);
+            this.stakingTask = new Task(StakingLoop, this.cts.Token);
             this.walletManager = walletManager;
             this.passphrase = passphrase;
             this.logger = loggerFactory.CreateLogger(typeof(StakingService).FullName);
@@ -48,97 +48,89 @@ namespace Obsidian.Features.X1Wallet.Staking
             this.posCoinviewRule = this.consensusManager.ConsensusRules.GetRule<PosCoinviewRule>();
             this.stopwatch = Stopwatch.StartNew();
             this.stakeChain = stakeChain;
+            this.Status = new StakingStatus { StartedUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
+            this.PosV3 = new PosV3 { TargetSpacingSeconds = 64, TargetBlockTime = 4 * 64 };
+            this.StakedBlock = new StakedBlock();
         }
-
-
 
         public void Start()
         {
             if (this.stakingTask.Status != TaskStatus.Running)
             {
-                this.logger.LogInformation($"Status is {this.stakingTask.Status}, starting...");
                 this.stakingTask.Start();
             }
-            else
-            {
-                this.logger.LogWarning($"Status is {this.stakingTask.Status}, ignoring Start command.");
-            }
-
         }
 
         public void Stop()
         {
             if (!this.cts.IsCancellationRequested)
             {
-                this.logger.LogInformation($"Status is {this.stakingTask.Status}, cancelling...");
                 this.cts.Cancel();
             }
         }
 
-        void DoWork()
+        void StakingLoop()
         {
-            try
-            {
-                long previousBlockTime = 0;
+            long previousBlockTime = 0;
 
-                while (!this.cts.IsCancellationRequested)
+            while (!this.cts.IsCancellationRequested)
+            {
+                try
                 {
-                    long currentBlockTime = GetCurrentBlockTime();
-                    if (currentBlockTime > previousBlockTime)
+                    this.PosV3.CurrentBlockTime = GetCurrentBlockTime();
+
+                    if (this.PosV3.CurrentBlockTime > previousBlockTime)
                     {
-                        previousBlockTime = currentBlockTime;
-                        Stake(currentBlockTime);
+                        previousBlockTime = this.PosV3.CurrentBlockTime;
+
+                        this.stopwatch.Restart();
+
+                        Stake();
+
+                        this.Status.ComputateTimeMs = this.stopwatch.ElapsedMilliseconds;
+                        this.stopwatch.Stop();
                     }
                     else
                     {
                         Wait(previousBlockTime);
                     }
                 }
+                catch (Exception e)
+                {
+                    this.logger.LogWarning($"Staking Error: {e.Message}");
+                }
             }
-            finally
-            {
-                // Dispose
-            }
-
         }
 
         void Wait(long previousBlockTime)
         {
             long currentMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            long nextStartMs = (previousBlockTime + 64) * 1000;
-            long waitMs = nextStartMs - currentMs;
-            if (waitMs <= 0)
+            long nextStartMs = (previousBlockTime + this.PosV3.TargetSpacingSeconds) * 1000;
+            this.Status.WaitMs = nextStartMs - currentMs;
+            if (this.Status.WaitMs <= 0)
                 return;
 
-            Task.Delay((int)waitMs).Wait(this.cts.Token);
-            this.logger.LogInformation($"Resuming after waiting for {waitMs} ms...");
-
+            Task.Delay((int)this.Status.WaitMs).Wait(this.cts.Token);
         }
 
-        void Stake(long currentBlockTime)
+        void Stake()
         {
-            try
-            {
-                this.stopwatch.Restart();
-                BlockTemplate blockTemplate = GetBlockTemplate();
+            this.stopwatch.Restart();
+            BlockTemplate blockTemplate = GetBlockTemplate();
 
-                BigInteger target = blockTemplate.Block.Header.Bits.ToBigInteger();
-                uint256 prevStakeModifierV2 = GetStakeModifierV22();
+            this.PosV3.Target = blockTemplate.Block.Header.Bits;
+            this.PosV3.PreviousStakeModifierV2 = GetStakeModifierV22();
 
-                this.logger.LogInformation($"Staking, blocktime is {currentBlockTime}, target: {target}");
+            var coins = GetUnspentOutputs();
+            var validKernels = FindValidKernels(coins);
 
-                var coins = GetOutputs();
-                var validKernels = FindValidKernels(coins, (uint)currentBlockTime, target, prevStakeModifierV2);
-                this.logger.LogWarning($"Found {validKernels.Count} solutions in {this.stopwatch.ElapsedMilliseconds} ms.");
+            this.Status.KernelsFound = validKernels.Count;
+            this.Status.ComputateTimeMs = this.stopwatch.ElapsedMilliseconds;
 
-                if (validKernels.Count > 0)
-                    CreateNextBlock((uint)currentBlockTime, blockTemplate, validKernels);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Staking Error: {e.Message}");
-            }
+            if (validKernels.Count > 0)
+                CreateNextBlock(blockTemplate, validKernels);
         }
+
         uint256 GetStakeModifierV22()
         {
             return this.stakeChain.Get(this.chainIndexer.Tip.HashBlock).StakeModifierV2;
@@ -160,80 +152,66 @@ namespace Obsidian.Features.X1Wallet.Staking
             goto search;
         }
 
-        static Dictionary<uint256, StakingCoin> FindValidKernels(StakingCoin[] coins, uint currentBlockTime, BigInteger target, uint256 prevStakeModifier)
+        List<StakingCoin> FindValidKernels(StakingCoin[] coins)
         {
-            var validKernels = new Dictionary<uint256, StakingCoin>();
+            var validKernels = new List<StakingCoin>();
             foreach (var c in coins)
             {
-                if (CheckStakeKernelHash(c, target, prevStakeModifier, currentBlockTime, out uint256 kernelHash))
-                    validKernels.Add(kernelHash, c);
+                if (CheckStakeKernelHash(c))
+                    validKernels.Add(c);
             }
             return validKernels;
         }
 
-        static bool CheckStakeKernelHash(StakingCoin stakingCoin, BigInteger target, uint256 prevStakeModifier, uint transactionTime, out uint256 kernelHash)
+        bool CheckStakeKernelHash(StakingCoin stakingCoin)
         {
-            BigInteger value = BigInteger.ValueOf(stakingCoin.Amount.Satoshi);
-            BigInteger weightedTarget = target.Multiply(value);
+            var value = BigInteger.ValueOf(stakingCoin.Amount.Satoshi);
+            BigInteger weightedTarget = this.PosV3.Target.ToBigInteger().Multiply(value);
 
-            using (var ms = new MemoryStream())
-            {
-                var serializer = new BitcoinStream(ms, true);
-                serializer.ReadWrite(prevStakeModifier);
-                serializer.ReadWrite(stakingCoin.Time);
-                serializer.ReadWrite(stakingCoin.Outpoint.Hash);
-                serializer.ReadWrite(stakingCoin.Outpoint.N);
-                serializer.ReadWrite(transactionTime);
+            using var ms = new MemoryStream();
 
-                kernelHash = Hashes.Hash256(ms.ToArray());
-            }
+            var serializer = new BitcoinStream(ms, true);
+            serializer.ReadWrite(this.PosV3.PreviousStakeModifierV2);
+            serializer.ReadWrite(stakingCoin.Time);
+            serializer.ReadWrite(stakingCoin.Outpoint.Hash);
+            serializer.ReadWrite(stakingCoin.Outpoint.N);
+            serializer.ReadWrite(this.PosV3.CurrentBlockTime);
 
+            uint256 kernelHash = Hashes.Hash256(ms.ToArray());
             var hash = new BigInteger(1, kernelHash.ToBytes(false));
 
             return hash.CompareTo(weightedTarget) <= 0;
         }
-
-
 
         BlockTemplate GetBlockTemplate()
         {
             return this.blockProvider.BuildPosBlock(this.consensusManager.Tip, new Script());
         }
 
-        void CreateNextBlock(uint currentBlockTime, BlockTemplate blockTemplate, Dictionary<uint256, StakingCoin> validKernels)
+        void CreateNextBlock(BlockTemplate blockTemplate, List<StakingCoin> kernelCoins)
         {
-            StakingCoin stakingCoin = null;
-            uint256 hash;
-            long totalIn = long.MaxValue;
-            foreach (var solution in validKernels)
-            {
-                if (solution.Value.Amount < totalIn)
-                {
-                    hash = solution.Key;
-                    stakingCoin = solution.Value;
-                    totalIn = solution.Value.Amount;
-                }
-            }
+            StakingCoin kernelCoin = kernelCoins[0];
+            foreach (var coin in kernelCoins)
+                if (coin.Amount < kernelCoin.Amount)
+                    kernelCoin = coin;
 
             var newBlockHeight = this.chainIndexer.Tip.Height + 1;
 
             var totalReward = blockTemplate.TotalFee + this.posCoinviewRule.GetProofOfStakeReward(newBlockHeight);
 
-            var key = new Key(VCL.DecryptWithPassphrase(this.passphrase, stakingCoin.EncryptedPrivateKey));
+            var key = new Key(VCL.DecryptWithPassphrase(this.passphrase, kernelCoin.EncryptedPrivateKey));
 
-            var tx = (PosTransaction)this.network.CreateTransaction();
-            tx.Outputs.Clear();
-            tx.Inputs.Clear();
-            tx.Time = blockTemplate.Block.Header.Time = blockTemplate.Block.Transactions[0].Time = currentBlockTime;
+            Transaction tx = new PosTransaction();
 
-            tx.AddInput(new TxIn(stakingCoin.Outpoint));
-            //tx.SignInput(this.network, key, stakingCoin);
+            tx.Time = blockTemplate.Block.Header.Time = blockTemplate.Block.Transactions[0].Time = (uint)this.PosV3.CurrentBlockTime;
+
+            tx.AddInput(new TxIn(kernelCoin.Outpoint));
 
             tx.Outputs.Add(new TxOut(0, Script.Empty));
             tx.Outputs.Add(new TxOut(0, new Script(OpcodeType.OP_RETURN, Op.GetPushOp(key.PubKey.Compress().ToBytes()))));
-            tx.Outputs.Add(new TxOut(totalReward + totalIn, stakingCoin.ScriptPubKey));
+            tx.Outputs.Add(new TxOut(totalReward + kernelCoin.Amount, kernelCoin.ScriptPubKey));
 
-            tx.Sign(this.network, new[] { key }, new[] { stakingCoin });
+            tx.Sign(this.network, new[] { key }, new ICoin[] { kernelCoin });
 
             blockTemplate.Block.Transactions.Insert(1, tx);
 
@@ -242,19 +220,69 @@ namespace Obsidian.Features.X1Wallet.Staking
             ECDSASignature signature = key.Sign(blockTemplate.Block.GetHash());
             ((PosBlock)blockTemplate.Block).BlockSignature = new BlockSignature { Signature = signature.ToDER() };
 
-            this.consensusManager.BlockMinedAsync(blockTemplate.Block).GetAwaiter().GetResult();
+            ChainedHeader chainedHeader = this.consensusManager.BlockMinedAsync(blockTemplate.Block).GetAwaiter().GetResult();
+
+            this.StakedBlock.Hash = chainedHeader.HashBlock;
+            this.StakedBlock.Height = chainedHeader.Height;
+            this.StakedBlock.Size = chainedHeader.Block.BlockSize ?? -1;
+            this.StakedBlock.Transactions = chainedHeader.Block.Transactions.Count;
+            this.StakedBlock.TotalReward = totalReward;
+            this.StakedBlock.KernelAddress = kernelCoin.Address;
+            this.StakedBlock.WeightUsed = kernelCoin.Amount;
+            this.StakedBlock.TotalComputeTimeMs = this.stopwatch.ElapsedMilliseconds;
+            this.StakedBlock.BlockTime = this.PosV3.CurrentBlockTime;
 
             this.logger.LogInformation($"Congratulations, you staked a new block at height {newBlockHeight} and received a reward of {totalReward} {this.network.CoinTicker}.");
 
         }
 
-        StakingCoin[] GetOutputs()
+        public long GetNetworkWeight()
+        {
+            var result = this.PosV3.Target.Difficulty * 0x100000000;
+            if (result > 0)
+            {
+                result /= this.PosV3.TargetBlockTime;
+                result *= this.PosV3.TargetSpacingSeconds;
+                return (long) result;
+            }
+            return 0;
+        }
+
+        public long GetExpectedTime()
+        {
+            if (this.Status.Weight > 0)
+                return GetNetworkWeight() * this.PosV3.TargetBlockTime / this.Status.Weight;
+            return long.MaxValue;
+        }
+
+        ChainedHeader GetLastPosHeader()
+        {
+            ChainedHeader header = this.consensusManager.Tip;
+
+            while (header != null && header.Height > 0)
+            {
+                BlockStake blockStake = this.stakeChain.Get(header.HashBlock);
+
+                if (blockStake != null && blockStake.IsProofOfStake())
+                    return header;
+
+                header = header.Previous;
+            }
+            return null;
+        }
+
+        StakingCoin[] GetUnspentOutputs()
         {
             try
             {
                 this.walletManager.WalletSemaphore.Wait();
+
                 var coins = this.walletManager.GetBudget(out var balance, true);
-                this.logger.LogInformation($"Fetched {coins.Length} utxos, value for staking is {balance.SpendableAmount}.");
+
+                this.Status.UnspentOutputs = coins.Length;
+                this.Status.Weight = balance.SpendableAmount.Satoshi;
+                this.Status.Immature = balance.AmountConfirmed.Satoshi - balance.SpendableAmount.Satoshi;
+
                 return coins;
             }
             finally
@@ -264,10 +292,10 @@ namespace Obsidian.Features.X1Wallet.Staking
 
         }
 
-        static long GetCurrentBlockTime()
+        long GetCurrentBlockTime()
         {
             long currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            long blockTime = currentTime - currentTime % 64;
+            long blockTime = currentTime - currentTime % this.PosV3.TargetSpacingSeconds;
             return blockTime;
         }
     }

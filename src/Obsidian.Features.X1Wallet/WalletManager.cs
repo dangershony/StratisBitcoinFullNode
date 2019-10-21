@@ -10,6 +10,8 @@ using NBitcoin;
 using NBitcoin.DataEncoders;
 using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Api.Requests;
+using Obsidian.Features.X1Wallet.Models.Api.Responses;
 using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
@@ -19,6 +21,7 @@ using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.EventBus;
 using Stratis.Bitcoin.EventBus.CoreEvents;
 using Stratis.Bitcoin.Features.Consensus;
+using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
@@ -44,14 +47,12 @@ namespace Obsidian.Features.X1Wallet
         readonly ISignals signals;
         readonly IInitialBlockDownloadState initialBlockDownloadState;
         readonly IBlockStore blockStore;
-        readonly IStakeChain stakeChain;
 
         // for staking
-        readonly StakingCore posMinting;
         readonly ITimeSyncBehaviorState timeSyncBehaviorState;
-
-        IBlockProvider blockProvider;
-        IConsensusManager consensusManager;
+        readonly IBlockProvider blockProvider;
+        readonly IConsensusManager consensusManager;
+        readonly IStakeChain stakeChain;
 
         X1WalletFile X1WalletFile { get; }
         X1WalletMetadataFile Metadata { get; }
@@ -69,7 +70,7 @@ namespace Obsidian.Features.X1Wallet
 
         public WalletManager(string x1WalletFilePath, ChainIndexer chainIndexer, Network network, DataFolder dataFolder,
             IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
-            INodeLifetime nodeLifetime, StakingCore posMinting, ITimeSyncBehaviorState timeSyncBehaviorState,
+            INodeLifetime nodeLifetime, ITimeSyncBehaviorState timeSyncBehaviorState,
             ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain)
         {
             AddressHelper.Init(network);
@@ -87,7 +88,6 @@ namespace Obsidian.Features.X1Wallet
             this.logger = loggerFactory.CreateLogger(typeof(WalletManager).FullName);
             this.nodeLifetime = nodeLifetime;
 
-            this.posMinting = posMinting;
             this.timeSyncBehaviorState = timeSyncBehaviorState;
             this.blockProvider = blockProvider;
             this.consensusManager = consensusManager;
@@ -133,6 +133,8 @@ namespace Obsidian.Features.X1Wallet
 
         public void Dispose()
         {
+            StopStaking();
+
             if (this.broadcasterManager != null)
                 this.broadcasterManager.TransactionStateChanged -= OnTransactionStateChanged;
 
@@ -142,7 +144,6 @@ namespace Obsidian.Features.X1Wallet
             if (this.blockConnectedSubscription != null)
                 this.signals.Unsubscribe(this.blockConnectedSubscription);
 
-            this.StakingManager?.Dispose();
         }
 
         internal LoadWalletResponse LoadWallet()
@@ -163,8 +164,6 @@ namespace Obsidian.Features.X1Wallet
         public int WalletLastBlockSyncedHeight => this.Metadata.SyncedHeight;
 
         public uint256 WalletLastBlockSyncedHash => this.Metadata.SyncedHash;
-
-        public StakingManager StakingManager { get; private set; }
 
         #endregion
 
@@ -373,6 +372,22 @@ namespace Obsidian.Features.X1Wallet
             var response = new ImportKeysResponse
             { ImportedAddresses = importedAddresses, Message = $"Imported {importedAddresses.Count} addresses." };
             return response;
+        }
+
+        internal StakingInfo GetStakingInfo()
+        {
+            if (this.stakingService == null)
+                return new StakingInfo();
+
+            return new StakingInfo
+            {
+                Enabled = true,
+                PosV3 = this.stakingService.PosV3,
+                Status = this.stakingService.Status,
+                LastStakedBlock = this.stakingService.StakedBlock,
+                NetworkWeight = this.stakingService.GetNetworkWeight(),
+                ExpectedTime = this.stakingService.GetExpectedTime()
+            };
         }
 
         internal ExportKeysResponse ExportKeys(ExportKeysRequest exportKeysRequest)
@@ -776,39 +791,39 @@ namespace Obsidian.Features.X1Wallet
                 throw new X1WalletException(HttpStatusCode.InternalServerError, errorMessage);
             }
 
-            // new 
             if (this.stakingService == null)
             {
                 this.stakingService = new StakingService(this, passphrase, this.loggerFactory, this.network, this.blockProvider, this.consensusManager, this.chainIndexer, this.stakeChain);
                 this.stakingService.Start();
             }
-
-            return;
-            this.StakingManager = new StakingManager(passphrase, this);
-
-            this.logger.LogInformation("Enabling staking on wallet '{0}'.", this.WalletName);
-
-            this.posMinting.Stake();
-
         }
 
         internal void StopStaking()
         {
-            // new
             if (this.stakingService != null)
             {
                 this.stakingService.Stop();
                 this.stakingService = null;
             }
-
-            return;
-
-
-            this.posMinting.StopStake();
-            this.StakingManager.Dispose();
-            this.StakingManager = null;
         }
 
+        internal GetWalletInfoResponse GetWalletInfo()
+        {
+            var model = new GetWalletInfoResponse
+            {
+                Network = this.network,
+                CreationTime = Utils.UnixTimeToDateTime(this.network.GenesisTime),
+                LastBlockSyncedHeight = this.chainIndexer.Tip.Height,
+                ConnectedNodes = 0,
+                ChainTip = this.chainIndexer.Tip.Height,
+                IsChainSynced = this.chainIndexer.IsDownloaded(),
+                IsDecrypted = this.stakingService != null,
+                WalletFilePath = this.CurrentX1WalletFilePath,
+                WalletName = this.WalletName
+            };
+
+            return model;
+        }
 
 
         #endregion

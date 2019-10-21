@@ -1,6 +1,5 @@
 ﻿using System;
 using Microsoft.Extensions.DependencyInjection;
-using Obsidian.Features.X1Wallet.Staking;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration.Logging;
 using Stratis.Bitcoin.Features.BlockStore;
@@ -40,7 +39,6 @@ namespace Obsidian.Features.X1Wallet.Feature
                     .FeatureServices(services =>
                     {
                         services.AddSingleton<WalletManagerFactory>();
-                        services.AddSingleton<StakingCore>();
                         services.AddSingleton<BlockDefinition, PowBlockDefinition>();
                         services.AddSingleton<BlockDefinition, PosBlockDefinition>();
                         services.AddSingleton<BlockDefinition, PosPowBlockDefinition>();

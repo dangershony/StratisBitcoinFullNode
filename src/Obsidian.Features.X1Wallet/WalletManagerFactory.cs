@@ -7,8 +7,8 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Api.Requests;
 using Obsidian.Features.X1Wallet.Models.Wallet;
-using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
@@ -36,7 +36,6 @@ namespace Obsidian.Features.X1Wallet
         readonly IInitialBlockDownloadState initialBlockDownloadState;
         readonly ISignals signals;
         readonly IBlockStore blockStore;
-        readonly StakingCore posMinting;
         readonly ITimeSyncBehaviorState timeSyncBehaviorState;
         readonly IBlockProvider blockProvider;
         readonly IConsensusManager consensusManager;
@@ -47,7 +46,7 @@ namespace Obsidian.Features.X1Wallet
         WalletManager walletManager;
 
         public WalletManagerFactory(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
-            INodeLifetime nodeLifetime, ISignals signals, IBlockStore blockStore, StakingCore posMinting, ITimeSyncBehaviorState timeSyncBehaviorState, IInitialBlockDownloadState initialBlockDownloadState, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain)
+            INodeLifetime nodeLifetime, ISignals signals, IBlockStore blockStore, ITimeSyncBehaviorState timeSyncBehaviorState, IInitialBlockDownloadState initialBlockDownloadState, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain)
         {
             this.dataFolder = dataFolder;
             this.chainIndexer = chainIndexer;
@@ -58,7 +57,6 @@ namespace Obsidian.Features.X1Wallet
             this.initialBlockDownloadState = initialBlockDownloadState;
             this.signals = signals;
             this.blockStore = blockStore;
-            this.posMinting = posMinting;
             this.timeSyncBehaviorState = timeSyncBehaviorState;
             this.blockProvider = blockProvider;
             this.consensusManager = consensusManager;
@@ -89,7 +87,6 @@ namespace Obsidian.Features.X1Wallet
                 {
                     LoadWalletAndCreateWalletManagerInstance(walletName);
                     Debug.Assert(this.walletManager != null, "The WalletSyncManager cannot be correctly initialized when the WalletManager is null");
-                    this.posMinting.SetWalletManagerWrapper(this, walletName);
                 }
             }
             return new WalletContext(this.walletManager);
@@ -116,7 +113,7 @@ namespace Obsidian.Features.X1Wallet
                         "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
             this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory, 
-                 this.nodeLifetime,  this.posMinting, this.timeSyncBehaviorState, this.signals, this.initialBlockDownloadState, this.blockStore, this.blockProvider, this.consensusManager, this.stakeChain);
+                 this.nodeLifetime,  this.timeSyncBehaviorState, this.signals, this.initialBlockDownloadState, this.blockStore, this.blockProvider, this.consensusManager, this.stakeChain);
         }
 
         public void CreateWallet(WalletCreateRequest walletCreateRequest)
@@ -202,5 +199,7 @@ namespace Obsidian.Features.X1Wallet
             context?.WalletManager?.Dispose();
 
         }
+
+        
     }
 }

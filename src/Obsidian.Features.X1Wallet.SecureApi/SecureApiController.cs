@@ -1,13 +1,16 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using NBitcoin;
 using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Api.Requests;
+using Obsidian.Features.X1Wallet.Models.Api.Responses;
 using Obsidian.Features.X1Wallet.SecureApi.Models;
 using Obsidian.Features.X1Wallet.Staking;
+using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin.Controllers.Models;
 using Stratis.Bitcoin.Features.Wallet.Models;
 using VisualCrypt.VisualCryptLight;
+using BuildTransactionRequest = Obsidian.Features.X1Wallet.Transactions.BuildTransactionRequest;
 
 namespace Obsidian.Features.X1Wallet.SecureApi
 {
@@ -61,8 +64,8 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                         }
                     case "generalInfo":
                         {
-                            WalletGeneralInfoModel walletGeneralInfoModel = this.walletController.GetGeneralInfo();
-                            return CreateOk(walletGeneralInfoModel, request);
+                            GetWalletInfoResponse walletGetWalletInfoResponse = this.walletController.GetWalletInfo();
+                            return CreateOk(walletGetWalletInfoResponse, request);
                         }
                     case "nodeStatus":
                         {
@@ -85,7 +88,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                     case "stakingInfo":
                         {
-                            GetStakingInfoModel stakingInfo = this.walletController.GetStakingInfo();
+                            StakingInfo stakingInfo = this.walletController.GetStakingInfo();
                             return CreateOk(stakingInfo, request);
                         }
 
@@ -98,29 +101,29 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
                     case "estimateFee":
                         {
-                            var txFeeEstimateRequest = Deserialize<TxFeeEstimateRequest>(decryptedRequest.Payload);
-                            Money fee = this.walletController.EstimateFee(txFeeEstimateRequest);
+                            var txFeeEstimateRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
+                            long fee = this.walletController.EstimateFee(txFeeEstimateRequest);
                             return CreateOk(fee, request);
                         }
                     case "buildTransaction":
                         {
-                            var buildTransactionRequest = Deserialize<X1Wallet.Models.Api.BuildTransactionRequest>(decryptedRequest.Payload);
+                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
                             BuildTransactionResponse buildTransactionResponse = this.walletController.BuildTransaction(buildTransactionRequest);
                             return CreateOk(buildTransactionResponse, request);
                         }
 
                     case "sendTransaction":
                         {
-                            SendTransactionRequest sendTransactionRequest = Deserialize<SendTransactionRequest>(decryptedRequest.Payload);
+                            SendHexTransactionRequest sendTransactionRequest = Deserialize<SendHexTransactionRequest>(decryptedRequest.Payload);
                             this.walletController.SendTransaction(sendTransactionRequest);
                             return CreateOk(request);
                         }
 
                     case "buildAndSendTransaction":
                         {
-                            var buildTransactionRequest = Deserialize<X1Wallet.Models.Api.BuildTransactionRequest>(decryptedRequest.Payload);
+                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
                             BuildTransactionResponse buildTransactionResponse = this.walletController.BuildTransaction(buildTransactionRequest);
-                            this.walletController.SendTransaction(new SendTransactionRequest { Hex = buildTransactionResponse.Transaction.ToHex() });
+                            this.walletController.SendTransaction(new SendHexTransactionRequest { Hex = buildTransactionResponse.Transaction.ToHex() });
                             return CreateOk(buildTransactionResponse, request);
                         }
 

@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
-using NBitcoin.Policy;
-using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Staking;
@@ -34,8 +31,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
             this.fixedFeeRate = new FeeRate(Money.Satoshis(Math.Max(network.MinTxFee, network.MinRelayTxFee)));
         }
 
-
-        public BuildTransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
+        public BuildTransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, List<Burn> burns = null)
         {
             var tx = this.network.CreateTransaction();
 
@@ -45,45 +41,31 @@ namespace Obsidian.Features.X1Wallet.Transactions
 
             // add recipients
             foreach (Recipient recipient in recipients)
-                tx.Outputs.Add(new TxOut(recipient.Amount, recipient.ScriptPubKey));
+                tx.Outputs.Add(new TxOut(recipient.Amount, recipient.Address.ScriptPubKeyFromBech32Safe()));
 
             // op_return data
-            if (burn != null)
-            {
-                byte[] bytes = Encoding.UTF8.GetBytes(burn.Utf8String);
-                Script opReturnScript = TxNullDataTemplate.Instance.GenerateScriptPubKey(bytes);
-                tx.Outputs.Add(new TxOut(burn.Amount ?? Money.Zero, opReturnScript));
-            }
+            if (burns != null)
+                foreach (Burn burn in burns)
+                    tx.Outputs.Add(new TxOut(burn.Amount, TxNullDataTemplate.Instance.GenerateScriptPubKey(burn.Data)));
 
-            TxOut changeOutput = null;
+
             // set change address
-            using (var walletContext = GetWalletContext())
-            {
-                P2WpkhAddress changeAddress = walletContext.WalletManager.GetUnusedAddress();
+            TxOut changeOutput = GetOutputForChange();
+            tx.Outputs.Add(changeOutput);
 
-                if (changeAddress == null)
-                {
-                    changeAddress = walletContext.WalletManager.GetAllAddresses().First().Value;
-                    this.logger.LogWarning(
-                        "Caution, the wallet has run out off unused addressed, and will now use a used address as change address.");
-                }
-
-                changeOutput = new TxOut(Money.Zero, changeAddress.ScriptPubKeyFromPublicKey());
-                tx.Outputs.Add(changeOutput);
-            }
-
+            // calculate size, fee and change amount
             var fee = Money.Zero;
             fundTx:
 
             // add outputs
-            StakingCoin[] coins = AddCoins(recipients, burn, fee.Satoshi).ToArray();
+            StakingCoin[] coins = AddCoins(recipients, fee.Satoshi, burns).ToArray();
 
             tx.Inputs.Clear();
             foreach (var c in coins)
                 tx.Inputs.Add(new TxIn(c.Outpoint));
 
             var virtualSize = tx.GetVirtualSize();
-           
+
             var currentFee = this.fixedFeeRate.GetFee(virtualSize);
             this.logger.LogInformation(
                 $"VirtualSize: {virtualSize}, CurrentFee: {currentFee}, PreviousFee: {fee}, Coins: {coins.Length}.");
@@ -101,25 +83,9 @@ namespace Obsidian.Features.X1Wallet.Transactions
             // signing
             if (sign)
             {
-                var keys = DecryptKeys(coins);
-
+                var keys = DecryptKeys(coins, passphrase);
                 tx.Sign(this.network, keys, coins);
-                Key[] DecryptKeys(StakingCoin[] selectedCoins)
-                {
-                    var keys = new Key[selectedCoins.Length];
-                    for (var i = 0; i < keys.Length; i++)
-                        keys[i] = new Key(VCL.DecryptWithPassphrase(passphrase, selectedCoins[i].EncryptedPrivateKey));
-                    return keys;
-                }
             }
-
-            // this doesn't work if MinTxFee and MinRelaxTxFee are not equal
-            //if (!txb.Verify(transaction, this.fixedFeeRate, out TransactionPolicyError[] errors))
-            //{
-            //    string errorsMessage = string.Join(" - ", errors.Select(s => s.ToString()));
-            //    this.logger.LogError($"Build transaction failed: {errorsMessage}");
-            //    throw new X1WalletException(System.Net.HttpStatusCode.BadRequest, $"Transaction verification failed: {errorsMessage}");
-            //}
 
             var response = new BuildTransactionResponse
             {
@@ -134,107 +100,11 @@ namespace Obsidian.Features.X1Wallet.Transactions
             return response;
         }
 
-        public BuildTransactionResponse BuildTransactionWithTransactionBuilder(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
+        IEnumerable<StakingCoin> AddCoins(List<Recipient> recipients, long fee, List<Burn> burns = null)
         {
-            var txb = CreateTransactionBuilder(recipients, sign, out var fee, out var virtualSize, passphrase, transactionTimestamp, burn);
-
-            var transaction = txb.BuildTransaction(sign);
-
-            // this doesn't work if MinTxFee and MinRelaxTxFee are not equal
-            if (!txb.Verify(transaction, this.fixedFeeRate, out TransactionPolicyError[] errors))
-            {
-                string errorsMessage = string.Join(" - ", errors.Select(s => s.ToString()));
-                this.logger.LogError($"Build transaction failed: {errorsMessage}");
-                throw new X1WalletException(System.Net.HttpStatusCode.BadRequest, $"Transaction verification failed: {errorsMessage}");
-            }
-
-            var response = new BuildTransactionResponse
-            {
-                Transaction = transaction,
-                Hex = transaction.ToHex(),
-                Fee = fee,
-                VirtualSize = virtualSize,
-                SerializedSize = transaction.GetSerializedSize(),
-                TransactionId = transaction.GetHash()
-            };
-
-            return response;
-        }
-
-        TransactionBuilder CreateTransactionBuilder(List<Recipient> recipients, bool sign, out Money fee, out int virtualSize, string passphrase = null, uint? transactionTimestamp = null, Burn burn = null)
-        {
-            var txb = new TransactionBuilder(this.network) { CoinSelector = new AllCoinsSelector() };
-
-            // time
-            if (transactionTimestamp.HasValue)
-                txb.SetTimeStamp(transactionTimestamp.Value);
-
-            // add recipients
-            foreach (Recipient recipient in recipients)
-                txb.Send(recipient.ScriptPubKey, recipient.Amount);
-
-            // op_return data
-            if (burn != null)
-            {
-                byte[] bytes = Encoding.UTF8.GetBytes(burn.Utf8String);
-                Script opReturnScript = TxNullDataTemplate.Instance.GenerateScriptPubKey(bytes);
-                txb.Send(opReturnScript, burn.Amount ?? Money.Zero);
-            }
-
-            // set change address
-            using (var walletContext = GetWalletContext())
-            {
-                P2WpkhAddress changeAddress = walletContext.WalletManager.GetUnusedAddress();
-
-                if (changeAddress == null)
-                {
-                    changeAddress = walletContext.WalletManager.GetAllAddresses().First().Value;
-                    this.logger.LogWarning(
-                        "Caution, the wallet has run out off unused addressed, and will now use a used address as change address.");
-                }
-                txb.SetChange(changeAddress.ScriptPubKeyFromPublicKey());
-            }
-
-            fee = Money.Zero;
-
-            fundTx:
-
-            // add outputs
-            var coins = AddCoins(recipients, burn, fee.Satoshi).ToArray();
-            txb.AddCoins(coins);
-
-            var test = txb.BuildTransaction(false);
-            virtualSize = txb.EstimateSize(test);
-            var currentFee = this.fixedFeeRate.GetFee(virtualSize);
-            if (fee != currentFee)
-            {
-                fee = currentFee;
-                goto fundTx;
-            }
-            txb.SendFees(fee);
-
-            // signing
-            if (sign)
-            {
-                txb.AddKeys(DecryptKeys(coins));
-
-                Key[] DecryptKeys(StakingCoin[] selectedCoins)
-                {
-                    var keys = new Key[selectedCoins.Length];
-                    for (var i = 0; i < keys.Length; i++)
-                        keys[i] = new Key(VCL.DecryptWithPassphrase(passphrase, selectedCoins[i].EncryptedPrivateKey));
-                    return keys;
-                }
-            }
-
-            return txb;
-        }
-
-        IEnumerable<StakingCoin> AddCoins(List<Recipient> recipients, Burn burn, long fee)
-        {
-            long requiredAmount = recipients.Sum(s => s.Amount) + fee;
-            if (burn != null && burn.Amount != null)
-                requiredAmount += burn.Amount.Satoshi;
+            long sendAmount = recipients.Sum(s => s.Amount) + fee;
+            long burnAmount = burns?.Sum(b => b.Amount) ?? 0;
+            long total = sendAmount + burnAmount + fee;
 
             IReadOnlyList<StakingCoin> budget;
             using (var walletContext = GetWalletContext())
@@ -245,12 +115,35 @@ namespace Obsidian.Features.X1Wallet.Transactions
 
             int pointer = 0;
             long selectedAmount = 0;
-            while (selectedAmount < requiredAmount)
+            while (selectedAmount < total)
             {
                 StakingCoin coin = budget[pointer++];
                 selectedAmount += coin.Amount.Satoshi;
                 yield return coin;
             }
+        }
+
+        TxOut GetOutputForChange()
+        {
+            using var walletContext = GetWalletContext();
+
+            P2WpkhAddress changeAddress = walletContext.WalletManager.GetUnusedAddress();
+
+            if (changeAddress == null)
+            {
+                changeAddress = walletContext.WalletManager.GetAllAddresses().First().Value;
+                this.logger.LogWarning("Caution, the wallet has run out off unused addresses, and will now use a used address as change address.");
+            }
+
+            return new TxOut(0, changeAddress.ScriptPubKeyFromPublicKey());
+        }
+
+        static Key[] DecryptKeys(StakingCoin[] selectedCoins, string passphrase)
+        {
+            var keys = new Key[selectedCoins.Length];
+            for (var i = 0; i < keys.Length; i++)
+                keys[i] = new Key(VCL.DecryptWithPassphrase(passphrase, selectedCoins[i].EncryptedPrivateKey));
+            return keys;
         }
 
         WalletContext GetWalletContext()

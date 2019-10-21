@@ -3,7 +3,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Api.Requests;
 using Obsidian.Features.X1Wallet.Tools;
+using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
@@ -80,7 +82,7 @@ namespace Obsidian.x1d.Temp
         {
             Controller.LoadWallet();
 
-            BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Password = _passPhrase });
+            BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Passphrase = _passPhrase });
             await Task.Delay(15000); // wait for connections
             Controller.SendTransaction(new Stratis.Bitcoin.Features.Wallet.Models.SendTransactionRequest
             {
