@@ -118,7 +118,8 @@ namespace Obsidian.Features.X1Wallet.Staking
             this.stopwatch.Restart();
             BlockTemplate blockTemplate = GetBlockTemplate();
 
-            this.PosV3.Target = blockTemplate.Block.Header.Bits;
+            this.PosV3.TargetBits = blockTemplate.Block.Header.Bits;
+            this.PosV3.Target = blockTemplate.Block.Header.Bits.ToBigInteger();
             this.PosV3.PreviousStakeModifierV2 = GetStakeModifierV22();
 
             var coins = GetUnspentOutputs();
@@ -166,18 +167,21 @@ namespace Obsidian.Features.X1Wallet.Staking
         bool CheckStakeKernelHash(StakingCoin stakingCoin)
         {
             var value = BigInteger.ValueOf(stakingCoin.Amount.Satoshi);
-            BigInteger weightedTarget = this.PosV3.Target.ToBigInteger().Multiply(value);
+            BigInteger weightedTarget = this.PosV3.Target.Multiply(value);
 
-            using var ms = new MemoryStream();
-
-            var serializer = new BitcoinStream(ms, true);
-            serializer.ReadWrite(this.PosV3.PreviousStakeModifierV2);
-            serializer.ReadWrite(stakingCoin.Time);
-            serializer.ReadWrite(stakingCoin.Outpoint.Hash);
-            serializer.ReadWrite(stakingCoin.Outpoint.N);
-            serializer.ReadWrite(this.PosV3.CurrentBlockTime);
-
-            uint256 kernelHash = Hashes.Hash256(ms.ToArray());
+            uint256 kernelHash;
+            using (var ms = new MemoryStream())
+            {
+                var serializer = new BitcoinStream(ms, true);
+                serializer.ReadWrite(this.PosV3.PreviousStakeModifierV2);
+                serializer.ReadWrite(stakingCoin.Time);
+                serializer.ReadWrite(stakingCoin.Outpoint.Hash);
+                serializer.ReadWrite(stakingCoin.Outpoint.N);
+                serializer.ReadWrite((uint)this.PosV3.CurrentBlockTime); // be sure it's serialized as uint
+                kernelHash = Hashes.Hash256(ms.ToArray());
+            }
+          
+           
             var hash = new BigInteger(1, kernelHash.ToBytes(false));
 
             return hash.CompareTo(weightedTarget) <= 0;
@@ -238,7 +242,7 @@ namespace Obsidian.Features.X1Wallet.Staking
 
         public long GetNetworkWeight()
         {
-            var result = this.PosV3.Target.Difficulty * 0x100000000;
+            var result = this.PosV3.TargetBits.Difficulty * 0x100000000;
             if (result > 0)
             {
                 result /= this.PosV3.TargetBlockTime;

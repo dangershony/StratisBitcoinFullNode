@@ -1,4 +1,5 @@
 ﻿using NBitcoin;
+using NBitcoin.BouncyCastle.Math;
 
 namespace Obsidian.Features.X1Wallet.Staking
 {
@@ -6,10 +7,11 @@ namespace Obsidian.Features.X1Wallet.Staking
     public sealed class PosV3
     {
         public long CurrentBlockTime;
-        public Target Target;
+        public Target TargetBits;
         public uint256 PreviousStakeModifierV2;
         public int TargetSpacingSeconds;
-        internal int TargetBlockTime;
+        public int TargetBlockTime;
+        public BigInteger Target;
     }
 
     public class StakingStatus

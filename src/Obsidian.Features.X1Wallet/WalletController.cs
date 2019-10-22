@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Feature;
+using Obsidian.Features.X1Wallet.Models;
 using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Api.Requests;
 using Obsidian.Features.X1Wallet.Models.Api.Responses;
@@ -246,68 +248,88 @@ namespace Obsidian.Features.X1Wallet
             this.walletManagerFactory.WalletSyncManagerSyncFromDate(request.Date);
         }
 
-        public StatusModel GetNodeStatus()
+        public ConnectionInfo GetConnections()
         {
-            var model = new StatusModel
+            var info = new ConnectionInfo { Peers = new List<PeerInfo>() };
+            info.BestPeerHeight = 0;
+            foreach (var p in this.connectionManager.ConnectedPeers)
             {
-                Version = this.fullNode.Version?.ToString() ?? "0",
-                ProtocolVersion = (uint)(this.nodeSettings.ProtocolVersion),
-                Agent = this.connectionManager.ConnectionSettings.Agent,
-                ProcessId = Process.GetCurrentProcess().Id,
-                Network = this.fullNode.Network.Name,
-                ConsensusHeight = this.chainState.ConsensusTip?.Height,
-                DataDirectoryPath = this.nodeSettings.DataDir,
-                Testnet = this.network.IsTest(),
-                RelayFee = this.nodeSettings.MinRelayTxFeeRate?.FeePerK?.ToUnit(MoneyUnit.BTC) ?? 0,
-                RunningTime = this.dateTimeProvider.GetUtcNow() - this.fullNode.StartTime,
-                CoinTicker = this.network.CoinTicker,
-                State = this.fullNode.State.ToString()
-            };
-
-
-            var target = this.networkDifficulty.GetNetworkDifficulty();
-            if (target != null)
-                model.Difficulty = target.Difficulty;
-
-            // Add the list of features that are enabled.
-            foreach (IFullNodeFeature feature in this.fullNode.Services.Features)
-            {
-                model.FeaturesData.Add(new FeatureData
+                var behavior = p.Behavior<ConsensusManagerBehavior>();
+                var peer = new PeerInfo
                 {
-                    Namespace = feature.GetType().ToString(),
-                    State = feature.State
-                });
-            }
-
-            // Include BlockStore Height if enabled
-            if (this.chainState.BlockStoreTip != null)
-                model.BlockStoreHeight = this.chainState.BlockStoreTip.Height;
-
-            // Add the details of connected nodes.
-            foreach (INetworkPeer peer in this.connectionManager.ConnectedPeers)
-            {
-                // var connectionManagerBehavior = peer.Behavior<IConnectionManagerBehavior>();
-
-                var chainHeadersBehavior = peer.Behavior<ConsensusManagerBehavior>();
-                var connectedPeer = new ConnectedPeerModel
-                {
-                    Version = peer.PeerVersion != null ? peer.PeerVersion.UserAgent : "[Unknown]",
-                    RemoteSocketEndpoint = peer.RemoteSocketEndpoint.ToString(),
-                    TipHeight = chainHeadersBehavior.BestReceivedTip != null ? chainHeadersBehavior.BestReceivedTip.Height : peer.PeerVersion?.StartHeight ?? -1,
-                    IsInbound = peer.Inbound
+                    Version = p.PeerVersion != null ? p.PeerVersion.UserAgent : "n/a",
+                    RemoteSocketEndpoint = p.RemoteSocketEndpoint.ToString(),
+                    BestReceivedTipHeight = behavior.BestReceivedTip.Height,
+                    BestReceivedTipHash = behavior.BestReceivedTip.HashBlock,
+                    IsInbound = p.Inbound
                 };
 
-                if (connectedPeer.IsInbound)
+                if (peer.BestReceivedTipHeight > info.BestPeerHeight)
                 {
-                    model.InboundPeers.Add(connectedPeer);
+                    info.BestPeerHeight = peer.BestReceivedTipHeight;
+                    info.BestPeerHash = peer.BestReceivedTipHash;
                 }
+                if (peer.IsInbound)
+                    info.InBound++;
                 else
+                    info.OutBound++;
+                info.Peers.Add(peer);
+            }
+            return info;
+        }
+
+        SyncingInfo GetSyncingInfo()
+        {
+            var syncingInfo= new SyncingInfo
+            {
+                ConsensusTipHeight = this.chainState.ConsensusTip.Height,
+                ConsensusTipHash = this.chainState.ConsensusTip.HashBlock,
+                ConsensusTipAge = (int) (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - this.chainState.ConsensusTip.Header.Time),
+                MaxTipAge = this.network.MaxTipAge,
+                IsAtBestChainTip = this.chainState.IsAtBestChainTip
+            };
+
+            if (this.chainState.BlockStoreTip != null)
+            {
+                syncingInfo.BlockStoreHeight = this.chainState.BlockStoreTip.Height;
+                syncingInfo.BlockStoreHash = this.chainState.BlockStoreTip.HashBlock;
+            }
+
+            if (this.walletManagerFactory.GetWalletContext(null, true) != null)
+            {
+                using (var context = GetWalletContext())
                 {
-                    model.OutboundPeers.Add(connectedPeer);
+                    syncingInfo.WalletTipHeight = context.WalletManager.WalletLastBlockSyncedHeight;
+                    syncingInfo.WalletTipHash = context.WalletManager.WalletLastBlockSyncedHash;
+                    syncingInfo.WalletName = context.WalletManager.WalletName;
                 }
             }
 
-            return model;
+            syncingInfo.ConnectionInfo = GetConnections();
+          
+            return syncingInfo;
+        }
+
+        public NodeInfo GetNodeInfo()
+        {
+            var process = Process.GetCurrentProcess();
+
+            return new NodeInfo
+            {
+                ProcessId = process.Id,
+                ProcessName = process.ProcessName,
+                MachineName = process.MachineName,
+                Program = Path.GetFullPath(System.Reflection.Assembly.GetExecutingAssembly().GetName().CodeBase),
+                Agent = this.connectionManager.ConnectionSettings.Agent,
+                StartupTime = new DateTimeOffset(this.fullNode.StartTime).ToUnixTimeSeconds(),
+                NetworkName = this.network.Name,
+                CoinTicker = this.network.CoinTicker,
+                Testnet = this.network.IsTest(),
+                MinTxFee = this.network.MinTxFee,
+                MinTxRelayFee = this.network.MinRelayTxFee,
+                DataDirectoryPath = this.nodeSettings.DataDir,
+                Features = this.fullNode.Services.Features.Select(x => $"{x.GetType()}, v.{x.GetType().Assembly.GetName().Version}").ToArray(),
+            };
         }
 
 

@@ -60,7 +60,7 @@ namespace Obsidian.x1d.Temp
                 {
                     var info = Controller.GetStakingInfo();
                     if (info != null && info.Enabled)
-                        _logger.LogInformation($"Staking: Enabled: {info.Enabled}, Staking: {info.Staking}.");
+                        _logger.LogInformation($"Staking: Enabled: {info.Enabled}, Expected Time: {info.ExpectedTime}.");
                     else
                     {
                         _logger.LogInformation($"Staking: Trying to start staking....");
@@ -84,7 +84,7 @@ namespace Obsidian.x1d.Temp
 
             BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Passphrase = _passPhrase });
             await Task.Delay(15000); // wait for connections
-            Controller.SendTransaction(new Stratis.Bitcoin.Features.Wallet.Models.SendTransactionRequest
+            Controller.SendTransaction(new SendHexTransactionRequest
             {
                 Hex = model.Hex
             });

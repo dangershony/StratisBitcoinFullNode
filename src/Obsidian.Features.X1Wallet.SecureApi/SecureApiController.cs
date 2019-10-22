@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Obsidian.Features.X1Wallet.Models;
 using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Api.Requests;
 using Obsidian.Features.X1Wallet.Models.Api.Responses;
@@ -67,9 +68,9 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             GetWalletInfoResponse walletGetWalletInfoResponse = this.walletController.GetWalletInfo();
                             return CreateOk(walletGetWalletInfoResponse, request);
                         }
-                    case "nodeStatus":
+                    case "nodeInfo":
                         {
-                            StatusModel nodeStatus = this.walletController.GetNodeStatus();
+                            NodeInfo nodeStatus = this.walletController.GetNodeInfo();
                             return CreateOk(nodeStatus, request);
                         }
 
