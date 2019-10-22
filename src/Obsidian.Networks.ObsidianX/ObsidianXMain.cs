@@ -183,7 +183,7 @@ namespace Obsidian.Networks.ObsidianX
 
                 // rules to prevent legacy script types and force segwit
                 .Register<ObsidianXPreventLegacyRule>()
-                .Register<ObsidianXRequireNativeSegWitRule>()
+                //.Register<ObsidianXRequireNativeSegWitRule>()
                 .Register<ObsidianXOutputNotWhitelistedRule>()
 
                 // rules that are inside the method ContextualCheckBlock
