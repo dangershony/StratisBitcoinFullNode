@@ -304,10 +304,11 @@ namespace Stratis.Bitcoin.Features.Wallet
         }
 
         /// <inheritdoc />
-        public string SignMessage(string password, string walletName, string externalAddress, string message)
+        public string SignMessage(string password, string walletName, string accountName, string externalAddress, string message)
         {
             Guard.NotEmpty(password, nameof(password));
             Guard.NotEmpty(walletName, nameof(walletName));
+            Guard.NotEmpty(accountName, nameof(accountName));
             Guard.NotEmpty(message, nameof(message));
             Guard.NotEmpty(externalAddress, nameof(externalAddress));
 
@@ -315,7 +316,7 @@ namespace Stratis.Bitcoin.Features.Wallet
             Wallet wallet = this.GetWalletByName(walletName);
 
             // Sign the message.
-            HdAddress hdAddress = wallet.GetAddress(externalAddress);
+            HdAddress hdAddress = wallet.GetAddress(externalAddress, account => account.Name.Equals(accountName));
             Key privateKey = wallet.GetExtendedPrivateKeyForAddress(password, hdAddress).PrivateKey;
             return privateKey.SignMessage(message);
         }
