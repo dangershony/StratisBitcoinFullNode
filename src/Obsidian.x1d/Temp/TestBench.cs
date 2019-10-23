@@ -43,10 +43,12 @@ namespace Obsidian.x1d.Temp
                 _fullNode = fullNode;
 
 
-                // await StartMiningAsync();
+                await StartMiningAsync();
+                await Task.Delay(1000 * 120);
                 //await SplitAsync();
-                //await TryStakingAsync();
-                await Send(Money.Coins(1000000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
+                await Send(Money.Coins(1000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
+                await TryStakingAsync();
+
             }
             catch (Exception e)
             {
@@ -60,8 +62,7 @@ namespace Obsidian.x1d.Temp
             Controller.LoadWallet();
             var recipients = new List<Recipient> { new Recipient { Amount = satoshis, Address = address } };
             var tx = Controller.BuildTransaction(new BuildTransactionRequest
-            { Recipients = recipients, Passphrase = _passPhrase, Sign = true });
-            Controller.SendTransaction(new SendHexTransactionRequest { Hex = tx.Hex });
+            { Recipients = recipients, Passphrase = _passPhrase, Sign = true, Send = true });
         }
 
         static async Task TryStakingAsync()
@@ -103,12 +104,7 @@ namespace Obsidian.x1d.Temp
         {
             Controller.LoadWallet();
 
-            BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Passphrase = _passPhrase });
-            await Task.Delay(15000); // wait for connections
-            Controller.SendTransaction(new SendHexTransactionRequest
-            {
-                Hex = model.Hex
-            });
+            BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Passphrase = _passPhrase, Send = true });
         }
 
         static async Task StartMiningAsync()

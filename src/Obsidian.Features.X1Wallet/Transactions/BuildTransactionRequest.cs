@@ -8,6 +8,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
         public List<Recipient> Recipients;
         public List<Burn> Burns;
         public bool Sign;
-        internal uint? TransactionTimestamp;
+        public bool Send;
+        public uint? TransactionTimestamp;
     }
 }

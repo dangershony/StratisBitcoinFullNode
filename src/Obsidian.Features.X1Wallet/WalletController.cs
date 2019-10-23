@@ -60,7 +60,7 @@ namespace Obsidian.Features.X1Wallet
 
         TransactionService GetTransactionHandler()
         {
-            return new TransactionService(this.loggerFactory, this.walletManagerFactory, this.walletName, this.network);
+            return new TransactionService(this.loggerFactory, this.walletManagerFactory, this.walletName, this.network, this.broadcasterManager);
         }
 
         public WalletController(
@@ -158,13 +158,13 @@ namespace Obsidian.Features.X1Wallet
 
             walletContext.WalletManager.GetBudget(out Balance _);
             var recipients = walletContext.WalletManager.GetAllAddresses().Values.Take(count).Select(x => new Recipient { Address = x.Address, Amount = amount }).ToList();
-            BuildTransactionResponse response = GetTransactionHandler().BuildTransaction(recipients, true, request.Passphrase);
+            BuildTransactionResponse response = GetTransactionHandler().BuildTransaction(recipients, true, true, request.Passphrase);
             return response;
         }
 
         public BuildTransactionResponse BuildTransaction(BuildTransactionRequest request)
         {
-            var response = GetTransactionHandler().BuildTransaction(request.Recipients, request.Sign, request.Passphrase, request.TransactionTimestamp, request.Burns);
+            var response = GetTransactionHandler().BuildTransaction(request.Recipients, request.Sign, request.Send, request.Passphrase, request.TransactionTimestamp, request.Burns);
             return response;
         }
 
