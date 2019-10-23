@@ -1,9 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using NBitcoin;
+using Newtonsoft.Json;
 using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Api.Requests;
+using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
 using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin;
@@ -39,15 +43,25 @@ namespace Obsidian.x1d.Temp
                 _fullNode = fullNode;
 
 
-                //await StartMiningAsync();
+                // await StartMiningAsync();
                 //await SplitAsync();
-                await TryStakingAsync();
+                //await TryStakingAsync();
+                await Send(Money.Coins(1000000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
             }
             catch (Exception e)
             {
                 _logger.LogError(e.ToString());
             }
 
+        }
+
+        static async Task Send(long satoshis, string address)
+        {
+            Controller.LoadWallet();
+            var recipients = new List<Recipient> { new Recipient { Amount = satoshis, Address = address } };
+            var tx = Controller.BuildTransaction(new BuildTransactionRequest
+            { Recipients = recipients, Passphrase = _passPhrase, Sign = true });
+            Controller.SendTransaction(new SendHexTransactionRequest { Hex = tx.Hex });
         }
 
         static async Task TryStakingAsync()
@@ -60,7 +74,10 @@ namespace Obsidian.x1d.Temp
                 {
                     var info = Controller.GetStakingInfo();
                     if (info != null && info.Enabled)
+                    {
                         _logger.LogInformation($"Staking: Enabled: {info.Enabled}, Expected Time: {info.ExpectedTime}.");
+                        Print(info);
+                    }
                     else
                     {
                         _logger.LogInformation($"Staking: Trying to start staking....");
@@ -76,7 +93,11 @@ namespace Obsidian.x1d.Temp
             }
         }
 
-
+        private static void Print(StakingInfo info)
+        {
+            var json = JsonConvert.SerializeObject(info, Formatting.Indented);
+            _logger.LogInformation(json);
+        }
 
         static async Task SplitAsync()
         {

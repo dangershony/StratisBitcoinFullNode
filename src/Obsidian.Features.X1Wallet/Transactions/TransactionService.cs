@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
@@ -18,6 +19,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
         readonly WalletManagerFactory walletManagerFactory;
         readonly string walletName;
         readonly FeeRate fixedFeeRate;
+        readonly SigningService signingService;
 
         public TransactionService(
             ILoggerFactory loggerFactory,
@@ -29,6 +31,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
             this.walletName = walletName;
             this.logger = loggerFactory.CreateLogger(GetType().FullName);
             this.fixedFeeRate = new FeeRate(Money.Satoshis(Math.Max(network.MinTxFee, network.MinRelayTxFee)));
+            this.signingService = new SigningService(network);
         }
 
         public BuildTransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, List<Burn> burns = null)
@@ -80,12 +83,17 @@ namespace Obsidian.Features.X1Wallet.Transactions
             var change = sending - outgoing;
             changeOutput.Value = Money.Satoshis(change);
 
+            var tx2 = new PosTransaction(tx.ToHex());
+            Debug.Assert(tx2.ToHex() == tx.ToHex());
             // signing
             if (sign)
             {
                 var keys = DecryptKeys(coins, passphrase);
                 tx.Sign(this.network, keys, coins);
+                this.signingService.SignInputs(tx2, keys, coins);
             }
+
+            Debug.Assert(tx2.ToHex() == tx.ToHex());
 
             var response = new BuildTransactionResponse
             {

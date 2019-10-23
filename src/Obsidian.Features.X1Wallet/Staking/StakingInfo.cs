@@ -21,22 +21,22 @@ namespace Obsidian.Features.X1Wallet.Staking
         public int KernelsFound;
         public long ComputateTimeMs;
         public string Errors;
-        internal int UnspentOutputs;
-        internal long Weight;
-        internal long Immature;
+        public int UnspentOutputs;
+        public long Weight;
+        public long Immature;
     }
 
     public class StakedBlock
     {
-        internal int Height;
-        internal uint256 Hash;
-        internal long Size;
-        internal int Transactions;
-        internal long TotalReward;
-        internal long WeightUsed;
-        internal string KernelAddress;
-        internal long TotalComputeTimeMs;
-        internal long BlockTime;
+        public int Height;
+        public uint256 Hash;
+        public long Size;
+        public int Transactions;
+        public long TotalReward;
+        public long WeightUsed;
+        public string KernelAddress;
+        public long TotalComputeTimeMs;
+        public long BlockTime;
     }
 
     public class StakingInfo
