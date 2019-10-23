@@ -44,9 +44,9 @@ namespace Obsidian.x1d.Temp
 
 
                 await StartMiningAsync();
-                await Task.Delay(1000 * 120);
+                //await Task.Delay(1000 * 120);
                 //await SplitAsync();
-                await Send(Money.Coins(1000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
+                //await Send(Money.Coins(1000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
                 await TryStakingAsync();
 
             }
