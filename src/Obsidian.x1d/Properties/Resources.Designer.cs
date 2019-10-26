@@ -89,6 +89,7 @@ namespace Obsidian.x1d.Properties {
         ///Bitcoin Core
         ///Blackcoin
         ///blackstone
+        ///pragmatrix
         ///Zap
         ///BlockCore
         ///bokobza
@@ -120,8 +121,7 @@ namespace Obsidian.x1d.Properties {
         ///ferdeen
         ///fluffypony
         ///Hans
-        ///herbepau
-        ///hungdang131 [rest of string was truncated]&quot;;.
+        ///herbepau        /// [rest of string was truncated]&quot;;.
         /// </summary>
         internal static string Credits {
             get {
