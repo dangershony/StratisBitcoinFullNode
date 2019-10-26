@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Net;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Feature;
@@ -10,8 +8,6 @@ using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
-using Stratis.Bitcoin.Features.Wallet.Broadcasting;
-using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.Transactions
@@ -23,23 +19,20 @@ namespace Obsidian.Features.X1Wallet.Transactions
         readonly WalletManagerFactory walletManagerFactory;
         readonly string walletName;
         readonly FeeRate fixedFeeRate;
-        readonly IBroadcasterManager broadcasterManager;
-
 
         public TransactionService(
             ILoggerFactory loggerFactory,
             WalletManagerFactory walletManagerFactory, string walletName,
-            Network network,IBroadcasterManager broadcasterManager)
+            Network network)
         {
             this.network = network;
             this.walletManagerFactory = walletManagerFactory;
             this.walletName = walletName;
             this.logger = loggerFactory.CreateLogger(GetType().FullName);
             this.fixedFeeRate = new FeeRate(Money.Satoshis(Math.Max(network.MinTxFee, network.MinRelayTxFee)));
-            this.broadcasterManager = broadcasterManager;
         }
 
-        public BuildTransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, bool send, string passphrase = null, uint? transactionTimestamp = null, List<Burn> burns = null)
+        public BuildTransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, List<Burn> burns = null)
         {
             var tx = this.network.CreateTransaction();
 
@@ -85,7 +78,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
 
             long outgoing = tx.Outputs.Sum(x => x.Value.Satoshi);
             var sending = coins.Sum(x => x.Amount.Satoshi);
-            var change = sending - outgoing;
+            var change = sending - outgoing - fee;
             changeOutput.Value = change;
 
             // signing
@@ -96,11 +89,6 @@ namespace Obsidian.Features.X1Wallet.Transactions
                 SigningService.SignInputs(tx, keys, coins);
             }
 
-
-            if (send)
-                Send(tx);
-
-
             var response = new BuildTransactionResponse
             {
                 Transaction = tx,
@@ -108,23 +96,14 @@ namespace Obsidian.Features.X1Wallet.Transactions
                 Fee = fee,
                 VirtualSize = virtualSize,
                 SerializedSize = tx.GetSerializedSize(),
-                TransactionId = tx.GetHash()
+                TransactionId = tx.GetHash(),
+                BroadcastState = BroadcastState.NotSet
             };
 
             return response;
         }
 
-        void Send(Transaction transaction)
-        {
-            this.broadcasterManager.BroadcastTransactionAsync(transaction).GetAwaiter().GetResult();
-
-            TransactionBroadcastEntry transactionBroadCastEntry = this.broadcasterManager.GetTransaction(transaction.GetHash());
-
-            if (transactionBroadCastEntry.State == State.CantBroadcast)
-            {
-                throw new X1WalletException(HttpStatusCode.BadRequest, transactionBroadCastEntry.ErrorMessage, new Exception("Transaction Exception"));
-            }
-        }
+       
 
         IEnumerable<StakingCoin> AddCoins(List<Recipient> recipients, long fee, List<Burn> burns = null)
         {
@@ -133,11 +112,16 @@ namespace Obsidian.Features.X1Wallet.Transactions
             long total = sendAmount + burnAmount + fee;
 
             IReadOnlyList<StakingCoin> budget;
+            Balance balance;
             using (var walletContext = GetWalletContext())
             {
-                budget = walletContext.WalletManager.GetBudget(out Balance _).OrderByDescending(o => o.Amount)
+                budget = walletContext.WalletManager.GetBudget(out balance).OrderByDescending(o => o.Amount)
                     .ToArray();
             }
+
+            if (balance.Spendable < total)
+                throw new X1WalletException(System.Net.HttpStatusCode.BadRequest,
+                    $"Required are at least {total}, but spendable is only {balance.Spendable}");
 
             int pointer = 0;
             long selectedAmount = 0;

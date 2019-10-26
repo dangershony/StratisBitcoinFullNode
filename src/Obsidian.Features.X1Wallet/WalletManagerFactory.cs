@@ -6,8 +6,8 @@ using System.Linq;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
-using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Api.Requests;
+using Obsidian.Features.X1Wallet.Models.Api.Responses;
 using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.Base;
@@ -164,22 +164,25 @@ namespace Obsidian.Features.X1Wallet
 
             x1WalletFile.SaveX1WalletFile(filePath);
 
-            X1WalletMetadataFile x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile(WalletManager.ExpectedMetadataVersion, this.network.GenesisHash);
+            X1WalletMetadataFile x1WalletMetadataFile = x1WalletFile.CreateX1WalletMetadataFile(this.network.GenesisHash);
             var x1WalletMetadataFilename = walletName.GetX1WalletMetaDataFilepath(this.network, this.dataFolder);
             x1WalletMetadataFile.SaveX1WalletMetadataFile(x1WalletMetadataFilename);
         }
 
-        public (string folderPath, IEnumerable<string>) GetWalletsFiles()
+        public WalletFilesResponse GetWalletsFiles()
         {
-            var filePaths = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{X1WalletFile.FileExtension}", SearchOption.TopDirectoryOnly);
-            var files = filePaths.Select(Path.GetFileName);
-            return (this.dataFolder.WalletPath, files);
+            return new WalletFilesResponse
+            {
+                WalletsPath = this.dataFolder.WalletPath,
+                WalletFiles = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{X1WalletFile.FileExtension}", SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileName).ToList()
+            };
         }
 
 
-        public void WalletSyncManagerSyncFromDate(DateTime date)
+        public void Repair(RepairRequest date)
         {
-            int blockSyncStart = this.chainIndexer.GetHeightAtTime(date);
+            int blockSyncStart = this.chainIndexer.GetHeightAtTime(DateTime.MinValue);
             WalletSyncManagerSyncFromHeightAsync(blockSyncStart);
         }
 

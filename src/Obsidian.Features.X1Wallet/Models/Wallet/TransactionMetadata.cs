@@ -8,6 +8,8 @@ namespace Obsidian.Features.X1Wallet.Models.Wallet
 {
     public class TransactionMetadata : IEquatable<TransactionMetadata>
     {
+        public long ValueAdded;
+
         [JsonConverter(typeof(StringEnumConverter))]
         public TxType TxType { get; set; }
 

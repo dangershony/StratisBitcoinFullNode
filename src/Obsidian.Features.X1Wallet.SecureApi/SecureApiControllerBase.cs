@@ -3,9 +3,9 @@ using System.Collections;
 using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.SecureApi.Models;
+using Obsidian.Features.X1Wallet.Tools;
 using VisualCrypt.VisualCryptLight;
 using VisualCrypt.VisualCryptLight.VisualCryptLib.ECC;
 
@@ -139,21 +139,12 @@ namespace Obsidian.Features.X1Wallet.SecureApi
 
         protected static T Deserialize<T>(string json)
         {
-            return JsonConvert.DeserializeObject<T>(json);
+            return Serializer.Deserialize<T>(json);
         }
 
         static string Serialize<T>(ResponseObject<T> responseObject)
         {
-            DefaultContractResolver contractResolver = new DefaultContractResolver
-            {
-                NamingStrategy = new CamelCaseNamingStrategy()
-            };
-            string json = JsonConvert.SerializeObject(responseObject, new JsonSerializerSettings
-            {
-                ContractResolver = contractResolver,
-                Formatting = Formatting.Indented
-            });
-            return json;
+            return Serializer.Serialize(responseObject);
         }
     }
 }

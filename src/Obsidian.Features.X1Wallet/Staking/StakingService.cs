@@ -20,7 +20,7 @@ namespace Obsidian.Features.X1Wallet.Staking
     {
         public readonly StakingStatus Status;
         public readonly PosV3 PosV3;
-        public readonly StakedBlock StakedBlock;
+        public readonly StakedBlock LastStakedBlock;
         readonly Task stakingTask;
         readonly CancellationTokenSource cts;
         readonly ILogger logger;
@@ -49,8 +49,8 @@ namespace Obsidian.Features.X1Wallet.Staking
             this.stopwatch = Stopwatch.StartNew();
             this.stakeChain = stakeChain;
             this.Status = new StakingStatus { StartedUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
-            this.PosV3 = new PosV3 { TargetSpacingSeconds = 64, TargetBlockTime = 4 * 64 };
-            this.StakedBlock = new StakedBlock();
+            this.PosV3 = new PosV3 { SearchInterval = 64, BlockInterval = 4 * 64 };
+            this.LastStakedBlock = new StakedBlock();
         }
 
         public void Start()
@@ -87,7 +87,6 @@ namespace Obsidian.Features.X1Wallet.Staking
 
                         Stake();
 
-                        this.Status.ComputateTimeMs = this.stopwatch.ElapsedMilliseconds;
                         this.stopwatch.Stop();
                     }
                     else
@@ -97,7 +96,9 @@ namespace Obsidian.Features.X1Wallet.Staking
                 }
                 catch (Exception e)
                 {
-                    this.logger.LogWarning($"Staking Error: {e.Message}");
+                    this.Status.LastException = e.Message.Replace(":", "-");
+                    this.Status.Exceptions++;
+                    this.logger.LogWarning($"Staking Loop: {e.Message}");
                 }
             }
         }
@@ -105,7 +106,7 @@ namespace Obsidian.Features.X1Wallet.Staking
         void Wait(long previousBlockTime)
         {
             long currentMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            long nextStartMs = (previousBlockTime + this.PosV3.TargetSpacingSeconds) * 1000;
+            long nextStartMs = (previousBlockTime + this.PosV3.SearchInterval) * 1000;
             this.Status.WaitMs = nextStartMs - currentMs;
             if (this.Status.WaitMs <= 0)
                 return;
@@ -118,15 +119,20 @@ namespace Obsidian.Features.X1Wallet.Staking
             this.stopwatch.Restart();
             BlockTemplate blockTemplate = GetBlockTemplate();
 
-            this.PosV3.TargetBits = blockTemplate.Block.Header.Bits;
-            this.PosV3.Target = blockTemplate.Block.Header.Bits.ToBigInteger();
-            this.PosV3.PreviousStakeModifierV2 = GetStakeModifierV22();
+            this.PosV3.TargetDifficulty = blockTemplate.Block.Header.Bits.Difficulty;
+
+            this.Status.NetworkWeight = GetNetworkWeight();
+            this.Status.ExpectedTime = GetExpectedTime(this.Status.NetworkWeight, out this.Status.WeightPercent);
+
+            this.PosV3.TargetAsBigInteger = blockTemplate.Block.Header.Bits.ToBigInteger(); // for calculation
+            this.PosV3.Target = blockTemplate.Block.Header.Bits.ToUInt256(); // same for display only
+            this.PosV3.StakeModifierV2 = GetStakeModifierV22();
 
             var coins = GetUnspentOutputs();
             var validKernels = FindValidKernels(coins);
 
             this.Status.KernelsFound = validKernels.Count;
-            this.Status.ComputateTimeMs = this.stopwatch.ElapsedMilliseconds;
+            this.Status.ComputeTimeMs = this.stopwatch.ElapsedMilliseconds;
 
             if (validKernels.Count > 0)
                 CreateNextBlock(blockTemplate, validKernels);
@@ -167,21 +173,21 @@ namespace Obsidian.Features.X1Wallet.Staking
         bool CheckStakeKernelHash(StakingCoin stakingCoin)
         {
             var value = BigInteger.ValueOf(stakingCoin.Amount.Satoshi);
-            BigInteger weightedTarget = this.PosV3.Target.Multiply(value);
+            BigInteger weightedTarget = this.PosV3.TargetAsBigInteger.Multiply(value);
 
             uint256 kernelHash;
             using (var ms = new MemoryStream())
             {
                 var serializer = new BitcoinStream(ms, true);
-                serializer.ReadWrite(this.PosV3.PreviousStakeModifierV2);
+                serializer.ReadWrite(this.PosV3.StakeModifierV2);
                 serializer.ReadWrite(stakingCoin.Time);
                 serializer.ReadWrite(stakingCoin.Outpoint.Hash);
                 serializer.ReadWrite(stakingCoin.Outpoint.N);
                 serializer.ReadWrite((uint)this.PosV3.CurrentBlockTime); // be sure it's serialized as uint
                 kernelHash = Hashes.Hash256(ms.ToArray());
             }
-          
-           
+
+
             var hash = new BigInteger(1, kernelHash.ToBytes(false));
 
             return hash.CompareTo(weightedTarget) <= 0;
@@ -224,39 +230,77 @@ namespace Obsidian.Features.X1Wallet.Staking
             ECDSASignature signature = key.Sign(blockTemplate.Block.GetHash());
             ((PosBlock)blockTemplate.Block).BlockSignature = new BlockSignature { Signature = signature.ToDER() };
 
-            ChainedHeader chainedHeader = this.consensusManager.BlockMinedAsync(blockTemplate.Block).GetAwaiter().GetResult();
+            ChainedHeader chainedHeader;
+            try
+            {
+                chainedHeader = this.consensusManager.BlockMinedAsync(blockTemplate.Block).GetAwaiter().GetResult();
+            }
+            catch (Exception)
+            {
+                this.Status.BlocksNotAccepted++;
+                throw;
+            }
 
-            this.StakedBlock.Hash = chainedHeader.HashBlock;
-            this.StakedBlock.Height = chainedHeader.Height;
-            this.StakedBlock.Size = chainedHeader.Block.BlockSize ?? -1;
-            this.StakedBlock.Transactions = chainedHeader.Block.Transactions.Count;
-            this.StakedBlock.TotalReward = totalReward;
-            this.StakedBlock.KernelAddress = kernelCoin.Address;
-            this.StakedBlock.WeightUsed = kernelCoin.Amount;
-            this.StakedBlock.TotalComputeTimeMs = this.stopwatch.ElapsedMilliseconds;
-            this.StakedBlock.BlockTime = this.PosV3.CurrentBlockTime;
+            if (chainedHeader == null)
+            {
+                this.Status.BlocksNotAccepted += 1;
+                return;
+            }
 
-            this.logger.LogInformation($"Congratulations, you staked a new block at height {newBlockHeight} and received a reward of {totalReward} {this.network.CoinTicker}.");
+            if (this.LastStakedBlock.BlockTime != 0)
+            {
+                this.Status.ActualTime = (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - this.LastStakedBlock.BlockTime);
+            }
+            else
+            {
+                this.Status.ActualTime = (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - this.Status.StartedUtc);
+            }
 
+            this.LastStakedBlock.Hash = chainedHeader.HashBlock;
+            this.LastStakedBlock.Height = chainedHeader.Height;
+            this.LastStakedBlock.BlockSize = chainedHeader.Block.BlockSize ?? -1;
+            this.LastStakedBlock.TxId = chainedHeader.Block.Transactions[1].GetHash();
+            this.LastStakedBlock.Transactions = chainedHeader.Block.Transactions.Count;
+            this.LastStakedBlock.TotalReward = totalReward;
+            this.LastStakedBlock.KernelAddress = kernelCoin.Address;
+            this.LastStakedBlock.WeightUsed = kernelCoin.Amount;
+            this.LastStakedBlock.TotalComputeTimeMs = this.stopwatch.ElapsedMilliseconds;
+            this.LastStakedBlock.BlockTime = this.PosV3.CurrentBlockTime;
+            this.Status.BlocksAccepted += 1;
+
+            this.logger.LogInformation(
+                $"Congratulations, your staked a new block at height {newBlockHeight} and received a total reward of {totalReward} {this.network.CoinTicker}.");
         }
 
-        public long GetNetworkWeight()
+        double GetNetworkWeight()
         {
-            var result = this.PosV3.TargetBits.Difficulty * 0x100000000;
+            var result = this.PosV3.TargetDifficulty * 0x100000000;
             if (result > 0)
             {
-                result /= this.PosV3.TargetBlockTime;
-                result *= this.PosV3.TargetSpacingSeconds;
-                return (long) result;
+                result /= this.PosV3.BlockInterval;
+                result *= this.PosV3.SearchInterval;
+                return result;
             }
             return 0;
         }
 
-        public long GetExpectedTime()
+
+        int GetExpectedTime(double networkWeight, out double ownPercent)
         {
-            if (this.Status.Weight > 0)
-                return GetNetworkWeight() * this.PosV3.TargetBlockTime / this.Status.Weight;
-            return long.MaxValue;
+            if (this.Status.Weight <= 0)
+            {
+                ownPercent = 0;
+                return int.MaxValue;
+            }
+
+            var ownWeight = (double)this.Status.Weight;
+
+            var ownFraction = ownWeight / networkWeight;
+
+            var expectedTimeSeconds = this.PosV3.BlockInterval / ownFraction;
+            ownPercent = Math.Round(ownFraction * 100, 1);
+
+            return (int)(this.PosV3.BlockInterval + expectedTimeSeconds);
         }
 
         ChainedHeader GetLastPosHeader()
@@ -284,8 +328,8 @@ namespace Obsidian.Features.X1Wallet.Staking
                 var coins = this.walletManager.GetBudget(out var balance, true);
 
                 this.Status.UnspentOutputs = coins.Length;
-                this.Status.Weight = balance.SpendableAmount.Satoshi;
-                this.Status.Immature = balance.AmountConfirmed.Satoshi - balance.SpendableAmount.Satoshi;
+                this.Status.Weight = balance.Stakable;
+                this.Status.Immature = balance.Confirmed - balance.Stakable;
 
                 return coins;
             }
@@ -299,7 +343,7 @@ namespace Obsidian.Features.X1Wallet.Staking
         long GetCurrentBlockTime()
         {
             long currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            long blockTime = currentTime - currentTime % this.PosV3.TargetSpacingSeconds;
+            long blockTime = currentTime - currentTime % this.PosV3.SearchInterval;
             return blockTime;
         }
     }

@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
-using Newtonsoft.Json;
 using Obsidian.Features.X1Wallet;
-using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Api.Requests;
 using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
@@ -16,7 +14,7 @@ using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Utilities;
 
-namespace Obsidian.x1d.Temp
+namespace Obsidian.x1d.Util
 {
     public static class TestBench
     {
@@ -44,9 +42,10 @@ namespace Obsidian.x1d.Temp
 
 
                 await StartMiningAsync();
-                //await Task.Delay(1000 * 120);
+                //await Task.Delay(1000 * 10);
                 //await SplitAsync();
-                //await Send(Money.Coins(1000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
+                await Task.Delay(5000);
+                await Send(Money.Coins(10000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
                 await TryStakingAsync();
 
             }
@@ -76,8 +75,7 @@ namespace Obsidian.x1d.Temp
                     var info = Controller.GetStakingInfo();
                     if (info != null && info.Enabled)
                     {
-                        _logger.LogInformation($"Staking: Enabled: {info.Enabled}, Expected Time: {info.ExpectedTime}.");
-                        Print(info);
+                       // Print(info);
                     }
                     else
                     {
@@ -94,17 +92,17 @@ namespace Obsidian.x1d.Temp
             }
         }
 
-        private static void Print(StakingInfo info)
+        static void Print(StakingInfo info)
         {
-            var json = JsonConvert.SerializeObject(info, Formatting.Indented);
-            _logger.LogInformation(json);
+            var output = Serializer.Print(info);
+            _logger.LogInformation(output);
         }
 
         static async Task SplitAsync()
         {
             Controller.LoadWallet();
 
-            BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Passphrase = _passPhrase, Send = true });
+            BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Passphrase = _passPhrase, Sign = true, Send = true });
         }
 
         static async Task StartMiningAsync()
@@ -123,11 +121,11 @@ namespace Obsidian.x1d.Temp
                 Controller.CreateWallet(new WalletCreateRequest
                 { Name = _walletName, Password = _passPhrase });
                 Console.WriteLine($"Created a new wallet {_walletName} for mining.");
-                await Task.Delay(2000);
+                
                 await StartMiningAsync();
 
             }
-
+            await Task.Delay(10000);
             var model = Controller.GetUnusedReceiveAddresses();
             var address = model.Addresses[0].FullAddress;
 

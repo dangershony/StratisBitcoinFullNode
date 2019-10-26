@@ -5,7 +5,8 @@ namespace Obsidian.Features.X1Wallet.Models.Api.Responses
 {
     public class GetWalletInfoResponse
     {
-        internal string WalletName;
+        public string WalletName;
+        internal string Coin;
 
         public string WalletFilePath { get; set; }
 
@@ -13,7 +14,6 @@ namespace Obsidian.Features.X1Wallet.Models.Api.Responses
 
         public DateTimeOffset CreationTime { get; set; }
 
-        public bool IsDecrypted { get; set; }
 
         public int? LastBlockSyncedHeight { get; set; }
 

@@ -8,8 +8,6 @@ using Obsidian.Features.X1Wallet.Models.Api.Responses;
 using Obsidian.Features.X1Wallet.SecureApi.Models;
 using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Transactions;
-using Stratis.Bitcoin.Controllers.Models;
-using Stratis.Bitcoin.Features.Wallet.Models;
 using VisualCrypt.VisualCryptLight;
 using BuildTransactionRequest = Obsidian.Features.X1Wallet.Transactions.BuildTransactionRequest;
 
@@ -55,8 +53,8 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                         }
                     case "getWalletFiles":
                         {
-                            WalletFileModel walletFileModel = this.walletController.ListWalletsFiles();
-                            return CreateOk(walletFileModel, request);
+                            WalletFilesResponse walletFilesResponse = this.walletController.ListWalletsFiles();
+                            return CreateOk(walletFilesResponse, request);
                         }
                     case "loadWallet":
                         {
@@ -65,8 +63,8 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                         }
                     case "generalInfo":
                         {
-                            GetWalletInfoResponse walletGetWalletInfoResponse = this.walletController.GetWalletInfo();
-                            return CreateOk(walletGetWalletInfoResponse, request);
+                            var walletInformation = this.walletController.GetWalletInfo();
+                            return CreateOk(walletInformation, request);
                         }
                     case "nodeInfo":
                         {
@@ -83,8 +81,8 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                     case "history":
                         {
                             // Deprecated
-                            var walletHistoryRequest = Deserialize<WalletHistoryRequest>(decryptedRequest.Payload);
-                            return CreateOk(new WalletHistoryModel(), request);
+                            var walletHistoryRequest = Deserialize<HistoryRequest>(decryptedRequest.Payload);
+                            return CreateOk(new HistoryResponse(), request);
                         }
 
                     case "stakingInfo":
@@ -113,25 +111,10 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             return CreateOk(buildTransactionResponse, request);
                         }
 
-                    case "sendTransaction":
+                    case "repair":
                         {
-                            SendHexTransactionRequest sendTransactionRequest = Deserialize<SendHexTransactionRequest>(decryptedRequest.Payload);
-                            this.walletController.SendTransaction(sendTransactionRequest);
-                            return CreateOk(request);
-                        }
-
-                    case "buildAndSendTransaction":
-                        {
-                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
-                            BuildTransactionResponse buildTransactionResponse = this.walletController.BuildTransaction(buildTransactionRequest);
-                            this.walletController.SendTransaction(new SendHexTransactionRequest { Hex = buildTransactionResponse.Transaction.ToHex() });
-                            return CreateOk(buildTransactionResponse, request);
-                        }
-
-                    case "syncFromDate":
-                        {
-                            var walletSyncFromDateRequest = Deserialize<WalletSyncFromDateRequest>(decryptedRequest.Payload);
-                            this.walletController.SyncFromDate(walletSyncFromDateRequest);
+                            var walletSyncFromDateRequest = Deserialize<RepairRequest>(decryptedRequest.Payload);
+                            this.walletController.Repair(walletSyncFromDateRequest);
                             return CreateOk(request);
                         }
 
