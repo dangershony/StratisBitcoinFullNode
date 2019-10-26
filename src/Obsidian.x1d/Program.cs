@@ -38,7 +38,7 @@ namespace Obsidian.x1d
 
                 Init.PrintWelcomeMessage(nodeSettings, node);
 
-                Init.RunIfDebugMode(node);
+                Init.RunIfDebugModeDelayed(node);
 
                 await node.RunAsync();
             }

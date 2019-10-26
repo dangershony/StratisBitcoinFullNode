@@ -11,6 +11,8 @@
     <Deterministic>false</Deterministic>
     <FileVersion>1.1.0.0</FileVersion>
     <RootNamespace>Obsidian.x1d</RootNamespace>
+    <ApplicationIcon />
+    <Win32Resource />
   </PropertyGroup>
 
   <ItemGroup>

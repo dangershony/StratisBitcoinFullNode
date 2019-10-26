@@ -37,17 +37,15 @@ namespace Obsidian.x1d.Util
         {
             try
             {
-                _logger = fullNode.NodeService<ILoggerFactory>().CreateLogger("Miner");
+                _logger = fullNode.NodeService<ILoggerFactory>().CreateLogger(typeof(TestBench).FullName);
                 _fullNode = fullNode;
 
-
-                await StartMiningAsync();
+                //await StartMiningAsync();
                 //await Task.Delay(1000 * 10);
                 //await SplitAsync();
-                await Task.Delay(5000);
-                await Send(Money.Coins(10000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
-                await TryStakingAsync();
-
+                //await Task.Delay(5000);
+                //await Send(Money.Coins(10000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
+                //await TryStakingAsync();
             }
             catch (Exception e)
             {

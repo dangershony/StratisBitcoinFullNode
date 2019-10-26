@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
@@ -44,34 +44,67 @@ namespace Obsidian.x1d.Util
 
         internal static void PrintWelcomeMessage(NodeSettings nodeSettings, IFullNode fullNode)
         {
+
             var welcome = new StringBuilder();
-            welcome.AppendLine("Welcome to ObsidianX!");
+            welcome.AppendLine($"Welcome to ObsidianX! Loading network {nodeSettings.Network.Name}...");
             welcome.AppendLine();
-            welcome.AppendLine($"Initializing network {nodeSettings.Network.Name}...");
             welcome.AppendLine(Properties.Resources.Brand);
+            welcome.AppendLine($"{GetCredits()}");
             ((FullNode) fullNode).NodeService<ILoggerFactory>().CreateLogger(GetName())
                 .LogInformation(welcome.ToString());
+        }
+
+        static string GetCredits()
+        {
+            var sb = new StringBuilder();
+            var intro = "Credits, greetings and thanks to: ";
+            sb.Append(intro);
+
+            var arr = Properties.Resources.Credits.Split(Environment.NewLine,StringSplitOptions.RemoveEmptyEntries).Select(x=>x.Trim()).OrderBy(x => x).ToList();
+            var length = intro.Length;
+
+            foreach (var name in arr)
+            {
+                if (length + name.Length <= 100)
+                {
+                    var item = $"{name}, ";
+                    length += item.Length;
+                    sb.Append(item);
+                }
+                else
+                {
+                    sb.Append(Environment.NewLine);
+                    length = 0;
+                    var item = $"{name}, ";
+                    length += item.Length;
+                    sb.Append(item);
+                }
+            }
+
+            var credits = sb.ToString(0, sb.Length - 2);
+
+            return $"{credits} and many more - join the power!";
         }
 
         internal static string GetName()
         {
             var assembly = Assembly.GetExecutingAssembly().GetName();
             var name = assembly.Name;
-            var version = assembly.Version;
+            var version = $"{assembly.Version.Major}.{assembly.Version.Minor}.{assembly.Version.Build}";
             // ReSharper disable once UnreachableCode
             var compilation = IsDebug ? " (Debug)" : "";
             return $"{name} {version}{compilation}";
         }
 
-        internal static void RunIfDebugMode(IFullNode fullNode)
+        internal static void RunIfDebugModeDelayed(IFullNode fullNode, int milliSeconds = 10000)
         {
-            //#if DEBUG
+            #if DEBUG
             _ = Task.Run(async () =>
             {
-                await Task.Delay(0);
-                TestBench.RunTestCodeAsync((FullNode)fullNode);  // start mining to the wallet
+                await Task.Delay(milliSeconds);
+                TestBench.RunTestCodeAsync((FullNode)fullNode);
             });
-            //#endif
+            #endif
         }
 
 #if DEBUG

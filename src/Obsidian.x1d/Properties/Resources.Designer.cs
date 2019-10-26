@@ -61,11 +61,71 @@ namespace Obsidian.x1d.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to huhu.
+        ///   Looks up a localized string similar to                                                                                                    
+        ///                                                                                                   
+        ///                                                                                                   
+        ///                                                                                                   
+        ///                                                 ░▒███████████████▒░                               
+        ///        [rest of string was truncated]&quot;;.
         /// </summary>
         internal static string Brand {
             get {
                 return ResourceManager.GetString("Brand", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 345James
+        ///345paul
+        ///4chan
+        ///AdmAlexus
+        ///alexandre-spieser
+        ///altilly
+        ///Anders Hejlsberg
+        ///andrasfuchs
+        ///Aprogiena
+        ///ArcSin2000X
+        ///auxon
+        ///Bitcoin Core
+        ///Blackcoin
+        ///blackstone
+        ///Zap
+        ///BlockCore
+        ///bokobza
+        ///buta
+        ///carlton355
+        ///Catamorpheus
+        ///CCC
+        ///chadrickm
+        ///Chris
+        ///Citychain
+        ///clintnetwork
+        ///codingupastorm
+        ///coinnail
+        ///Coinvault.io
+        ///cooin
+        ///cryptohunter
+        ///dangershony
+        ///DanGould
+        ///Daniil
+        ///degant
+        ///DennisAMenace
+        ///detroitpro
+        ///dev0tion
+        ///dlandi
+        ///DogaOztuzun
+        ///Edward Snowden
+        ///fassadlr
+        ///fenix2222
+        ///ferdeen
+        ///fluffypony
+        ///Hans
+        ///herbepau
+        ///hungdang131 [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string Credits {
+            get {
+                return ResourceManager.GetString("Credits", resourceCulture);
             }
         }
     }
