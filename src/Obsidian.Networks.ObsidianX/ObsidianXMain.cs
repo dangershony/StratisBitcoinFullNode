@@ -32,7 +32,7 @@ namespace Obsidian.Networks.ObsidianX
 
             this.DefaultBanTimeSeconds = 16000; // 500 (MaxReorg) * 64 (TargetSpacing) / 2 = 4 hours, 26 minutes and 40 seconds
 
-            this.MaxTipAge = 2 * 60 * 60; // (120 minutes)
+            this.MaxTipAge = 2 * 60 * 60 * 1000; // (120 minutes)
             this.MinTxFee = Money.Coins(0.001m).Satoshi;
             this.MinRelayTxFee = this.MinTxFee; // this should match MinTxFee, or it will break TransactionBuilder.Verify
             this.FallbackFee = this.MinTxFee; // note: this seems to be unused and can also be set in configuration.
