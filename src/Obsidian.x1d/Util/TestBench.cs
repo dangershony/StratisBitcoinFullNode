@@ -39,6 +39,7 @@ namespace Obsidian.x1d.Util
             {
                 _logger = fullNode.NodeService<ILoggerFactory>().CreateLogger(typeof(TestBench).FullName);
                 _fullNode = fullNode;
+                Controller.LoadWallet();
 
                 //await StartMiningAsync();
                 //await Task.Delay(1000 * 10);
@@ -56,7 +57,7 @@ namespace Obsidian.x1d.Util
 
         static async Task Send(long satoshis, string address)
         {
-            Controller.LoadWallet();
+           
             var recipients = new List<Recipient> { new Recipient { Amount = satoshis, Address = address } };
             var tx = Controller.BuildTransaction(new BuildTransactionRequest
             { Recipients = recipients, Passphrase = _passPhrase, Sign = true, Send = true });
@@ -64,7 +65,7 @@ namespace Obsidian.x1d.Util
 
         static async Task TryStakingAsync()
         {
-            Controller.LoadWallet();
+           
 
             while (!_fullNode.NodeService<INodeLifetime>().ApplicationStopping.IsCancellationRequested)
             {
@@ -98,7 +99,7 @@ namespace Obsidian.x1d.Util
 
         static async Task SplitAsync()
         {
-            Controller.LoadWallet();
+            
 
             BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Passphrase = _passPhrase, Sign = true, Send = true });
         }

@@ -108,6 +108,7 @@ namespace Obsidian.x1d.Properties {
         ///cryptohunter
         ///dangershony
         ///DanGould
+        ///Wolfi
         ///Daniil
         ///degant
         ///DennisAMenace
@@ -121,7 +122,7 @@ namespace Obsidian.x1d.Properties {
         ///ferdeen
         ///fluffypony
         ///Hans
-        ///herbepau        /// [rest of string was truncated]&quot;;.
+        ///he [rest of string was truncated]&quot;;.
         /// </summary>
         internal static string Credits {
             get {
