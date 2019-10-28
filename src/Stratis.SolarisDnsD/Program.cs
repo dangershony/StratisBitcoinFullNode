@@ -22,6 +22,8 @@ namespace Stratis.SolarisDnsD
     /// </summary>
     public class Program
     {
+        private const string Agent = "SolarisNode";
+
         /// <summary>
         /// The async entry point for the Solaris Dns process.
         /// </summary>
@@ -31,7 +33,7 @@ namespace Stratis.SolarisDnsD
         {
             try
             {
-                var nodeSettings = new NodeSettings(networksSelector:Networks.Solaris, protocolVersion:ProtocolVersion.PROTOCOL_VERSION, args:args)
+                var nodeSettings = new NodeSettings(networksSelector:Networks.Solaris, protocolVersion:ProtocolVersion.PROTOCOL_VERSION, agent: Agent, args:args)
                 {
                     MinProtocolVersion = ProtocolVersion.PROTOCOL_VERSION
                 };
@@ -64,6 +66,7 @@ namespace Stratis.SolarisDnsD
                     node = new FullNodeBuilder()
                         .UseNodeSettings(nodeSettings)
                         .UsePosConsensus()
+                        .UseBlockStore()
                         .UseApi()
                         .AddRPC()
                         .UseDns()
