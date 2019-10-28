@@ -141,17 +141,17 @@ namespace Stratis.Bitcoin.Networks
 
             this.DNSSeeds = new List<DNSSeedData>
             {
-                new DNSSeedData("mainnet1.solarisplatform.com", "mainnet1.solarisplatform.com"),
-                new DNSSeedData("mainnet2.solarisplatform.com", "mainnet2.solarisplatform.com"),
-                new DNSSeedData("mainnet3.solarisplatform.com", "mainnet3.solarisplatform.com"),
-                new DNSSeedData("mainnet4.solarisplatform.com", "mainnet4.solarisplatform.com"),
-                new DNSSeedData("mainnet5.solarisplatform.com", "mainnet5.solarisplatform.com")
+                new DNSSeedData("node1.solarisdns.network", "node1.solarisdns.network"),
+                new DNSSeedData("node2.solarisdns.network", "node2.solarisdns.network"),
+                new DNSSeedData("node3.solarisdns.network", "node3.solarisdns.network"),
+                new DNSSeedData("node4.solarisdns.network", "node4.solarisdns.network"),
+                new DNSSeedData("node5.solarisdns.network", "node5.solarisdns.network")
             };
 
             this.SeedNodes = new List<NetworkAddress>
             {
-                new NetworkAddress(IPAddress.Parse("3.221.114.225"), this.DefaultPort), //Official node 1
-                new NetworkAddress(IPAddress.Parse("3.222.184.199"), this.DefaultPort) //Official node 2
+                new NetworkAddress(IPAddress.Parse("176.223.131.60"), this.DefaultPort), //Official node 1
+                //new NetworkAddress(IPAddress.Parse(""), this.DefaultPort) //Official node 2
             };
 
             this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();
