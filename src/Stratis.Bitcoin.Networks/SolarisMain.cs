@@ -50,8 +50,8 @@ namespace Stratis.Bitcoin.Networks
             var consensusFactory = new PosConsensusFactory();
 
             // Create the genesis block.
-            this.GenesisTime = 1563786843;
-            this.GenesisNonce = 479044;
+            this.GenesisTime = 1572266171;
+            this.GenesisNonce = 1834723;
             this.GenesisBits = 0x1e0fffff;
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
@@ -132,7 +132,7 @@ namespace Stratis.Bitcoin.Networks
 
             this.Checkpoints = new Dictionary<int, CheckpointInfo>
             {
-                { 0, new CheckpointInfo(new uint256("0x371938e3812da8e628341403b9d01cdcc95ee8f2d58c6535178aa24e1f905f79"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
+                { 0, new CheckpointInfo(new uint256("0xa3a98f72634c7d098164926b83ff136b66d1cafbb9aeb5a3b8d18da02937f79f"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
             };
 
             this.Bech32Encoders = new Bech32Encoder[2];
@@ -156,13 +156,13 @@ namespace Stratis.Bitcoin.Networks
 
             this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();
             
-            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0x371938e3812da8e628341403b9d01cdcc95ee8f2d58c6535178aa24e1f905f79"));
-            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x75fd69908077ef283bda138684a579dab938a65aa9f7f9c856eb93d441f76d24"));
+            Assert(this.Consensus.HashGenesisBlock == uint256.Parse("0xa3a98f72634c7d098164926b83ff136b66d1cafbb9aeb5a3b8d18da02937f79f"));
+            Assert(this.Genesis.Header.HashMerkleRoot == uint256.Parse("0x64ebe67e26861a4608c4315a7cb5671e7d15fb7546989b2621bfb806bbc6ad08"));
         }
 
         protected static Block CreateSolarisGenesisBlock(ConsensusFactory consensusFactory, uint nTime, uint nNonce, uint nBits, int nVersion, Money genesisReward)
         {
-            const string pszTimestamp = "https://www.solarisplatform.com/";
+            const string pszTimestamp = "https://www.solarisplatform.com";
 
             Transaction txNew = consensusFactory.CreateTransaction();
             txNew.Version = 1;
