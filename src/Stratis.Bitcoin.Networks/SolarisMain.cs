@@ -92,7 +92,7 @@ namespace Stratis.Bitcoin.Networks
                 majorityWindow: 1000,
                 buriedDeployments: buriedDeployments,
                 bip9Deployments: bip9Deployments,
-                bip34Hash: new uint256("0x371938e3812da8e628341403b9d01cdcc95ee8f2d58c6535178aa24e1f905f79"),
+                bip34Hash: new uint256("0x0000000000000000000000000000000000000000000000000000000000000000"),
                 ruleChangeActivationThreshold: 1916, // 95% of 2016
                 minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
                 maxReorgLength: 500,

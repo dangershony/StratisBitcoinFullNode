@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Stratis.SolarisD": {
+      "commandName": "Project",
+      "commandLineArgs": "-txindex=1 -testnet=1"
+    }
+  }
+}
