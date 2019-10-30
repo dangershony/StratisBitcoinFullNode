@@ -87,9 +87,9 @@ namespace Obsidian.x1d.Util
             bool found = false;
             foreach (var seg in currentSegments)
             {
-                if (!found && (seg == ".obsidianx" || seg == "ObsidianX"))
+                if (!found && (seg == ".obsidian" || seg == "Obsidian"))
                 {
-                    if (seg == ".obsidianx")
+                    if (seg == ".obsidian")
                         oldSegments.Add(".stratisnode");
                     else
                         oldSegments.Add("StratisNode");

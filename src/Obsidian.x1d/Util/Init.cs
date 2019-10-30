@@ -38,7 +38,7 @@ namespace Obsidian.x1d.Util
                     isDataDirRootProvided = true;
             }
             if (!isDataDirRootProvided)
-                arguments.Add("datadirroot=ObsidianX");
+                arguments.Add("datadirroot=Obsidian");
 
             return arguments.ToArray();
         }
@@ -47,7 +47,7 @@ namespace Obsidian.x1d.Util
         {
 
             var welcome = new StringBuilder();
-            welcome.AppendLine($"Welcome to ObsidianX! Loading network {nodeSettings.Network.Name}...");
+            welcome.AppendLine($"Welcome to Obsidian! Loading network {nodeSettings.Network.Name}...");
             welcome.AppendLine();
             welcome.AppendLine(Properties.Resources.Brand);
             welcome.AppendLine($"{GetCredits()}");

@@ -22,7 +22,6 @@ using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.EventBus;
 using Stratis.Bitcoin.EventBus.CoreEvents;
 using Stratis.Bitcoin.Features.Consensus;
-using Stratis.Bitcoin.Features.Consensus.Interfaces;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
@@ -812,7 +811,7 @@ namespace Obsidian.Features.X1Wallet
                         this.Metadata.Blocks.Add(blockHeight, walletBlock);
                     }
                     walletBlock.Transactions.Add(walletTransaction);
-                    this.logger.LogInformation($"Confirmed transaction {walletTransaction.HashTx} in block {blockHeight} added {walletTransaction.ValueAdded} {this.network.CoinTicker} to the wallet.");
+                    this.logger.LogInformation($"Confirmed transaction {walletTransaction.HashTx} in block {blockHeight} added {walletTransaction.ValueAdded/100000000m} {this.network.CoinTicker} to the wallet.");
                 }
             }
 
