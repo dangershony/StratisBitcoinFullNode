@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin.Protocol;
+using Obsidian.Features.X1Wallet.Tools;
 using Obsidian.Networks.ObsidianX;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Configuration;
@@ -88,9 +89,9 @@ namespace Obsidian.x1d.Util
 
         internal static string GetName()
         {
-            var assembly = Assembly.GetExecutingAssembly().GetName();
-            var name = assembly.Name;
-            var version = $"{assembly.Version.Major}.{assembly.Version.Minor}.{assembly.Version.Build}";
+            var assembly = Assembly.GetExecutingAssembly();
+            var name = assembly.GetName().Name;
+            var version = assembly.GetShortVersionString();
             // ReSharper disable once UnreachableCode
             var compilation = IsDebug ? " (Debug)" : "";
             return $"{name} {version}{compilation}";

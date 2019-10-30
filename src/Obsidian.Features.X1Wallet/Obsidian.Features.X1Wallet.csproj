@@ -5,6 +5,11 @@
     <AssemblyVersion>1.0.*</AssemblyVersion>
     <Deterministic>false</Deterministic>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <PackageId>X1Wallet</PackageId>
+    <Authors>X1Wallet</Authors>
+    <Company>X1Wallet</Company>
+    <Product>X1Wallet</Product>
+    <AssemblyName>X1Wallet</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

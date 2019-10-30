@@ -1,9 +1,9 @@
 ﻿using NBitcoin;
 using Obsidian.Features.X1Wallet.Models.Wallet;
 
-namespace Obsidian.Features.X1Wallet.Transactions
+namespace Obsidian.Features.X1Wallet.Models.Api.Requests
 {
-    public class BuildTransactionResponse
+    public class TransactionResponse
     {
         public Transaction Transaction;
         public string Hex;

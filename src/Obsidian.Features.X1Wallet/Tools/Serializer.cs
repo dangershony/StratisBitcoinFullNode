@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using Obsidian.Features.X1Wallet.Models;
 using Stratis.Bitcoin.Utilities.JsonConverters;
 
 namespace Obsidian.Features.X1Wallet.Tools
@@ -42,7 +43,7 @@ namespace Obsidian.Features.X1Wallet.Tools
             return JsonConvert.DeserializeObject<T>(serialized, Settings.Value);
         }
 
-        public static string Print<T>(T obj)
+        public static string Print<T>(T obj, string customHeader = null)
         {
             if (obj == null)
                 return string.Empty;
@@ -53,15 +54,19 @@ namespace Obsidian.Features.X1Wallet.Tools
 
             var body = Strip(serialized);
             var padded = Pad(body);
-            var header = $"======={obj.GetType().Name}======={Environment.NewLine}";
-            _cache= $"{header}{padded}";
+            var namedItem = $"{nameof(StringItem.NamedItem)}:";
+            padded = padded.Replace(namedItem, new string(Spaces, 0, namedItem.Length));
+            var header = customHeader ?? obj.GetType().Name;
+            var headerLine = $"======= {header} ======={Environment.NewLine}";
+            _cache = $"{headerLine}{padded}";
             return _cache;
         }
 
+        static readonly char[] Spaces = new[] { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', };
+
         static string Pad(string body)
         {
-            var spaces = new[] { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', };
-            int tabAt = spaces.Length;
+            int tabAt = Spaces.Length;
             var sb = new StringBuilder();
             var lines = body.Split(Environment.NewLine);
             foreach (var line in lines)
@@ -76,11 +81,11 @@ namespace Obsidian.Features.X1Wallet.Tools
                     var diff = tabAt - cindex;
                     if (diff > 0)
                     {
-                        var padded = edit.Insert(cindex + 1, new string(spaces, 0, diff));
+                        var padded = edit.Insert(cindex + 1, new string(Spaces, 0, diff));
                         sb.AppendLine(padded);
                     }
                 }
-               
+
             }
 
             return sb.ToString();
@@ -96,7 +101,7 @@ namespace Obsidian.Features.X1Wallet.Tools
                 char c = chars[i];
                 switch (c)
                 {
-                    case var _ when char.IsWhiteSpace(c) || c=='\\' || c== '!':
+                    case var _ when char.IsWhiteSpace(c) || c == '\\' || c == '!':
                         break;
                     case var isLowerCase when (isLowerCase >= 97 && isLowerCase <= 122): // a - z
                         break;

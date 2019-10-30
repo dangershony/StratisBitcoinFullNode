@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Api.Requests;
 using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
@@ -32,7 +33,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
             this.fixedFeeRate = new FeeRate(Money.Satoshis(Math.Max(network.MinTxFee, network.MinRelayTxFee)));
         }
 
-        public BuildTransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, List<Burn> burns = null)
+        public TransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, List<Burn> burns = null)
         {
             var tx = this.network.CreateTransaction();
 
@@ -89,7 +90,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
                 SigningService.SignInputs(tx, keys, coins);
             }
 
-            var response = new BuildTransactionResponse
+            var response = new TransactionResponse
             {
                 Transaction = tx,
                 Hex = tx.ToHex(),

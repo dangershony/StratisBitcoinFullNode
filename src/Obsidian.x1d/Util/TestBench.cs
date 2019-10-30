@@ -1,14 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using NBitcoin;
 using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.Models.Api.Requests;
-using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
-using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin;
+using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Interfaces;
@@ -39,14 +38,16 @@ namespace Obsidian.x1d.Util
             {
                 _logger = fullNode.NodeService<ILoggerFactory>().CreateLogger(typeof(TestBench).FullName);
                 _fullNode = fullNode;
-                Controller.LoadWallet();
+
+                TryCopyWalletForUpdate();
+                await LoadOrCreateWalletAsync();
 
                 //await StartMiningAsync();
                 //await Task.Delay(1000 * 10);
                 //await SplitAsync();
                 //await Task.Delay(5000);
                 //await Send(Money.Coins(10000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
-                //await TryStakingAsync();
+                await TryStakingAsync();
             }
             catch (Exception e)
             {
@@ -55,53 +56,88 @@ namespace Obsidian.x1d.Util
 
         }
 
+        static async Task LoadOrCreateWalletAsync()
+        {
+            try
+            {
+                Controller.LoadWallet();
+                _logger.LogInformation($"Loaded wallet '{_walletName}'.");
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e.Message);
+
+                if (!e.Message.StartsWith("No wallet file found"))
+                    throw;
+
+                Controller.CreateWallet(new WalletCreateRequest
+                { WalletName = _walletName, Passphrase = _passPhrase });
+
+                _logger.LogInformation($"Created a new wallet named '{_walletName}'.");
+                await Task.Delay(2000);
+                await LoadOrCreateWalletAsync();
+            }
+        }
+
+        static void TryCopyWalletForUpdate()
+        {
+            var currentWalletPath = _fullNode.NodeService<DataFolder>().WalletPath;
+            var currentSegments = currentWalletPath.Split(Path.DirectorySeparatorChar);
+            var oldSegments = new List<string>();
+            bool found = false;
+            foreach (var seg in currentSegments)
+            {
+                if (!found && (seg == ".obsidianx" || seg == "ObsidianX"))
+                {
+                    if (seg == ".obsidianx")
+                        oldSegments.Add(".stratisnode");
+                    else
+                        oldSegments.Add("StratisNode");
+                    found = true;
+                }
+                else
+                {
+                    oldSegments.Add(seg);
+                }
+            }
+
+            var oldWalletDirPath = string.Join(Path.DirectorySeparatorChar, oldSegments);
+            var oldWalletPath = Path.Combine(oldWalletDirPath, "new1.ODX.x1wallet.json");
+            var newWalletPath = Path.Combine(currentWalletPath, "new1.ODX.x1wallet.json");
+            if (!File.Exists(newWalletPath))
+                if (File.Exists(oldWalletPath))
+                    File.Copy(oldWalletPath, newWalletPath);
+        }
+
         static async Task Send(long satoshis, string address)
         {
-           
+
             var recipients = new List<Recipient> { new Recipient { Amount = satoshis, Address = address } };
-            var tx = Controller.BuildTransaction(new BuildTransactionRequest
+            var tx = Controller.BuildTransaction(new TransactionRequest
             { Recipients = recipients, Passphrase = _passPhrase, Sign = true, Send = true });
         }
 
         static async Task TryStakingAsync()
         {
-           
-
-            while (!_fullNode.NodeService<INodeLifetime>().ApplicationStopping.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    var info = Controller.GetStakingInfo();
-                    if (info != null && info.Enabled)
-                    {
-                       // Print(info);
-                    }
-                    else
-                    {
-                        _logger.LogInformation($"Staking: Trying to start staking....");
-                        Controller.StartStaking(new Features.X1Wallet.Staking.StartStakingRequest
-                        { Name = _walletName, Password = _passPhrase });
-                    }
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e.Message);
-                }
-                await Task.Delay(15000);
+                _logger.LogInformation("Starting staking...");
+                Controller.StartStaking(new StartStakingRequest { Passphrase = _passPhrase });
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e.Message);
             }
         }
 
-        static void Print(StakingInfo info)
-        {
-            var output = Serializer.Print(info);
-            _logger.LogInformation(output);
-        }
+
+
 
         static async Task SplitAsync()
         {
-            
 
-            BuildTransactionResponse model = Controller.BuildSplitTransaction(new BuildTransactionRequest { Passphrase = _passPhrase, Sign = true, Send = true });
+
+            TransactionResponse model = Controller.BuildSplitTransaction(new TransactionRequest { Passphrase = _passPhrase, Sign = true, Send = true });
         }
 
         static async Task StartMiningAsync()
@@ -118,9 +154,9 @@ namespace Obsidian.x1d.Util
                 if (!e.Message.StartsWith("No wallet file found"))
                     throw;
                 Controller.CreateWallet(new WalletCreateRequest
-                { Name = _walletName, Password = _passPhrase });
+                { WalletName = _walletName, Passphrase = _passPhrase });
                 Console.WriteLine($"Created a new wallet {_walletName} for mining.");
-                
+
                 await StartMiningAsync();
 
             }

@@ -86,8 +86,7 @@ namespace Obsidian.Features.X1Wallet.Tools
 
         static string GetX1WalletAssemblyVersion()
         {
-            var v = typeof(X1WalletMetadataFile).Assembly.GetName().Version;
-            return $"{v.Major}.{v.Minor}.{v.Build}"; // we use 1.0.*. The wildcard is: DateTime.Today.Subtract(new DateTime(2000, 1, 1)).Days;
+            return  typeof(X1WalletMetadataFile).Assembly.GetShortVersionString();
         }
     }
 }

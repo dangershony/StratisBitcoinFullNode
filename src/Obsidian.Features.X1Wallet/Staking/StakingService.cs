@@ -28,13 +28,12 @@ namespace Obsidian.Features.X1Wallet.Staking
         readonly Network network;
         readonly IBlockProvider blockProvider;
         readonly IConsensusManager consensusManager;
-        readonly ChainIndexer chainIndexer;
         readonly string passphrase;
-        readonly PosCoinviewRule posCoinviewRule;
+        readonly PosCoinviewRule posCoinViewRule;
         readonly Stopwatch stopwatch;
         readonly IStakeChain stakeChain;
 
-        public StakingService(WalletManager walletManager, string passphrase, ILoggerFactory loggerFactory, Network network, IBlockProvider blockProvider, IConsensusManager consensusManager, ChainIndexer chainIndexer, IStakeChain stakeChain)
+        public StakingService(WalletManager walletManager, string passphrase, ILoggerFactory loggerFactory, Network network, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain)
         {
             this.cts = new CancellationTokenSource();
             this.stakingTask = new Task(StakingLoop, this.cts.Token);
@@ -44,8 +43,7 @@ namespace Obsidian.Features.X1Wallet.Staking
             this.network = network;
             this.blockProvider = blockProvider;
             this.consensusManager = consensusManager;
-            this.chainIndexer = chainIndexer;
-            this.posCoinviewRule = this.consensusManager.ConsensusRules.GetRule<PosCoinviewRule>();
+            this.posCoinViewRule = this.consensusManager.ConsensusRules.GetRule<PosCoinviewRule>();
             this.stopwatch = Stopwatch.StartNew();
             this.stakeChain = stakeChain;
             this.Status = new StakingStatus { StartedUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
@@ -98,7 +96,7 @@ namespace Obsidian.Features.X1Wallet.Staking
                 {
                     this.Status.LastException = e.Message.Replace(":", "-");
                     this.Status.Exceptions++;
-                    this.logger.LogWarning($"Staking Loop: {e.Message}");
+                    this.logger.LogWarning(e.Message);
                 }
             }
         }
@@ -140,23 +138,7 @@ namespace Obsidian.Features.X1Wallet.Staking
 
         uint256 GetStakeModifierV22()
         {
-            return this.stakeChain.Get(this.chainIndexer.Tip.HashBlock).StakeModifierV2;
-        }
-
-        uint256 GetStakeModifierV2()
-        {
-            var last = this.chainIndexer.Tip;
-
-            search:
-            if (last.Header is ProvenBlockHeader proven)
-            {
-                return proven.StakeModifierV2;
-            }
-
-            last = last.Previous;
-            if (last.Height == 0)
-                return uint256.Zero;
-            goto search;
+            return this.stakeChain.Get(this.consensusManager.Tip.HashBlock).StakeModifierV2;
         }
 
         List<StakingCoin> FindValidKernels(StakingCoin[] coins)
@@ -166,6 +148,7 @@ namespace Obsidian.Features.X1Wallet.Staking
             {
                 if (CheckStakeKernelHash(c))
                     validKernels.Add(c);
+
             }
             return validKernels;
         }
@@ -180,13 +163,12 @@ namespace Obsidian.Features.X1Wallet.Staking
             {
                 var serializer = new BitcoinStream(ms, true);
                 serializer.ReadWrite(this.PosV3.StakeModifierV2);
-                serializer.ReadWrite(stakingCoin.Time);
+                serializer.ReadWrite(stakingCoin.Time); // be sure this is uint
                 serializer.ReadWrite(stakingCoin.Outpoint.Hash);
                 serializer.ReadWrite(stakingCoin.Outpoint.N);
-                serializer.ReadWrite((uint)this.PosV3.CurrentBlockTime); // be sure it's serialized as uint
+                serializer.ReadWrite((uint)this.PosV3.CurrentBlockTime); // be sure this is uint
                 kernelHash = Hashes.Hash256(ms.ToArray());
             }
-
 
             var hash = new BigInteger(1, kernelHash.ToBytes(false));
 
@@ -205,9 +187,9 @@ namespace Obsidian.Features.X1Wallet.Staking
                 if (coin.Amount < kernelCoin.Amount)
                     kernelCoin = coin;
 
-            var newBlockHeight = this.chainIndexer.Tip.Height + 1;
+            var newBlockHeight = this.consensusManager.Tip.Height + 1;
 
-            var totalReward = blockTemplate.TotalFee + this.posCoinviewRule.GetProofOfStakeReward(newBlockHeight);
+            var totalReward = blockTemplate.TotalFee + this.posCoinViewRule.GetProofOfStakeReward(newBlockHeight);
 
             var key = new Key(VCL.DecryptWithPassphrase(this.passphrase, kernelCoin.EncryptedPrivateKey));
 
@@ -284,7 +266,6 @@ namespace Obsidian.Features.X1Wallet.Staking
             return 0;
         }
 
-
         int GetExpectedTime(double networkWeight, out double ownPercent)
         {
             if (this.Status.Weight <= 0)
@@ -301,22 +282,6 @@ namespace Obsidian.Features.X1Wallet.Staking
             ownPercent = Math.Round(ownFraction * 100, 1);
 
             return (int)(this.PosV3.BlockInterval + expectedTimeSeconds);
-        }
-
-        ChainedHeader GetLastPosHeader()
-        {
-            ChainedHeader header = this.consensusManager.Tip;
-
-            while (header != null && header.Height > 0)
-            {
-                BlockStake blockStake = this.stakeChain.Get(header.HashBlock);
-
-                if (blockStake != null && blockStake.IsProofOfStake())
-                    return header;
-
-                header = header.Previous;
-            }
-            return null;
         }
 
         StakingCoin[] GetUnspentOutputs()
@@ -337,7 +302,6 @@ namespace Obsidian.Features.X1Wallet.Staking
             {
                 this.walletManager.WalletSemaphore.Release();
             }
-
         }
 
         long GetCurrentBlockTime()
@@ -347,6 +311,4 @@ namespace Obsidian.Features.X1Wallet.Staking
             return blockTime;
         }
     }
-
-
 }

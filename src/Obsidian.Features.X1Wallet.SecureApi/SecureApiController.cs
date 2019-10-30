@@ -9,7 +9,6 @@ using Obsidian.Features.X1Wallet.SecureApi.Models;
 using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Transactions;
 using VisualCrypt.VisualCryptLight;
-using BuildTransactionRequest = Obsidian.Features.X1Wallet.Transactions.BuildTransactionRequest;
 
 namespace Obsidian.Features.X1Wallet.SecureApi
 {
@@ -51,44 +50,26 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             this.walletController.CreateWallet(walletCreateRequest);
                             return CreateOk(request);
                         }
-                    case "getWalletFiles":
-                        {
-                            WalletFilesResponse walletFilesResponse = this.walletController.ListWalletsFiles();
-                            return CreateOk(walletFilesResponse, request);
-                        }
                     case "loadWallet":
                         {
                             LoadWalletResponse loadWalletResponse = this.walletController.LoadWallet();
                             return CreateOk(loadWalletResponse, request);
                         }
-                    case "generalInfo":
+                    case "daemonInfo": // one-time information about the running daemon, includes list of wallet files
                         {
-                            var walletInformation = this.walletController.GetWalletInfo();
-                            return CreateOk(walletInformation, request);
+                            DaemonInfo daemonStatus = this.walletController.GetDaemonInfo();
+                            return CreateOk(daemonStatus, request);
                         }
-                    case "nodeInfo":
+                    case "walletInfo": // does not depend on weather a wallet is loaded, but if a wallet is loaded, it includes all wallet info, including balance and staking info when enabled
                         {
-                            NodeInfo nodeStatus = this.walletController.GetNodeInfo();
-                            return CreateOk(nodeStatus, request);
+                            WalletInfo walletInfo = this.walletController.GetWalletInfo();
+                            return CreateOk(walletInfo, request);
                         }
-
-                    case "balance":
+                    case "historyInfo":
                         {
-                            Balance balanceModel = this.walletController.GetBalance();
-                            return CreateOk(balanceModel, request);
-                        }
-
-                    case "history":
-                        {
-                            // Deprecated
-                            var walletHistoryRequest = Deserialize<HistoryRequest>(decryptedRequest.Payload);
-                            return CreateOk(new HistoryResponse(), request);
-                        }
-
-                    case "stakingInfo":
-                        {
-                            StakingInfo stakingInfo = this.walletController.GetStakingInfo();
-                            return CreateOk(stakingInfo, request);
+                            var historyRequest = Deserialize<HistoryRequest>(decryptedRequest.Payload);
+                            HistoryInfo historyInfo = this.walletController.GetHistoryInfo(historyRequest);
+                            return CreateOk(historyInfo, request);
                         }
 
                     case "getReceiveAddresses":
@@ -97,18 +78,17 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                             var addressesModel = this.walletController.GetUnusedReceiveAddresses();
                             return CreateOk(addressesModel, request);
                         }
-
                     case "estimateFee":
                         {
-                            var txFeeEstimateRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
+                            var txFeeEstimateRequest = Deserialize<TransactionRequest>(decryptedRequest.Payload);
                             long fee = this.walletController.EstimateFee(txFeeEstimateRequest);
                             return CreateOk(fee, request);
                         }
                     case "buildTransaction":
                         {
-                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
-                            BuildTransactionResponse buildTransactionResponse = this.walletController.BuildTransaction(buildTransactionRequest);
-                            return CreateOk(buildTransactionResponse, request);
+                            var buildTransactionRequest = Deserialize<TransactionRequest>(decryptedRequest.Payload);
+                            TransactionResponse transactionResponse = this.walletController.BuildTransaction(buildTransactionRequest);
+                            return CreateOk(transactionResponse, request);
                         }
 
                     case "repair":

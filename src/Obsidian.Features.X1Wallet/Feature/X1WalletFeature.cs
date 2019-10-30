@@ -1,7 +1,9 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using System.Threading.Tasks;
 using NBitcoin;
-using Obsidian.Features.X1Wallet.Models.Api.Responses;
+using Obsidian.Features.X1Wallet.Models;
+using Obsidian.Features.X1Wallet.Models.Api.Requests;
 using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.Configuration.Logging;
 using Stratis.Bitcoin.Connection;
@@ -18,7 +20,10 @@ namespace Obsidian.Features.X1Wallet.Feature
         readonly IConnectionManager connectionManager;
         readonly BroadcasterBehavior broadcasterBehavior;
         readonly Network network;
-        WalletController walletController;
+        readonly WalletController walletController;
+
+        string inlineStats = NoWalletLoaded;
+        const string NoWalletLoaded = "No wallet loaded.";
 
         public X1WalletFeature(
             WalletManagerFactory walletManagerFactory,
@@ -45,62 +50,69 @@ namespace Obsidian.Features.X1Wallet.Feature
             return Task.CompletedTask;
         }
 
-        string height = "n/a";
-        string hash = "n/a";
-        string walletName;
-
         void AddInlineStats(StringBuilder log)
         {
-            if (this.walletName != null)
-                log.AppendLine($"Wallet {this.walletName}: Height: ".PadRight(LoggingConfiguration.ColumnLength + 1) + this.height.PadRight(8) +
-                               (" Wallet.Hash: ".PadRight(LoggingConfiguration.ColumnLength - 1) + this.hash));
-            else
-                log.AppendLine("No wallet loaded.");
+            log.AppendLine(this.inlineStats);
         }
 
         void AddComponentStats(StringBuilder log)
         {
-            string loadedWalletName;
+            WriteDaemonInfo(log);
 
             using (var context = this.walletManagerFactory.GetWalletContext(null, true))
             {
-                if (context == null)
-                    loadedWalletName = null;
-                else
-                    loadedWalletName = context.WalletManager.WalletName;
-            }
-
-            WalletInformation walletInformation = null;
-            if (loadedWalletName != null)
-            {
+                string loadedWalletName = context?.WalletManager.WalletName;
                 this.walletController.SetWalletName(loadedWalletName, true);
-                walletInformation = this.walletController.GetWalletInfo();
-            }
-               
-
-            if (walletInformation == null)
-            {
-                log.AppendLine();
-                log.AppendLine("====== X1 Wallet ======");
-                log.AppendLine("No wallet file loaded.");
-
-                // for inline stats
-                this.walletName = null;
-                this.hash = "n/a";
-                this.height = "n/a";
-                return;
             }
 
-            var output = Serializer.Print(walletInformation);
-            var header = $" X1 Wallet v. {walletInformation.AssemblyVersion} ";
-            output = output.Replace(nameof(WalletInformation), header);
+            WalletInfo walletInfo = this.walletController.GetWalletInfo();
+
             log.AppendLine();
+            var header = $" {walletInfo.AssemblyName} {walletInfo.AssemblyVersion} ";
+            var output = Serializer.Print(walletInfo, header);
             log.Append(output);
 
-            // for inline stats
-            this.walletName = walletInformation.WalletName;
-            this.hash = walletInformation.SyncedHash?.ToString() ?? "n/a";
-            this.height = walletInformation.SyncedHeight.ToString();
+            if (walletInfo.WalletDetails != null)
+            {
+                this.inlineStats =
+                    $"Wallet {walletInfo.WalletDetails.WalletName}: Height: ".PadRight(
+                        LoggingConfiguration.ColumnLength + 1) +
+                    walletInfo.WalletDetails.SyncedHeight.ToString().PadRight(8) +
+                    (" Wallet.Hash: ".PadRight(LoggingConfiguration.ColumnLength - 1) +
+                     walletInfo.WalletDetails.SyncedHash);
+            }
+            else
+            {
+                this.inlineStats = NoWalletLoaded;
+            }
+            if (walletInfo.WalletDetails != null)
+                WriteTransactionInfo(log);
+        }
+
+        void WriteDaemonInfo(StringBuilder log)
+        {
+            try
+            {
+                var daemonInfo = this.walletController.GetDaemonInfo();
+                var header = $" {daemonInfo.ProcessName} {daemonInfo.AssemblyVersion} ";
+                var output = Serializer.Print(daemonInfo, header);
+                log.AppendLine();
+                log.AppendLine(output);
+            }
+            catch (Exception e)
+            {
+                log.AppendLine($"Can't add other stats: {e.Message}");
+            }
+        }
+
+        void WriteTransactionInfo(StringBuilder log)
+        {
+            var request = new HistoryRequest { Take = 3 };
+            var daemonInfo = this.walletController.GetHistoryInfo(request);
+            var header = $" Last {request.Take.Value} Transactions ";
+            var output = Serializer.Print(daemonInfo, header);
+            log.AppendLine();
+            log.AppendLine(output);
         }
 
         public override void Dispose()

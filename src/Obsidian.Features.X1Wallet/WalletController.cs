@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -15,26 +14,18 @@ using Obsidian.Features.X1Wallet.Models.Api;
 using Obsidian.Features.X1Wallet.Models.Api.Requests;
 using Obsidian.Features.X1Wallet.Models.Api.Responses;
 using Obsidian.Features.X1Wallet.Models.Wallet;
-using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
 using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Base;
-using Stratis.Bitcoin.Builder.Feature;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Connection;
 using Stratis.Bitcoin.Consensus;
-using Stratis.Bitcoin.Controllers.Models;
-using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
-using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Interfaces;
-using Stratis.Bitcoin.P2P.Peer;
 using Stratis.Bitcoin.Utilities;
-using AddressModel = Obsidian.Features.X1Wallet.Models.Api.AddressModel;
-using BuildTransactionRequest = Obsidian.Features.X1Wallet.Transactions.BuildTransactionRequest;
-using Recipient = Obsidian.Features.X1Wallet.Transactions.Recipient;
+using Stratis.Bitcoin.Utilities.JsonErrors;
 
 namespace Obsidian.Features.X1Wallet
 {
@@ -94,6 +85,12 @@ namespace Obsidian.Features.X1Wallet
             this.logger = loggerFactory.CreateLogger(typeof(WalletController).Name);
         }
 
+        public HistoryInfo GetHistoryInfo(HistoryRequest historyRequest)
+        {
+            using var context = GetWalletContext();
+            return context.WalletManager.GetHistoryInfo(historyRequest);
+        }
+
         public void SetWalletName(string targetWalletName, bool canReuseInstance = false)
         {
             if (this.walletName != null && !canReuseInstance)
@@ -130,7 +127,7 @@ namespace Obsidian.Features.X1Wallet
         public void StartStaking(StartStakingRequest startStakingRequest)
         {
             using var context = GetWalletContext();
-            context.WalletManager.StartStaking(startStakingRequest.Password);
+            context.WalletManager.StartStaking(startStakingRequest.Passphrase);
         }
 
         public void StopStaking()
@@ -146,14 +143,14 @@ namespace Obsidian.Features.X1Wallet
             return balance;
         }
 
-        public long EstimateFee(BuildTransactionRequest request)
+        public long EstimateFee(TransactionRequest request)
         {
             request.Sign = false;
             var response = BuildTransaction(request);
             return response.Fee;
         }
 
-        public BuildTransactionResponse BuildSplitTransaction(BuildTransactionRequest request)
+        public TransactionResponse BuildSplitTransaction(TransactionRequest request)
         {
             var count = 1000;
             var amount = Money.Coins(5000);
@@ -162,7 +159,7 @@ namespace Obsidian.Features.X1Wallet
 
             walletContext.WalletManager.GetBudget(out Balance _);
             var recipients = walletContext.WalletManager.GetAllAddresses().Values.Take(count).Select(x => new Recipient { Address = x.Address, Amount = amount }).ToList();
-            BuildTransactionResponse response = GetTransactionHandler().BuildTransaction(recipients, request.Sign, request.Passphrase);
+            TransactionResponse response = GetTransactionHandler().BuildTransaction(recipients, request.Sign, request.Passphrase);
             if (request.Send)
             {
                 this.broadcasterManager.BroadcastTransactionAsync(response.Transaction).GetAwaiter().GetResult();
@@ -174,7 +171,7 @@ namespace Obsidian.Features.X1Wallet
             return response;
         }
 
-        public BuildTransactionResponse BuildTransaction(BuildTransactionRequest request)
+        public TransactionResponse BuildTransaction(TransactionRequest request)
         {
             int retries = 0;
 
@@ -196,7 +193,20 @@ namespace Obsidian.Features.X1Wallet
 
             if (request.Send)
             {
+                if (!this.connectionManager.ConnectedPeers.Any())
+                {
+                    throw new X1WalletException(HttpStatusCode.BadRequest,"Can't send the transactions without connections.");
+                }
                 this.broadcasterManager.BroadcastTransactionAsync(response.Transaction).GetAwaiter().GetResult();
+                TransactionBroadcastEntry transactionBroadCastEntry = this.broadcasterManager.GetTransaction(response.Transaction.GetHash());
+
+                if (transactionBroadCastEntry.State == State.CantBroadcast)
+                {
+                    throw new X1WalletException(HttpStatusCode.InternalServerError,
+                        $"Can't send the transaction: {transactionBroadCastEntry.ErrorMessage}.");
+                }
+
+                response.BroadcastState = transactionBroadCastEntry.State.ToBroadcastState();
             }
             else
             {
@@ -220,17 +230,6 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-        public WalletInformation GetWalletInfo()
-        {
-            using var context = GetWalletContext();
-            return context.WalletManager.GetFullInfo();
-        }
-
-        public WalletFilesResponse ListWalletsFiles()
-        {
-            return this.walletManagerFactory.GetWalletsFiles();
-        }
-
         public GetAddressesResponse GetUnusedReceiveAddresses()
         {
             using (var context = GetWalletContext())
@@ -249,24 +248,86 @@ namespace Obsidian.Features.X1Wallet
             }
         }
 
-        public void Repair(RepairRequest request)
+
+        public void Repair(RepairRequest date)
         {
-            this.walletManagerFactory.Repair(request);
+            var chainedHeader = this.chainIndexer.GetHeader(1);
+            using var context = GetWalletContext();
+            context.WalletManager.RemoveBlocks(chainedHeader);
         }
 
-        public ConnectionInfo GetConnections()
+        public DaemonInfo GetDaemonInfo()
         {
+            var process = Process.GetCurrentProcess();
+            var assembly = System.Reflection.Assembly.GetEntryAssembly();
+            Debug.Assert(assembly != null);
+            return new DaemonInfo
+            {
+                ProcessId = process.Id,
+                ProcessName = process.ProcessName,
+                ProcessMemory = process.PrivateMemorySize64,
+                MachineName = Environment.MachineName,
+                CodeBase = new Uri(assembly.GetName().CodeBase).AbsolutePath,
+                AssemblyVersion = assembly.GetShortVersionString(),
+                AgentName = this.connectionManager.ConnectionSettings.Agent,
+                StartupTime = new DateTimeOffset(this.fullNode.StartTime).ToUnixTimeSeconds(),
+                NetworkName = this.network.Name,
+                CoinTicker = this.network.CoinTicker,
+                Testnet = this.network.IsTest(),
+                MinTxFee = this.network.MinTxFee,
+                MinTxRelayFee = this.network.MinRelayTxFee,
+                Features = this.fullNode.Services.Features.Select(x => new StringItem { NamedItem = $"{x.GetType()}, v.{x.GetType().Assembly.GetShortVersionString()}" }).ToArray(),
+                WalletPath = new Uri(this.nodeSettings.DataFolder.WalletPath).AbsolutePath,
+                WalletFiles = Directory.EnumerateFiles(this.nodeSettings.DataFolder.WalletPath, $"*{X1WalletFile.FileExtension}", SearchOption.TopDirectoryOnly)
+                    .Select(x => new StringItem { NamedItem = Path.GetFileName(x) }).ToArray()
+            };
+        }
+
+
+        public WalletInfo GetWalletInfo()
+        {
+            var syncingInfo = new WalletInfo
+            {
+                ConsensusTipHeight = this.chainState.ConsensusTip.Height,
+                ConsensusTipHash = this.chainState.ConsensusTip.HashBlock,
+                ConsensusTipAge = (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - this.chainState.ConsensusTip.Header.Time),
+                MaxTipAge = this.network.MaxTipAge,
+                AssemblyName = typeof(WalletController).Assembly.GetName().Name,
+                AssemblyVersion = typeof(WalletController).Assembly.GetShortVersionString(),
+                IsAtBestChainTip = this.chainState.IsAtBestChainTip
+            };
+
+            if (this.chainState.BlockStoreTip != null)
+            {
+                syncingInfo.BlockStoreHeight = this.chainState.BlockStoreTip.Height;
+                syncingInfo.BlockStoreHash = this.chainState.BlockStoreTip.HashBlock;
+            }
+
+            syncingInfo.ConnectionInfo = GetConnections();
+
+            if (this.walletName != null)
+            {
+                syncingInfo.WalletDetails = GetWalletDetails();
+            }
+
+            return syncingInfo;
+        }
+
+        ConnectionInfo GetConnections()
+        {
+            const string notAvailable = "n/a";
             var info = new ConnectionInfo { Peers = new List<PeerInfo>() };
             info.BestPeerHeight = 0;
+
             foreach (var p in this.connectionManager.ConnectedPeers)
             {
                 var behavior = p.Behavior<ConsensusManagerBehavior>();
                 var peer = new PeerInfo
                 {
-                    Version = p.PeerVersion != null ? p.PeerVersion.UserAgent : "n/a",
-                    RemoteSocketEndpoint = p.RemoteSocketEndpoint.ToString(),
-                    BestReceivedTipHeight = behavior.BestReceivedTip.Height,
-                    BestReceivedTipHash = behavior.BestReceivedTip.HashBlock,
+                    Version = p.PeerVersion != null ? p.PeerVersion.UserAgent : notAvailable,
+                    RemoteSocketEndpoint = p.RemoteSocketEndpoint != null ? p.RemoteSocketEndpoint.ToString() : notAvailable,
+                    BestReceivedTipHeight = behavior != null && behavior.BestReceivedTip != null ? behavior.BestReceivedTip.Height : 0,
+                    BestReceivedTipHash = behavior != null && behavior.BestReceivedTip != null ? behavior.BestReceivedTip.HashBlock : null,
                     IsInbound = p.Inbound
                 };
 
@@ -284,65 +345,11 @@ namespace Obsidian.Features.X1Wallet
             return info;
         }
 
-        SyncingInfo GetSyncingInfo()
-        {
-            var syncingInfo = new SyncingInfo
-            {
-                ConsensusTipHeight = this.chainState.ConsensusTip.Height,
-                ConsensusTipHash = this.chainState.ConsensusTip.HashBlock,
-                ConsensusTipAge = (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - this.chainState.ConsensusTip.Header.Time),
-                MaxTipAge = this.network.MaxTipAge,
-                IsAtBestChainTip = this.chainState.IsAtBestChainTip
-            };
-
-            if (this.chainState.BlockStoreTip != null)
-            {
-                syncingInfo.BlockStoreHeight = this.chainState.BlockStoreTip.Height;
-                syncingInfo.BlockStoreHash = this.chainState.BlockStoreTip.HashBlock;
-            }
-
-            if (this.walletManagerFactory.GetWalletContext(null, true) != null)
-            {
-                using (var context = GetWalletContext())
-                {
-                    syncingInfo.WalletTipHeight = context.WalletManager.WalletLastBlockSyncedHeight;
-                    syncingInfo.WalletTipHash = context.WalletManager.WalletLastBlockSyncedHash;
-                    syncingInfo.WalletName = context.WalletManager.WalletName;
-                }
-            }
-
-            syncingInfo.ConnectionInfo = GetConnections();
-
-            return syncingInfo;
-        }
-
-        public NodeInfo GetNodeInfo()
-        {
-            var process = Process.GetCurrentProcess();
-
-            return new NodeInfo
-            {
-                ProcessId = process.Id,
-                ProcessName = process.ProcessName,
-                MachineName = process.MachineName,
-                Program = Path.GetFullPath(System.Reflection.Assembly.GetExecutingAssembly().GetName().CodeBase),
-                Agent = this.connectionManager.ConnectionSettings.Agent,
-                StartupTime = new DateTimeOffset(this.fullNode.StartTime).ToUnixTimeSeconds(),
-                NetworkName = this.network.Name,
-                CoinTicker = this.network.CoinTicker,
-                Testnet = this.network.IsTest(),
-                MinTxFee = this.network.MinTxFee,
-                MinTxRelayFee = this.network.MinRelayTxFee,
-                DataDirectoryPath = this.nodeSettings.DataDir,
-                Features = this.fullNode.Services.Features.Select(x => $"{x.GetType()}, v.{x.GetType().Assembly.GetName().Version}").ToArray(),
-            };
-        }
-
-
-        public StakingInfo GetStakingInfo()
+        WalletDetails GetWalletDetails()
         {
             using var context = GetWalletContext();
-            return context.WalletManager.GetStakingInfo();
+            return context.WalletManager.GetWalletDetails();
         }
+
     }
 }

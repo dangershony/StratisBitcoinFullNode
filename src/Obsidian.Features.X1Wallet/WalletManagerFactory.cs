@@ -2,19 +2,16 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Models.Api.Requests;
-using Obsidian.Features.X1Wallet.Models.Api.Responses;
 using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.Tools;
 using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Consensus;
-using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Mining;
@@ -118,13 +115,13 @@ namespace Obsidian.Features.X1Wallet
 
         public void CreateWallet(WalletCreateRequest walletCreateRequest)
         {
-            string walletName = walletCreateRequest.Name;
+            string walletName = walletCreateRequest.WalletName;
             string filePath = walletName.GetX1WalletFilepath(this.network, this.dataFolder);
 
             if (File.Exists(filePath))
                 throw new InvalidOperationException($"A wallet with the name {walletName} already exists at {filePath}!");
 
-            if (string.IsNullOrWhiteSpace(walletCreateRequest.Password))
+            if (string.IsNullOrWhiteSpace(walletCreateRequest.Passphrase))
                 throw new InvalidOperationException("A passphrase is required.");
 
             AddressHelper.Init(this.network);
@@ -147,7 +144,7 @@ namespace Obsidian.Features.X1Wallet
                 SyncFromHeight = 0, // TODO
                 Comment = "Your notes here!",
                 Version = 1,
-                PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Password, challengePlaintext)
+                PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Passphrase, challengePlaintext)
             };
 
             const int addressPoolSize = 1000;
@@ -156,7 +153,7 @@ namespace Obsidian.Features.X1Wallet
             {
                 var bytes = new byte[32];
                 Rng.GetBytes(bytes);
-                var address = AddressHelper.CreateWithPrivateKey(bytes, walletCreateRequest.Password, VCL.EncryptWithPassphrase);
+                var address = AddressHelper.CreateWithPrivateKey(bytes, walletCreateRequest.Passphrase, VCL.EncryptWithPassphrase);
                 x1WalletFile.Addresses.Add(address.Address, address);
             }
             if (x1WalletFile.Addresses.Count != addressPoolSize)
@@ -169,32 +166,6 @@ namespace Obsidian.Features.X1Wallet
             x1WalletMetadataFile.SaveX1WalletMetadataFile(x1WalletMetadataFilename);
         }
 
-        public WalletFilesResponse GetWalletsFiles()
-        {
-            return new WalletFilesResponse
-            {
-                WalletsPath = this.dataFolder.WalletPath,
-                WalletFiles = Directory.EnumerateFiles(this.dataFolder.WalletPath, $"*{X1WalletFile.FileExtension}", SearchOption.TopDirectoryOnly)
-                    .Select(Path.GetFileName).ToList()
-            };
-        }
-
-
-        public void Repair(RepairRequest date)
-        {
-            int blockSyncStart = this.chainIndexer.GetHeightAtTime(DateTime.MinValue);
-            WalletSyncManagerSyncFromHeightAsync(blockSyncStart);
-        }
-
-        void WalletSyncManagerSyncFromHeightAsync(int height)
-        {
-            ChainedHeader chainedHeader = this.chainIndexer.GetHeader(height);
-            if (chainedHeader == null)
-                throw new WalletException("Invalid block height");
-
-            using var context = GetWalletContextPrivate();
-            context.WalletManager.RemoveBlocks(chainedHeader);
-        }
 
         public void Dispose()
         {
