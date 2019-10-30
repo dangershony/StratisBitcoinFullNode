@@ -72,12 +72,12 @@ namespace NBitcoin
             if (target.CompareTo(zero) == 0)
                 return result;
 
-            var orderedCoinGroups = coins.ToArray().GroupBy(c => this.GroupByScriptPubKey ? c.TxOut.ScriptPubKey : new Key().ScriptPubKey)
+            var orderedCoinGroups = coins.GroupBy(c => this.GroupByScriptPubKey ? c.TxOut.ScriptPubKey : new Key().ScriptPubKey)
                                     .Select(scriptPubKeyCoins => new
                                     {
                                         Amount = scriptPubKeyCoins.Select(c => c.Amount).Sum(zero),
                                         Coins = scriptPubKeyCoins.ToList()
-                                    }).OrderBy(c => c.Amount).ToArray();
+                                    }).OrderBy(c => c.Amount);
 
 
             var targetCoin = orderedCoinGroups
