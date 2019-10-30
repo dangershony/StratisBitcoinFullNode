@@ -132,7 +132,8 @@ namespace Stratis.Bitcoin.Networks
 
             this.Checkpoints = new Dictionary<int, CheckpointInfo>
             {
-                { 0, new CheckpointInfo(new uint256("0xa3a98f72634c7d098164926b83ff136b66d1cafbb9aeb5a3b8d18da02937f79f"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) }
+                { 0, new CheckpointInfo(new uint256("0xa3a98f72634c7d098164926b83ff136b66d1cafbb9aeb5a3b8d18da02937f79f"), new uint256("0x0000000000000000000000000000000000000000000000000000000000000000")) },
+                { 1409, new CheckpointInfo(new uint256("0xd2f9c43c57fbb066daf940f80e9ce1a63d5d444e9e337b1491f79c36288ab0da"), new uint256("0x602e263081a44650085947dbe99fd0c51041389d79fb9c3f379f8a403a74d977")) }
             };
 
             this.Bech32Encoders = new Bech32Encoder[2];
@@ -150,9 +151,9 @@ namespace Stratis.Bitcoin.Networks
 
             this.SeedNodes = new List<NetworkAddress>
             {
-                new NetworkAddress(IPAddress.Parse("176.223.131.60"), this.DefaultPort), //Official node 1
-                new NetworkAddress(IPAddress.Parse("85.214.223.236"), this.DefaultPort), //Official node 2
-                new NetworkAddress(IPAddress.Parse("85.214.241.80"), this.DefaultPort) //Official node 3
+                new NetworkAddress(IPAddress.Parse("176.223.131.60"), 60000), //Official node 1
+                new NetworkAddress(IPAddress.Parse("85.214.223.236"), 60000), //Official node 2
+                new NetworkAddress(IPAddress.Parse("85.214.241.80"), 60000) //Official node 3
             };
 
             this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();
