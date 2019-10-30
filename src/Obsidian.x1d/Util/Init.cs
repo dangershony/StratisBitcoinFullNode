@@ -99,13 +99,13 @@ namespace Obsidian.x1d.Util
 
         internal static void RunIfDebugModeDelayed(IFullNode fullNode, int milliSeconds = 10000)
         {
-            #if DEBUG
+           // #if DEBUG
             _ = Task.Run(async () =>
             {
                 await Task.Delay(milliSeconds);
                 TestBench.RunTestCodeAsync((FullNode)fullNode);
             });
-            #endif
+          //  #endif
         }
 
 #if DEBUG
