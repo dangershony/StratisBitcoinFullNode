@@ -34,6 +34,7 @@ namespace Obsidian.x1d.Util
 
         public static async void RunTestCodeAsync(FullNode fullNode)
         {
+            var i = 0;
             try
             {
                 _logger = fullNode.NodeService<ILoggerFactory>().CreateLogger(typeof(TestBench).FullName);
@@ -42,16 +43,20 @@ namespace Obsidian.x1d.Util
                 TryCopyWalletForUpdate();
                 await LoadOrCreateWalletAsync();
 
-                //await StartMiningAsync();
-                //await Task.Delay(1000 * 10);
-                //await SplitAsync();
-                //await Task.Delay(5000);
-                //await Send(Money.Coins(10000), "odx1q0693fqjqze4h7jy44vpmp8qtpk8v2rws0xa486");
+               
+                await Task.Delay(10000);
+                for (i = 0; i < 1; i++)
+                {
+                    //await Send(100 * Satoshi.Long, "odx1qjdldsm72vr4tmlecjfstr5clkk6pzux47f3e8x"); // buta
+                    //await Send(1_000_000 * Satoshi.Long, "odx1qynfypr709q086jhjjxc324aqcwtvcpym0crm6c"); // blacky #2
+                    //await Task.Delay(1000);
+                }
+
                 await TryStakingAsync();
             }
             catch (Exception e)
             {
-                _logger.LogError(e.ToString());
+                _logger.LogError($"Error at {i}:{e}");
             }
 
         }

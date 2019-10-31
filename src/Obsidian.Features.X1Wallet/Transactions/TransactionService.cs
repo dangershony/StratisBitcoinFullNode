@@ -15,11 +15,18 @@ namespace Obsidian.Features.X1Wallet.Transactions
 {
     sealed class TransactionService
     {
+        const int SignatureVirtualSize = 28;
+        const int ChangeOutputVirtualSize = 31;
+        const int MinimumVirtualSize = 86;  // one input, one output, without signature and change output
+
+        readonly long minimumPossibleFee;
+        readonly long dustThreshold;
+
         readonly ILogger logger;
         readonly Network network;
         readonly WalletManagerFactory walletManagerFactory;
         readonly string walletName;
-        readonly FeeRate fixedFeeRate;
+        readonly long feePer1000VBytes;
 
         public TransactionService(
             ILoggerFactory loggerFactory,
@@ -30,7 +37,9 @@ namespace Obsidian.Features.X1Wallet.Transactions
             this.walletManagerFactory = walletManagerFactory;
             this.walletName = walletName;
             this.logger = loggerFactory.CreateLogger(GetType().FullName);
-            this.fixedFeeRate = new FeeRate(Money.Satoshis(Math.Max(network.MinTxFee, network.MinRelayTxFee)));
+            this.feePer1000VBytes = Math.Max(network.MinTxFee, network.MinRelayTxFee);
+            this.minimumPossibleFee = (MinimumVirtualSize + SignatureVirtualSize + ChangeOutputVirtualSize) * this.feePer1000VBytes / 1000;
+            this.dustThreshold = this.minimumPossibleFee * 5;
         }
 
         public TransactionResponse BuildTransaction(List<Recipient> recipients, bool sign, string passphrase = null, uint? transactionTimestamp = null, List<Burn> burns = null)
@@ -42,60 +51,78 @@ namespace Obsidian.Features.X1Wallet.Transactions
                 tx.Time = transactionTimestamp.Value;
 
             // add recipients
+            long recipientsAmount = 0;
             foreach (Recipient recipient in recipients)
-                tx.Outputs.Add(new TxOut(recipient.Amount, recipient.Address.ScriptPubKeyFromBech32Safe()));
-
-            // op_return data
-            if (burns != null)
-                foreach (Burn burn in burns)
-                    tx.Outputs.Add(new TxOut(burn.Amount, TxNullDataTemplate.Instance.GenerateScriptPubKey(burn.Data)));
-
-
-            // set change address
-            TxOut changeOutput = GetOutputForChange();
-            tx.Outputs.Add(changeOutput);
-
-            // calculate size, fee and change amount
-            var fee = Money.Zero;
-            fundTx:
-
-            // add outputs
-            StakingCoin[] coins = AddCoins(recipients, fee.Satoshi, burns).ToArray();
-
-            tx.Inputs.Clear();
-            foreach (var c in coins)
-                tx.Inputs.Add(new TxIn(c.Outpoint));
-
-            var virtualSize = tx.GetVirtualSize();
-
-            var currentFee = this.fixedFeeRate.GetFee(virtualSize);
-            this.logger.LogInformation(
-                $"VirtualSize: {virtualSize}, CurrentFee: {currentFee}, PreviousFee: {fee}, Coins: {coins.Length}.");
-            if (fee != currentFee)
             {
-                fee = currentFee;
-                goto fundTx;
+                recipientsAmount += recipient.Amount;
+                tx.Outputs.Add(new TxOut(recipient.Amount, recipient.Address.ScriptPubKeyFromBech32Safe()));
             }
 
-            long outgoing = tx.Outputs.Sum(x => x.Value.Satoshi);
-            var sending = coins.Sum(x => x.Amount.Satoshi);
-            var change = sending - outgoing - fee;
-            changeOutput.Value = change;
+            // add burns
+            long burnAmount = 0;
+            if (burns != null)
+                foreach (Burn burn in burns)
+                {
+                    burnAmount += burn.Amount;
+                    tx.Outputs.Add(new TxOut(burn.Amount, TxNullDataTemplate.Instance.GenerateScriptPubKey(burn.Data)));
+                }
+
+            long totalSendAmount = recipientsAmount + burnAmount;
+
+
+            // calculate size, fee and change amount
+            long addedFee = this.minimumPossibleFee;
+
+            long selectedAmount = 0;
+            StakingCoin[] selectedCoins;
+
+            while (true)
+            {
+                tx.Inputs.Clear();
+
+                int selectedCount = 0;
+               
+                selectedCoins = AddCoins(totalSendAmount, addedFee).ToArray();
+
+                foreach (var c in selectedCoins)
+                {
+                    selectedCount++;
+                    selectedAmount += c.Amount;
+                    tx.Inputs.Add(new TxIn(c.Outpoint));
+                }
+
+                var virtualSize = tx.GetVirtualSize() + selectedCount * SignatureVirtualSize + ChangeOutputVirtualSize;
+
+                long requiredFee = virtualSize * this.feePer1000VBytes / 1000;
+                
+                if (addedFee == requiredFee)
+                {
+                    var change = selectedAmount - totalSendAmount - addedFee;
+                    if (change > this.dustThreshold)
+                    {
+                        TxOut changeOutput = GetOutputForChange();
+                        changeOutput.Value = change;
+                        tx.Outputs.Add(changeOutput);
+                    }
+                    break;
+                }
+                    
+                addedFee = requiredFee;
+            }
 
             // signing
             if (sign)
             {
-                var keys = DecryptKeys(coins, passphrase);
-                //tx.Sign(this.network, keys, coins);
-                SigningService.SignInputs(tx, keys, coins);
+                var keys = DecryptKeys(selectedCoins, passphrase);
+                SigningService.SignInputs(tx, keys, selectedCoins);
             }
 
             var response = new TransactionResponse
             {
                 Transaction = tx,
                 Hex = tx.ToHex(),
-                Fee = fee,
-                VirtualSize = virtualSize,
+                Fee = addedFee,
+                VirtualSize = tx.GetVirtualSize(),
                 SerializedSize = tx.GetSerializedSize(),
                 TransactionId = tx.GetHash(),
                 BroadcastState = BroadcastState.NotSet
@@ -104,29 +131,26 @@ namespace Obsidian.Features.X1Wallet.Transactions
             return response;
         }
 
-       
 
-        IEnumerable<StakingCoin> AddCoins(List<Recipient> recipients, long fee, List<Burn> burns = null)
+
+        IEnumerable<StakingCoin> AddCoins(long totalAmountToSend, long fee)
         {
-            long sendAmount = recipients.Sum(s => s.Amount) + fee;
-            long burnAmount = burns?.Sum(b => b.Amount) ?? 0;
-            long total = sendAmount + burnAmount + fee;
+            long totalToSelect = totalAmountToSend + fee;
 
             IReadOnlyList<StakingCoin> budget;
             Balance balance;
             using (var walletContext = GetWalletContext())
             {
-                budget = walletContext.WalletManager.GetBudget(out balance).OrderByDescending(o => o.Amount)
-                    .ToArray();
+                budget = walletContext.WalletManager.GetBudget(out balance);
             }
 
-            if (balance.Spendable < total)
+            if (balance.Spendable < totalToSelect)
                 throw new X1WalletException(System.Net.HttpStatusCode.BadRequest,
-                    $"Required are at least {total}, but spendable is only {balance.Spendable}");
+                    $"Required are at least {totalToSelect}, but spendable is only {balance.Spendable}");
 
             int pointer = 0;
             long selectedAmount = 0;
-            while (selectedAmount < total)
+            while (selectedAmount < totalToSelect)
             {
                 StakingCoin coin = budget[pointer++];
                 selectedAmount += coin.Amount.Satoshi;

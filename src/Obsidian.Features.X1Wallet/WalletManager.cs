@@ -361,7 +361,8 @@ namespace Obsidian.Features.X1Wallet
                             Transaction = processed,
                             BroadcastState = broadcastEntry.State.ToBroadcastState(),
                             MemoryPoolError = broadcastEntry.MempoolError.GetMemoryPoolError(),
-                            ConsensusError = broadcastEntry.MempoolError.GetMemoryPoolError()
+                            ConsensusError = broadcastEntry.MempoolError.GetMemoryPoolError(),
+                            TransactionTime = broadcastEntry.Transaction.Time
                         };
                         this.Metadata.MemoryPool.Entries.Add(entry);
                     }
@@ -421,6 +422,7 @@ namespace Obsidian.Features.X1Wallet
                     this.Metadata.MemoryPool.Entries.Add(new MemoryPoolEntry
                     {
                         Transaction = processed,
+                        TransactionTime = transactionReceived.ReceivedTransaction.Time
                     });
                 }
                 SaveMetadata();
@@ -687,10 +689,12 @@ namespace Obsidian.Features.X1Wallet
 
 
 
-            // unconfimed
+            // unconfirmed - add them last, ordered by time, so that they come last in coin selection
+            // when unconfirmed outputs gets spend, to allow the memory pool and network to recognize 
+            // the new unspent outputs
             long totalUnconfirmedReceived = 0;
             long totalUnconfirmedSent = 0;
-            foreach (var item in this.Metadata.MemoryPool.Entries)
+            foreach (var item in this.Metadata.MemoryPool.Entries.OrderBy(x=>x.TransactionTime))
             {
                 var tx = item.Transaction;
                 if (tx.Received != null)
@@ -706,7 +710,7 @@ namespace Obsidian.Features.X1Wallet
                             Money.Satoshis(utxo.Satoshis),
                             address.ScriptPubKeyFromPublicKey(),
                             address.EncryptedPrivateKey,
-                            utxo.Address, -1, null, 0);
+                            utxo.Address, int.MaxValue, null, item.TransactionTime);
                         spendableMature.Add(utxo.GetKey(), coin);
                     }
                 }
