@@ -154,7 +154,11 @@ namespace Stratis.Bitcoin.Networks
             {
                 new NetworkAddress(IPAddress.Parse("176.223.131.60"), 60000), //Official node 1
                 new NetworkAddress(IPAddress.Parse("85.214.223.236"), 60000), //Official node 2
-                new NetworkAddress(IPAddress.Parse("85.214.241.80"), 60000) //Official node 3
+                new NetworkAddress(IPAddress.Parse("85.214.241.80"), 60000), //Official node 3
+                new NetworkAddress(IPAddress.Parse("85.214.130.77"), 60000), //Official node 4
+                new NetworkAddress(IPAddress.Parse("81.169.238.113"), 60000), //Official node 5
+                new NetworkAddress(IPAddress.Parse("81.169.234.147"), 60000), //Official node 6
+                new NetworkAddress(IPAddress.Parse("80.211.88.141"), 60000) //Trustaking node
             };
 
             this.StandardScriptsRegistry = new StratisStandardScriptsRegistry();
