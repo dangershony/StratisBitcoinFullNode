@@ -369,7 +369,7 @@ namespace Obsidian.Features.X1Wallet
                 }
                 else
                 {
-                    UpdateMemoryPoolEntry(memoryPoolEntry,broadcastEntry);
+                    UpdateMemoryPoolEntry(memoryPoolEntry, broadcastEntry);
                 }
                 SaveMetadata();
             }
@@ -478,7 +478,7 @@ namespace Obsidian.Features.X1Wallet
                 {
                     var secret = new BitcoinSecret(candidate, obsidianNetwork);
                     var privateKey = secret.PrivateKey.ToBytes();
-                    var address = AddressHelper.CreateWithPrivateKey(privateKey, importKeysRequest.WalletPassphrase, VCL.EncryptWithPassphrase);
+                    var address = AddressHelper.CreateWithPrivateKey(privateKey, importKeysRequest.WalletPassphrase, AddressType.SingleKey);
 
                     this.X1WalletFile.Addresses.Add(address.Address, address);
                     importedAddresses.Add($"{secret.GetAddress()} -> {address.Address}");
@@ -694,7 +694,7 @@ namespace Obsidian.Features.X1Wallet
             // the new unspent outputs
             long totalUnconfirmedReceived = 0;
             long totalUnconfirmedSent = 0;
-            foreach (var item in this.Metadata.MemoryPool.Entries.OrderBy(x=>x.TransactionTime))
+            foreach (var item in this.Metadata.MemoryPool.Entries.OrderBy(x => x.TransactionTime))
             {
                 var tx = item.Transaction;
                 if (tx.Received != null)
@@ -815,7 +815,7 @@ namespace Obsidian.Features.X1Wallet
                         this.Metadata.Blocks.Add(blockHeight, walletBlock);
                     }
                     walletBlock.Transactions.Add(walletTransaction);
-                    this.logger.LogInformation($"Confirmed transaction {walletTransaction.HashTx} in block {blockHeight} added {walletTransaction.ValueAdded/100000000m} {this.network.CoinTicker} to the wallet.");
+                    this.logger.LogInformation($"Confirmed transaction {walletTransaction.HashTx} in block {blockHeight} added {walletTransaction.ValueAdded / 100000000m} {this.network.CoinTicker} to the wallet.");
                 }
             }
 

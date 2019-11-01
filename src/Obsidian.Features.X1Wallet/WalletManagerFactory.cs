@@ -109,8 +109,8 @@ namespace Obsidian.Features.X1Wallet
                     throw new NotSupportedException(
                         "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
-            this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory, 
-                 this.nodeLifetime,  this.timeSyncBehaviorState, this.signals, this.initialBlockDownloadState, this.blockStore, this.blockProvider, this.consensusManager, this.stakeChain);
+            this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory,
+                 this.nodeLifetime, this.timeSyncBehaviorState, this.signals, this.initialBlockDownloadState, this.blockStore, this.blockProvider, this.consensusManager, this.stakeChain);
         }
 
         public void CreateWallet(WalletCreateRequest walletCreateRequest)
@@ -147,17 +147,40 @@ namespace Obsidian.Features.X1Wallet
                 PassphraseChallenge = VCL.EncryptWithPassphrase(walletCreateRequest.Passphrase, challengePlaintext)
             };
 
-            const int addressPoolSize = 1000;
+            //const int addressPoolSize = 1000;
 
-            for (var i = 0; i < addressPoolSize; i++)
+            //for (var i = 0; i < addressPoolSize; i++)
+            //{
+            //    var bytes = new byte[32];
+            //    Rng.GetBytes(bytes);
+            //    P2WpkhAddress address = AddressHelper.CreateWithPrivateKey(bytes, walletCreateRequest.Passphrase);
+            //    x1WalletFile.Addresses.Add(address.Address, address);
+            //}
+
+
+            //if (x1WalletFile.Addresses.Count != addressPoolSize)
+            //    throw new Exception("Something is seriously wrong, collision of random numbers detected. Do not use this wallet.");
+
+            // HD
+            var hdBytes = new byte[32];
+            Rng.GetBytes(hdBytes);
+            var wl = Wordlist.English;
+            var mnemonic = new Mnemonic(wl, hdBytes);
+            byte[] hdSeed = mnemonic.DeriveSeed(walletCreateRequest.Bip39Passphrase?.Trim() ?? "");
+
+            x1WalletFile.HdSeed = VCL.EncryptWithPassphrase(walletCreateRequest.Passphrase, hdSeed);
+            const int hdPoolSize = 20;
+            for (var i = 0; i < hdPoolSize; i++)
             {
-                var bytes = new byte[32];
-                Rng.GetBytes(bytes);
-                var address = AddressHelper.CreateWithPrivateKey(bytes, walletCreateRequest.Passphrase, VCL.EncryptWithPassphrase);
-                x1WalletFile.Addresses.Add(address.Address, address);
+                P2WpkhAddress hdAddress = AddressHelper.CreateHdAddress(hdSeed, i, AddressType.HdAddress, walletCreateRequest.Passphrase);
+                x1WalletFile.Addresses.Add(hdAddress.Address, hdAddress);
             }
-            if (x1WalletFile.Addresses.Count != addressPoolSize)
-                throw new Exception("Something is seriously wrong, collision of random numbers detected. Do not use this wallet.");
+
+            for (var i = 0; i < hdPoolSize; i++)
+            {
+                P2WpkhAddress hdAddress = AddressHelper.CreateHdAddress(hdSeed, i, AddressType.HdChangeAddress, walletCreateRequest.Passphrase);
+                x1WalletFile.Addresses.Add(hdAddress.Address, hdAddress);
+            }
 
             x1WalletFile.SaveX1WalletFile(filePath);
 
@@ -174,6 +197,6 @@ namespace Obsidian.Features.X1Wallet
 
         }
 
-        
+
     }
 }

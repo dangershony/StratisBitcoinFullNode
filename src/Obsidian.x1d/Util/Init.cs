@@ -32,13 +32,18 @@ namespace Obsidian.x1d.Util
                 arguments.AddRange(args);
 
             bool isDataDirRootProvided = false;
+            bool isIpRangeFilteringProvided = false;
             foreach (var a in arguments)
             {
                 if (a.ToLowerInvariant().Contains("datadirroot"))
                     isDataDirRootProvided = true;
+                if (a.ToLowerInvariant().Contains("iprangefiltering"))
+                    isIpRangeFilteringProvided = true;
             }
             if (!isDataDirRootProvided)
                 arguments.Add("datadirroot=Obsidian");
+            if (!isIpRangeFilteringProvided)
+                arguments.Add("iprangefiltering=0");
 
             return arguments.ToArray();
         }
@@ -51,7 +56,7 @@ namespace Obsidian.x1d.Util
             welcome.AppendLine();
             welcome.AppendLine(Properties.Resources.Brand);
             welcome.AppendLine($"{GetCredits()}");
-            ((FullNode) fullNode).NodeService<ILoggerFactory>().CreateLogger(GetName())
+            ((FullNode)fullNode).NodeService<ILoggerFactory>().CreateLogger(GetName())
                 .LogInformation(welcome.ToString());
         }
 
@@ -61,7 +66,7 @@ namespace Obsidian.x1d.Util
             var intro = "Credits, greetings and thanks to: ";
             sb.Append(intro);
 
-            var arr = Properties.Resources.Credits.Split(Environment.NewLine,StringSplitOptions.RemoveEmptyEntries).Select(x=>x.Trim()).OrderBy(x => x).ToList();
+            var arr = Properties.Resources.Credits.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).OrderBy(x => x).ToList();
             var length = intro.Length;
 
             foreach (var name in arr)
@@ -99,13 +104,13 @@ namespace Obsidian.x1d.Util
 
         internal static void RunIfDebugModeDelayed(IFullNode fullNode, int milliSeconds = 10000)
         {
-           // #if DEBUG
+            // #if DEBUG
             _ = Task.Run(async () =>
             {
                 await Task.Delay(milliSeconds);
                 TestBench.RunTestCodeAsync((FullNode)fullNode);
             });
-          //  #endif
+            //  #endif
         }
 
 #if DEBUG

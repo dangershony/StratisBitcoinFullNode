@@ -73,7 +73,6 @@ namespace Obsidian.Features.X1Wallet.Transactions
             // calculate size, fee and change amount
             long addedFee = this.minimumPossibleFee;
 
-            long selectedAmount = 0;
             StakingCoin[] selectedCoins;
 
             while (true)
@@ -81,6 +80,7 @@ namespace Obsidian.Features.X1Wallet.Transactions
                 tx.Inputs.Clear();
 
                 int selectedCount = 0;
+                long selectedAmount = 0;
                
                 selectedCoins = AddCoins(totalSendAmount, addedFee).ToArray();
 

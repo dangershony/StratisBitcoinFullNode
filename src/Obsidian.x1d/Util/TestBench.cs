@@ -11,7 +11,7 @@ using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Miner;
 using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Interfaces;
-using Stratis.Bitcoin.Utilities;
+using Recipient = Obsidian.Features.X1Wallet.Models.Api.Requests.Recipient;
 
 namespace Obsidian.x1d.Util
 {
@@ -43,12 +43,13 @@ namespace Obsidian.x1d.Util
                 TryCopyWalletForUpdate();
                 await LoadOrCreateWalletAsync();
 
-               
-                await Task.Delay(10000);
-                for (i = 0; i < 1; i++)
+
+                await Task.Delay(20000);
+                for (i = 0; i < 20; i++)
                 {
                     //await Send(100 * Satoshi.Long, "odx1qjdldsm72vr4tmlecjfstr5clkk6pzux47f3e8x"); // buta
                     //await Send(1_000_000 * Satoshi.Long, "odx1qynfypr709q086jhjjxc324aqcwtvcpym0crm6c"); // blacky #2
+                    //await Send(100_000 * Satoshi.Long, "odx1q0p84t3whrflupcw5nrax2le7c2jpn67erpymnx"); // blacky stratis core wallet
                     //await Task.Delay(1000);
                 }
 
@@ -61,6 +62,7 @@ namespace Obsidian.x1d.Util
 
         }
 
+      
         static async Task LoadOrCreateWalletAsync()
         {
             try
