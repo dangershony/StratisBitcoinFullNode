@@ -10,8 +10,10 @@ using NBitcoin.BouncyCastle.Math;
 using NBitcoin.Crypto;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Consensus;
+using Stratis.Bitcoin.Features.Consensus.CoinViews;
 using Stratis.Bitcoin.Features.Consensus.Rules.CommonRules;
 using Stratis.Bitcoin.Mining;
+using Stratis.Bitcoin.Utilities;
 using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.Staking
@@ -32,8 +34,11 @@ namespace Obsidian.Features.X1Wallet.Staking
         readonly PosCoinviewRule posCoinViewRule;
         readonly Stopwatch stopwatch;
         readonly IStakeChain stakeChain;
+        readonly ICoinView coinView;
+        readonly IDateTimeProvider dateTimeProvider;
 
-        public StakingService(WalletManager walletManager, string passphrase, ILoggerFactory loggerFactory, Network network, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain)
+        public StakingService(WalletManager walletManager, string passphrase, ILoggerFactory loggerFactory, Network network, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain,
+            ICoinView coinView, IDateTimeProvider dateTimeProvider)
         {
             this.cts = new CancellationTokenSource();
             this.stakingTask = new Task(StakingLoop, this.cts.Token);
@@ -49,6 +54,8 @@ namespace Obsidian.Features.X1Wallet.Staking
             this.Status = new StakingStatus { StartedUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
             this.PosV3 = new PosV3 { SearchInterval = 64, BlockInterval = 4 * 64 };
             this.LastStakedBlock = new StakedBlock();
+            this.coinView = coinView;
+            this.dateTimeProvider = dateTimeProvider;
         }
 
         public void Start()
@@ -69,11 +76,12 @@ namespace Obsidian.Features.X1Wallet.Staking
 
         void StakingLoop()
         {
-            long previousBlockTime = 0;
+            long previousBlockTime = GetCurrentBlockTime();
 
             while (!this.cts.IsCancellationRequested)
             {
                 try
+
                 {
                     this.PosV3.CurrentBlockTime = GetCurrentBlockTime();
 
@@ -89,7 +97,7 @@ namespace Obsidian.Features.X1Wallet.Staking
                     }
                     else
                     {
-                        Wait(previousBlockTime);
+                        Task.Delay(1000).Wait();
                     }
                 }
                 catch (Exception e)
@@ -99,17 +107,6 @@ namespace Obsidian.Features.X1Wallet.Staking
                     this.logger.LogWarning(e.Message);
                 }
             }
-        }
-
-        void Wait(long previousBlockTime)
-        {
-            long currentMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            long nextStartMs = (previousBlockTime + this.PosV3.SearchInterval) * 1000;
-            this.Status.WaitMs = nextStartMs - currentMs;
-            if (this.Status.WaitMs <= 0)
-                return;
-
-            Task.Delay((int)this.Status.WaitMs).Wait(this.cts.Token);
         }
 
         void Stake()
@@ -123,6 +120,9 @@ namespace Obsidian.Features.X1Wallet.Staking
             this.Status.ExpectedTime = GetExpectedTime(this.Status.NetworkWeight, out this.Status.WeightPercent);
 
             this.PosV3.TargetAsBigInteger = blockTemplate.Block.Header.Bits.ToBigInteger(); // for calculation
+            Debug.Assert(
+                this.PosV3.TargetAsBigInteger.Equals(new Target(blockTemplate.Block.Header.Bits.ToCompact())
+                    .ToBigInteger()), "Effect of ToCompact()");
             this.PosV3.Target = blockTemplate.Block.Header.Bits.ToUInt256(); // same for display only
             this.PosV3.StakeModifierV2 = GetStakeModifierV22();
 
@@ -148,14 +148,13 @@ namespace Obsidian.Features.X1Wallet.Staking
             {
                 if (CheckStakeKernelHash(c))
                     validKernels.Add(c);
-
             }
             return validKernels;
         }
 
         bool CheckStakeKernelHash(StakingCoin stakingCoin)
         {
-            var value = BigInteger.ValueOf(stakingCoin.Amount.Satoshi);
+            BigInteger value = BigInteger.ValueOf(stakingCoin.Amount.Satoshi);
             BigInteger weightedTarget = this.PosV3.TargetAsBigInteger.Multiply(value);
 
             uint256 kernelHash;
@@ -163,7 +162,11 @@ namespace Obsidian.Features.X1Wallet.Staking
             {
                 var serializer = new BitcoinStream(ms, true);
                 serializer.ReadWrite(this.PosV3.StakeModifierV2);
-                serializer.ReadWrite(stakingCoin.Time); // be sure this is uint
+
+                //serializer.ReadWrite(stakingCoin.Time); // be sure this is uint
+                var oldFunnyTime = this.coinView.FetchCoins(new[] { stakingCoin.Outpoint.Hash }).UnspentOutputs[0].Time;
+                serializer.ReadWrite(oldFunnyTime); // it should be block time, but due to a bug in ppcoin we need oldFunnyTime
+
                 serializer.ReadWrite(stakingCoin.Outpoint.Hash);
                 serializer.ReadWrite(stakingCoin.Outpoint.N);
                 serializer.ReadWrite((uint)this.PosV3.CurrentBlockTime); // be sure this is uint
@@ -306,8 +309,13 @@ namespace Obsidian.Features.X1Wallet.Staking
 
         long GetCurrentBlockTime()
         {
-            long currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            long blockTime = currentTime - currentTime % this.PosV3.SearchInterval;
+            long currentAdjustedTime = this.dateTimeProvider.GetAdjustedTimeAsUnixTimestamp();
+            long blockTime = currentAdjustedTime - currentAdjustedTime % this.PosV3.SearchInterval;
+
+            var blockTimeViaMask = currentAdjustedTime & ~PosConsensusOptions.StakeTimestampMask;
+            Debug.Assert(blockTime == blockTimeViaMask);
+
+
             return blockTime;
         }
     }

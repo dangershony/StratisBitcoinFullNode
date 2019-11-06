@@ -4,6 +4,7 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Obsidian.Features.X1Wallet.Feature;
+using Obsidian.Features.X1Wallet.Models.Wallet;
 using Obsidian.Features.X1Wallet.SecureApi.Models;
 using Obsidian.Features.X1Wallet.Tools;
 using VisualCrypt.VisualCryptLight;
@@ -104,8 +105,8 @@ namespace Obsidian.Features.X1Wallet.SecureApi
             if (((IList)CommandsWithoutWalletNameCheck).Contains(decryptedRequest.Command))
                 return decryptedRequest;
             if (decryptedRequest.Target == null)
-                throw new X1WalletException(HttpStatusCode.BadRequest, "No wallet name was supplied.", null);
-            walletController.SetWalletName(decryptedRequest.Target);
+                throw new X1WalletException(HttpStatusCode.BadRequest, "No wallet name was supplied.");
+            walletController.SetWalletName(decryptedRequest.Target.Replace($".{walletController.CoinTicker}{X1WalletFile.FileExtension}", ""));
             return decryptedRequest;
         }
 

@@ -22,6 +22,7 @@ using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.EventBus;
 using Stratis.Bitcoin.EventBus.CoreEvents;
 using Stratis.Bitcoin.Features.Consensus;
+using Stratis.Bitcoin.Features.Consensus.CoinViews;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
@@ -52,6 +53,8 @@ namespace Obsidian.Features.X1Wallet
         readonly IBlockProvider blockProvider;
         readonly IConsensusManager consensusManager;
         readonly IStakeChain stakeChain;
+        readonly ICoinView coinView;
+        readonly IDateTimeProvider dateTimeProvider;
 
         X1WalletFile X1WalletFile { get; }
         X1WalletMetadataFile Metadata { get; }
@@ -70,7 +73,9 @@ namespace Obsidian.Features.X1Wallet
         public WalletManager(string x1WalletFilePath, ChainIndexer chainIndexer, Network network, DataFolder dataFolder,
             IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
             INodeLifetime nodeLifetime, ITimeSyncBehaviorState timeSyncBehaviorState,
-            ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain)
+            ISignals signals, IInitialBlockDownloadState initialBlockDownloadState, IBlockStore blockStore, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain,
+            ICoinView coinView, IDateTimeProvider dateTimeProvider
+            )
         {
             AddressHelper.Init(network);
             this.CurrentX1WalletFilePath = x1WalletFilePath;
@@ -96,6 +101,9 @@ namespace Obsidian.Features.X1Wallet
             this.initialBlockDownloadState = initialBlockDownloadState;
             this.blockStore = blockStore;
             this.stakeChain = stakeChain;
+
+            this.coinView = coinView;
+            this.dateTimeProvider = dateTimeProvider;
 
             ScheduleSyncing();
         }
@@ -754,23 +762,79 @@ namespace Obsidian.Features.X1Wallet
 
         public HistoryInfo GetHistoryInfo(HistoryRequest historyRequest)
         {
+            var transactionCount = 0;
             var historyInfo = new HistoryInfo { Blocks = new List<HistoryInfo.BlockInfo>() };
-            var count = 0;
+
+            // testing
+            int coinstakeCount = 0;
+            int coinbaseCount = 0;
+            int sendCount = 0;
+            // end testing
+            
+            var unconfirmed = new List<HistoryInfo.TransactionInfo>();
+            foreach (var item in this.Metadata.MemoryPool.Entries.OrderByDescending(x => x.TransactionTime))
+            {
+                var tx = item.Transaction;
+                var ti = new HistoryInfo.TransactionInfo { TxType = tx.TxType, HashTx = tx.HashTx.ToString(), ValueAdded = tx.ValueAdded };
+                unconfirmed.Add(ti);
+                if (tx.Received != null)
+                    ti.TotalReceived = tx.Received.Values.Sum(x => x.Satoshis);
+                if (tx.Spent != null)
+                    ti.TotalSpent = tx.Spent.Values.Sum(x => x.Satoshis);
+                if (tx.Destinations != null)
+                {
+                    ti.Recipients = new Recipient[tx.Destinations.Count];
+                    int recipientIndex = 0;
+                    foreach (var d in tx.Destinations)
+                    {
+                        var r = new Recipient { Address = d.Value.Address, Amount = d.Value.Satoshis };
+                        ti.Recipients[recipientIndex++] = r;
+                    }
+                }
+                transactionCount++;
+            }
+            if (unconfirmed.Count > 0)
+            {
+                var bi = new HistoryInfo.BlockInfo { Height = int.MaxValue, Time = this.Metadata.MemoryPool.Entries.Max(x=>x.TransactionTime),  Transactions = unconfirmed };
+                historyInfo.Blocks.Add(bi);
+            }
+
+
             foreach ((int height, BlockMetadata block) in this.Metadata.Blocks.Reverse())
             {
-                if (historyRequest.Take.HasValue)
-                    if (count++ > historyRequest.Take.Value)
-                        break;
+                var transactions = new List<HistoryInfo.TransactionInfo>();
 
-                int txIndex = 0;
-                foreach (var tx in block.Transactions)
+                foreach (var tx in block.Transactions.Reverse())
                 {
-                    var bi = new HistoryInfo.BlockInfo
-                    { Height = height, Time = block.Time, HashBlock = block.HashBlock.ToString(), Transactions = new HistoryInfo.TransactionInfo[block.Transactions.Count] };
-                    historyInfo.Blocks.Add(bi);
+                    if (historyRequest.Take.HasValue)
+                        if (transactionCount == historyRequest.Take.Value)
+                            return historyInfo;
+
+                    // testing
+                    if (tx.TxType == TxType.Coinstake)
+                    {
+                        coinstakeCount++;
+                        if (coinstakeCount > 3)
+                            continue;
+                    }
+
+                    if (tx.TxType == TxType.Coinbase)
+                    {
+                        coinbaseCount++;
+                        if (coinbaseCount > 3)
+                            continue;
+                    }
+
+                    if (tx.TxType == TxType.Spend)
+                    {
+                        sendCount++;
+                        if (sendCount > 3)
+                            continue;
+                    }
+                    // end testing
 
                     var ti = new HistoryInfo.TransactionInfo { TxType = tx.TxType, HashTx = tx.HashTx.ToString(), ValueAdded = tx.ValueAdded };
-                    bi.Transactions[txIndex++] = ti;
+                    transactions.Add(ti);
 
                     if (tx.Received != null)
                         ti.TotalReceived = tx.Received.Values.Sum(x => x.Satoshis);
@@ -783,13 +847,18 @@ namespace Obsidian.Features.X1Wallet
                         foreach (var d in tx.Destinations)
                         {
                             var r = new Recipient { Address = d.Value.Address, Amount = d.Value.Satoshis };
-                            ti.Recipients[recipientIndex] = r;
+                            ti.Recipients[recipientIndex++] = r;
                         }
                     }
+                    transactionCount++;
+                }
 
+                if (transactions.Count > 0)
+                {
+                    var bi = new HistoryInfo.BlockInfo { Height = height, Time = block.Time, HashBlock = block.HashBlock.ToString(), Transactions = transactions };
+                    historyInfo.Blocks.Add(bi);
                 }
             }
-
             return historyInfo;
         }
 
@@ -1010,7 +1079,7 @@ namespace Obsidian.Features.X1Wallet
 
             if (this.stakingService == null)
             {
-                this.stakingService = new StakingService(this, passphrase, this.loggerFactory, this.network, this.blockProvider, this.consensusManager, this.stakeChain);
+                this.stakingService = new StakingService(this, passphrase, this.loggerFactory, this.network, this.blockProvider, this.consensusManager, this.stakeChain, this.coinView, this.dateTimeProvider);
                 this.stakingService.Start();
             }
         }

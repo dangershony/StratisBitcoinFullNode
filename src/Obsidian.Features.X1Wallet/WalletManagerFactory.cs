@@ -12,6 +12,7 @@ using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.Consensus;
+using Stratis.Bitcoin.Features.Consensus.CoinViews;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Mining;
@@ -37,13 +38,15 @@ namespace Obsidian.Features.X1Wallet
         readonly IBlockProvider blockProvider;
         readonly IConsensusManager consensusManager;
         readonly IStakeChain stakeChain;
+        readonly ICoinView coinView;
+        readonly IDateTimeProvider dateTimeProvider;
 
         static readonly RNGCryptoServiceProvider Rng = new RNGCryptoServiceProvider();
 
         WalletManager walletManager;
 
         public WalletManagerFactory(DataFolder dataFolder, ChainIndexer chainIndexer, Network network, IBroadcasterManager broadcasterManager, ILoggerFactory loggerFactory,
-            INodeLifetime nodeLifetime, ISignals signals, IBlockStore blockStore, ITimeSyncBehaviorState timeSyncBehaviorState, IInitialBlockDownloadState initialBlockDownloadState, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain)
+            INodeLifetime nodeLifetime, ISignals signals, IBlockStore blockStore, ITimeSyncBehaviorState timeSyncBehaviorState, IInitialBlockDownloadState initialBlockDownloadState, IBlockProvider blockProvider, IConsensusManager consensusManager, IStakeChain stakeChain, ICoinView coinView, IDateTimeProvider dateTimeProvider)
         {
             this.dataFolder = dataFolder;
             this.chainIndexer = chainIndexer;
@@ -58,6 +61,8 @@ namespace Obsidian.Features.X1Wallet
             this.blockProvider = blockProvider;
             this.consensusManager = consensusManager;
             this.stakeChain = stakeChain;
+            this.dateTimeProvider = dateTimeProvider;
+            this.coinView = coinView;
         }
 
         public WalletContext GetWalletContext(string walletName, bool doNotCheck = false)
@@ -110,7 +115,7 @@ namespace Obsidian.Features.X1Wallet
                         "Core wallet manager already created, changing the wallet file while node and wallet are running is not currently supported.");
             }
             this.walletManager = new WalletManager(x1WalletFilePath, this.chainIndexer, this.network, this.dataFolder, this.broadcasterManager, this.loggerFactory,
-                 this.nodeLifetime, this.timeSyncBehaviorState, this.signals, this.initialBlockDownloadState, this.blockStore, this.blockProvider, this.consensusManager, this.stakeChain);
+                 this.nodeLifetime, this.timeSyncBehaviorState, this.signals, this.initialBlockDownloadState, this.blockStore, this.blockProvider, this.consensusManager, this.stakeChain, this.coinView, this.dateTimeProvider);
         }
 
         public void CreateWallet(WalletCreateRequest walletCreateRequest)

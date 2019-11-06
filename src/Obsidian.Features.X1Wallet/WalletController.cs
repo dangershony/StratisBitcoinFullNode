@@ -47,6 +47,12 @@ namespace Obsidian.Features.X1Wallet
 
         string walletName;
 
+        public string CoinTicker
+        {
+            get { return this.network.CoinTicker; }
+        }
+
+
         WalletContext GetWalletContext()
         {
             return this.walletManagerFactory.GetWalletContext(this.walletName);

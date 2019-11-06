@@ -20,7 +20,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
         /// <summary>
         /// Default for whether SecureApi is enabled.
         /// </summary>
-        public const bool IsSecureApiEnabledDefaultValue = false;
+        public const bool IsSecureApiEnabledDefaultValue = true;
 
         /// <summary>
         /// Host, e.g. 'http://0.0.0.0' for remote access or 'http://localhost' for local-only access. Default: SecureApiDefaultHostBinding.
