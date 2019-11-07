@@ -4,40 +4,34 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Obsidian.Features.X1Wallet.Feature;
+using Obsidian.Features.X1Wallet.Models;
 using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Api.Requests;
+using Obsidian.Features.X1Wallet.Models.Api.Responses;
 using Obsidian.Features.X1Wallet.Models.Wallet;
-using Obsidian.Features.X1Wallet.Staking;
 using Obsidian.Features.X1Wallet.Tools;
 using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin;
 using Stratis.Bitcoin.Base;
-using Stratis.Bitcoin.Builder.Feature;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Connection;
 using Stratis.Bitcoin.Consensus;
-using Stratis.Bitcoin.Controllers.Models;
-using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
-using Stratis.Bitcoin.Features.Wallet.Models;
 using Stratis.Bitcoin.Interfaces;
-using Stratis.Bitcoin.P2P.Peer;
 using Stratis.Bitcoin.Utilities;
+using Stratis.Bitcoin.Utilities.JsonErrors;
 
 namespace Obsidian.Features.X1Wallet
 {
     public class WalletController : Controller
     {
-        const int MaxHistoryItemsPerAccount = 500;
-
         readonly WalletManagerFactory walletManagerFactory;
-        readonly TransactionHandler walletTransactionHandler;
-        readonly CoinType coinType;
         readonly Network network;
         readonly IConnectionManager connectionManager;
         readonly ChainIndexer chainIndexer;
@@ -48,10 +42,15 @@ namespace Obsidian.Features.X1Wallet
         readonly NodeSettings nodeSettings;
         readonly IChainState chainState;
         readonly INetworkDifficulty networkDifficulty;
-
-        readonly StakingCore posMinting;
+        readonly ILoggerFactory loggerFactory;
+        readonly ILogger logger;
 
         string walletName;
+
+        public string CoinTicker
+        {
+            get { return this.network.CoinTicker; }
+        }
 
 
         WalletContext GetWalletContext()
@@ -59,9 +58,13 @@ namespace Obsidian.Features.X1Wallet
             return this.walletManagerFactory.GetWalletContext(this.walletName);
         }
 
+        TransactionService GetTransactionHandler()
+        {
+            return new TransactionService(this.loggerFactory, this.walletManagerFactory, this.walletName, this.network);
+        }
+
         public WalletController(
-            WalletManagerFactory walletManagerFacade,
-            IWalletTransactionHandler walletTransactionHandler,
+            WalletManagerFactory walletManagerFactory,
             IConnectionManager connectionManager,
             Network network,
             ChainIndexer chainIndexer,
@@ -71,14 +74,12 @@ namespace Obsidian.Features.X1Wallet
             NodeSettings nodeSettings,
             IChainState chainState,
             INetworkDifficulty networkDifficulty,
-            StakingCore posMinting
+            ILoggerFactory loggerFactory
             )
         {
-            this.walletManagerFactory = (WalletManagerFactory)walletManagerFacade;
-            this.walletTransactionHandler = (TransactionHandler)walletTransactionHandler;
+            this.walletManagerFactory = walletManagerFactory;
             this.connectionManager = connectionManager;
             this.network = network;
-            this.coinType = (CoinType)network.Consensus.CoinType;
             this.chainIndexer = chainIndexer;
             this.broadcasterManager = broadcasterManager;
             this.dateTimeProvider = dateTimeProvider;
@@ -86,416 +87,275 @@ namespace Obsidian.Features.X1Wallet
             this.nodeSettings = nodeSettings;
             this.chainState = chainState;
             this.networkDifficulty = networkDifficulty;
-
-            this.posMinting = posMinting;
+            this.loggerFactory = loggerFactory;
+            this.logger = loggerFactory.CreateLogger(typeof(WalletController).Name);
         }
 
-
-
-
-
-
-
-        public void SetWalletName(string target)
+        public HistoryInfo GetHistoryInfo(HistoryRequest historyRequest)
         {
-            if (this.walletName != null)
+            using var context = GetWalletContext();
+            return context.WalletManager.GetHistoryInfo(historyRequest);
+        }
+
+        public void SetWalletName(string targetWalletName, bool canReuseInstance = false)
+        {
+            if (this.walletName != null && !canReuseInstance)
                 throw new InvalidOperationException("walletName is already set - this controller must be a new instance per request!");
-            this.walletName = target;
+            this.walletName = targetWalletName;
+        }
+
+        public LoadWalletResponse LoadWallet()
+        {
+            using var context = GetWalletContext();
+            return context.WalletManager.LoadWallet();
+        }
+
+        public void CreateWallet(WalletCreateRequest walletCreateRequest)
+        {
+            this.walletManagerFactory.CreateWallet(walletCreateRequest);
+        }
+
+        public ImportKeysResponse ImportKeys(ImportKeysRequest importKeysRequest)
+        {
+            using var context = GetWalletContext();
+            return context.WalletManager.ImportKeys(importKeysRequest);
+        }
+
+        public ExportKeysResponse ExportKeys(ExportKeysRequest importKeysRequest)
+        {
+            using var context = GetWalletContext();
+            return context.WalletManager.ExportKeys(importKeysRequest);
+
         }
 
 
 
-        public async Task<LoadWalletResponse> LoadAsync()
+        public void StartStaking(StartStakingRequest startStakingRequest)
         {
-            using (var context = GetWalletContext())
+            using var context = GetWalletContext();
+            context.WalletManager.StartStaking(startStakingRequest.Passphrase);
+        }
+
+        public void StopStaking()
+        {
+            using var context = GetWalletContext();
+            context.WalletManager.StopStaking();
+        }
+
+        public Balance GetBalance()
+        {
+            using var context = GetWalletContext();
+            context.WalletManager.GetBudget(out var balance);
+            return balance;
+        }
+
+        public long EstimateFee(TransactionRequest request)
+        {
+            request.Sign = false;
+            var response = BuildTransaction(request);
+            return response.Fee;
+        }
+
+        public TransactionResponse BuildSplitTransaction(TransactionRequest request)
+        {
+            var count = 1000;
+            var amount = Money.Coins(5000);
+
+            using var walletContext = GetWalletContext();
+
+            walletContext.WalletManager.GetBudget(out Balance _);
+            var recipients = walletContext.WalletManager.GetAllAddresses().Values.Take(count).Select(x => new Recipient { Address = x.Address, Amount = amount }).ToList();
+            TransactionResponse response = GetTransactionHandler().BuildTransaction(recipients, request.Sign, request.Passphrase);
+            if (request.Send)
             {
-                ; // this will load the wallet or ensure it's loaded, because ExecuteAsync does that.
-                return context.WalletManager.LoadWallet();
+                this.broadcasterManager.BroadcastTransactionAsync(response.Transaction).GetAwaiter().GetResult();
             }
-        }
-
-        public async Task CreateKeyWalletAsync(WalletCreateRequest walletCreateRequest)
-        {
-            await this.walletManagerFactory.CreateKeyWalletAsync(walletCreateRequest);
-        }
-
-        public async Task<ImportKeysResponse> ImportKeysAsync(ImportKeysRequest importKeysRequest)
-        {
-            using (var context = GetWalletContext())
+            else
             {
-                return await context.WalletManager.ImportKeysAsync(importKeysRequest);
+                response.BroadcastState = BroadcastState.NotRequested;
             }
-
+            return response;
         }
 
-        public async Task<ExportKeysResponse> ExportKeysAsync(ExportKeysRequest importKeysRequest)
+        public TransactionResponse BuildTransaction(TransactionRequest request)
         {
-            using (var context = GetWalletContext())
+            int retries = 0;
+
+            while (!CanBuildTx())
             {
-                return await context.WalletManager.ExportKeysAsync(importKeysRequest);
-            }
-
-        }
-
-        public async Task<WalletGeneralInfoModel> GetGeneralInfoAsync()
-        {
-            using (var context = GetWalletContext())
-            {
-                var manager = context.WalletManager;
-
-                var model = new WalletGeneralInfoModel
+                if (retries < 15)
                 {
-                    Network = this.network,
-                    CreationTime = Utils.UnixTimeToDateTime(this.network.GenesisTime),
-                    LastBlockSyncedHeight = manager.WalletLastBlockSyncedHeight,
-                    ConnectedNodes = this.connectionManager.ConnectedPeers.Count(),
-                    ChainTip = this.chainIndexer.Tip.Height,
-                    IsChainSynced = this.chainIndexer.IsDownloaded(),
-                    IsDecrypted = this.posMinting.GetGetStakingInfoModel().Enabled,
-                    WalletFilePath = manager.CurrentX1WalletFilePath
-                };
-
-                return model;
-            }
-        }
-
-        public async Task StartStaking(StartStakingRequest startStakingRequest)
-        {
-            using (var context = GetWalletContext())
-            {
-                context.WalletManager.StartStaking(startStakingRequest.Password);
-            }
-        }
-
-        public async Task StopStaking()
-        {
-            using (var context = GetWalletContext())
-            {
-                context.WalletManager.StopStaking();
-            }
-        }
-
-
-
-
-        public async Task<Balance> GetBalanceAsync(string walletName)
-        {
-            using (var context = GetWalletContext())
-            {
-                context.WalletManager.GetBudget(out var balance);
-                return balance;
-            }
-        }
-
-
-
-
-
-        public async Task<MaxSpendableAmountModel> GetMaximumSpendableBalanceAsync(WalletMaximumBalanceRequest request)
-        {
-            (Money maximumSpendableAmount, Money Fee) transactionResult = this.walletTransactionHandler.GetMaximumSpendableAmount(new WalletAccountReference(this.walletName, this.walletName), FeeParser.Parse(request.FeeType), request.AllowUnconfirmed);
-            return new MaxSpendableAmountModel
-            {
-                MaxSpendableAmount = transactionResult.maximumSpendableAmount,
-                Fee = transactionResult.Fee
-            };
-        }
-
-
-
-        public async Task<Money> GetTransactionFeeEstimateAsync(TxFeeEstimateRequest request)
-        {
-            var recipients = new List<Recipient>();
-            foreach (RecipientModel recipientModel in request.Recipients)
-            {
-                var scriptPubKey = recipientModel.DestinationAddress.ScriptPubKeyFromBech32Safe();
-
-                if (scriptPubKey == null)
-                    throw new NotSupportedException($"Only {nameof(P2WpkhAddress)}es are supported at this time.");
-
-                recipients.Add(new Recipient
-                {
-                    ScriptPubKey = scriptPubKey,
-                    Amount = recipientModel.Amount
-                });
-            }
-
-            var context = new TransactionBuildContext(this.network)
-            {
-                AccountReference = new WalletAccountReference(this.walletName, this.walletName),
-                FeeType = FeeParser.Parse(request.FeeType),
-                MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
-                Recipients = recipients,
-                OpReturnData = request.OpReturnData,
-                OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
-                Sign = false
-            };
-            Money model = this.walletTransactionHandler.EstimateFee(context);
-            return model;
-        }
-
-
-        public async Task<WalletBuildTransactionModel> BuildSplitTransactionAsync(BuildTransactionRequest request)
-        {
-            var count = 100;
-            var recipients = new List<Recipient>(count);
-
-            using (var walletContext = GetWalletContext())
-            {
-                walletContext.WalletManager.GetBudget(out Balance balance);
-                var singleAmount = balance.SpendableAmount.Satoshi / (count + 1); // leave a rest, therefore +1
-                IEnumerable<NBitcoin.Script> destinations = walletContext.WalletManager.GetAllAddresses().Select(kvp => kvp.Value.ScriptPubKeyFromPublicKey()).Take(100);
-                foreach (var d in destinations)
-                {
-                    recipients.Add(new Recipient
-                        {ScriptPubKey = d, Amount = Money.Satoshis(singleAmount), SubtractFeeFromAmount = false});
-                }
-            }
-
-            
-
-            var context = new TransactionBuildContext(this.network)
-            {
-                AccountReference = new WalletAccountReference(this.walletName, this.walletName),
-                TransactionFee = string.IsNullOrEmpty(request.FeeAmount) ? null : Money.Parse(request.FeeAmount),
-                MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
-                Shuffle = request.ShuffleOutputs ?? true, // We shuffle transaction outputs by default as it's better for anonymity.
-                OpReturnData = request.OpReturnData,
-                OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
-                WalletPassword = request.Password,
-                SelectedInputs = request.Outpoints?.Select(u => new OutPoint(uint256.Parse(u.TransactionId), u.Index)).ToList(),
-                AllowOtherInputs = false,
-                Recipients = recipients
-            };
-
-            if (!string.IsNullOrEmpty(request.FeeType))
-            {
-                context.FeeType = FeeParser.Parse(request.FeeType);
-            }
-
-            Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
-
-            var model = new WalletBuildTransactionModel
-            {
-                Hex = transactionResult.ToHex(),
-                Fee = context.TransactionFee,
-                TransactionId = transactionResult.GetHash()
-            };
-
-            return model;
-        }
-
-        public async Task<WalletBuildTransactionModel> BuildTransactionAsync(BuildTransactionRequest request)
-        {
-            var recipients = new List<Recipient>();
-            foreach (RecipientModel recipientModel in request.Recipients)
-            {
-                recipients.Add(new Recipient
-                {
-                    ScriptPubKey = BitcoinAddress.Create(recipientModel.DestinationAddress, this.network).ScriptPubKey,
-                    Amount = recipientModel.Amount
-                });
-            }
-
-            var context = new TransactionBuildContext(this.network)
-            {
-                AccountReference = new WalletAccountReference(this.walletName, this.walletName),
-                TransactionFee = string.IsNullOrEmpty(request.FeeAmount) ? null : Money.Parse(request.FeeAmount),
-                MinConfirmations = request.AllowUnconfirmed ? 0 : 1,
-                Shuffle = request.ShuffleOutputs ?? true, // We shuffle transaction outputs by default as it's better for anonymity.
-                OpReturnData = request.OpReturnData,
-                OpReturnAmount = string.IsNullOrEmpty(request.OpReturnAmount) ? null : Money.Parse(request.OpReturnAmount),
-                WalletPassword = request.Password,
-                SelectedInputs = request.Outpoints?.Select(u => new OutPoint(uint256.Parse(u.TransactionId), u.Index)).ToList(),
-                AllowOtherInputs = false,
-                Recipients = recipients
-            };
-
-            if (!string.IsNullOrEmpty(request.FeeType))
-            {
-                context.FeeType = FeeParser.Parse(request.FeeType);
-            }
-
-            Transaction transactionResult = this.walletTransactionHandler.BuildTransaction(context);
-
-            var model = new WalletBuildTransactionModel
-            {
-                Hex = transactionResult.ToHex(),
-                Fee = context.TransactionFee,
-                TransactionId = transactionResult.GetHash()
-            };
-
-            return model;
-        }
-
-
-        public async Task<WalletSendTransactionModel> SendTransactionAsync(SendTransactionRequest request)
-        {
-            using (var context = GetWalletContext())
-            {
-                if (!this.connectionManager.ConnectedPeers.Any())
-                {
-                    throw new X1WalletException(HttpStatusCode.Forbidden, "Can't send transaction: sending transaction requires at least one connection!", new Exception());
-                }
-
-                Transaction transaction = this.network.CreateTransaction(request.Hex);
-
-                var model = new WalletSendTransactionModel
-                {
-                    TransactionId = transaction.GetHash(),
-                    Outputs = new List<TransactionOutputModel>()
-                };
-
-                foreach (TxOut output in transaction.Outputs)
-                {
-                    bool isUnspendable = output.ScriptPubKey.IsUnspendable;
-                    model.Outputs.Add(new TransactionOutputModel
-                    {
-                        Address = isUnspendable ? null : output.ScriptPubKey.GetDestinationAddress(this.network)?.ToString(),
-                        Amount = output.Value,
-                        OpReturnData = isUnspendable ? Encoding.UTF8.GetString(output.ScriptPubKey.ToOps().Last().PushData) : null
-                    });
-                }
-
-                this.broadcasterManager.BroadcastTransactionAsync(transaction).GetAwaiter().GetResult();
-
-                TransactionBroadcastEntry transactionBroadCastEntry = this.broadcasterManager.GetTransaction(transaction.GetHash());
-
-                if (transactionBroadCastEntry.State == State.CantBroadcast)
-                {
-                    throw new X1WalletException(HttpStatusCode.BadRequest, transactionBroadCastEntry.ErrorMessage, new Exception("Transaction Exception"));
-                }
-
-                return model;
-            }
-
-        }
-
-
-        public async Task<WalletFileModel> ListWalletsFilesAsync()
-        {
-            (string folderPath, IEnumerable<string> filesNames) result = this.walletManagerFactory.GetWalletsFiles();
-            var model = new WalletFileModel
-            {
-                WalletsPath = result.folderPath,
-                WalletsFiles = result.filesNames
-            };
-            return model;
-        }
-
-
-        public async Task<KeyAddressesModel> GetUnusedReceiveAddresses()
-        {
-            using (var context = GetWalletContext())
-            {
-                var unusedAddress = context.WalletManager.GetUnusedAddress();
-                if (unusedAddress == null)
-                    throw new X1WalletException(HttpStatusCode.BadRequest,
-                        "The wallet doesn't have any unused addresses left.", null);
-
-                var model = new KeyAddressesModel { Addresses = new List<KeyAddressModel>() };
-                model.Addresses.Add(new KeyAddressModel { Address = unusedAddress.Address, IsChange = false, IsUsed = false, FullAddress = unusedAddress });
-                return model;
-            }
-        }
-
-
-
-
-
-        public async Task SyncAsync(HashModel request)
-        {
-            ChainedHeader block = this.chainIndexer.GetHeader(uint256.Parse(request.Hash));
-
-            if (block == null)
-            {
-                throw new X1WalletException(HttpStatusCode.BadRequest, $"Block with hash {request.Hash} was not found on the blockchain.", new Exception());
-            }
-
-            await this.walletManagerFactory.WalletSyncManagerSyncFromHeightAsync(block.Height);
-        }
-
-
-        public async Task SyncFromDate(WalletSyncFromDateRequest request)
-        {
-            await this.walletManagerFactory.WalletSyncManagerSyncFromDateAsync(request.Date);
-        }
-
-
-
-
-        public StatusModel GetNodeStatus()
-        {
-            var model = new StatusModel
-            {
-                Version = this.fullNode.Version?.ToString() ?? "0",
-                ProtocolVersion = (uint)(this.nodeSettings.ProtocolVersion),
-                Agent = this.connectionManager.ConnectionSettings.Agent,
-                ProcessId = Process.GetCurrentProcess().Id,
-                Network = this.fullNode.Network.Name,
-                ConsensusHeight = this.chainState.ConsensusTip?.Height,
-                DataDirectoryPath = this.nodeSettings.DataDir,
-                Testnet = this.network.IsTest(),
-                RelayFee = this.nodeSettings.MinRelayTxFeeRate?.FeePerK?.ToUnit(MoneyUnit.BTC) ?? 0,
-                RunningTime = this.dateTimeProvider.GetUtcNow() - this.fullNode.StartTime,
-                CoinTicker = this.network.CoinTicker,
-                State = this.fullNode.State.ToString()
-            };
-
-
-            var target = this.networkDifficulty.GetNetworkDifficulty();
-            if (target != null)
-                model.Difficulty = target.Difficulty;
-
-            // Add the list of features that are enabled.
-            foreach (IFullNodeFeature feature in this.fullNode.Services.Features)
-            {
-                model.FeaturesData.Add(new FeatureData
-                {
-                    Namespace = feature.GetType().ToString(),
-                    State = feature.State
-                });
-            }
-
-            // Include BlockStore Height if enabled
-            if (this.chainState.BlockStoreTip != null)
-                model.BlockStoreHeight = this.chainState.BlockStoreTip.Height;
-
-            // Add the details of connected nodes.
-            foreach (INetworkPeer peer in this.connectionManager.ConnectedPeers)
-            {
-                var connectionManagerBehavior = peer.Behavior<IConnectionManagerBehavior>();
-                var chainHeadersBehavior = peer.Behavior<ConsensusManagerBehavior>();
-
-                var connectedPeer = new ConnectedPeerModel
-                {
-                    Version = peer.PeerVersion != null ? peer.PeerVersion.UserAgent : "[Unknown]",
-                    RemoteSocketEndpoint = peer.RemoteSocketEndpoint.ToString(),
-                    TipHeight = chainHeadersBehavior.BestReceivedTip != null ? chainHeadersBehavior.BestReceivedTip.Height : peer.PeerVersion?.StartHeight ?? -1,
-                    IsInbound = peer.Inbound
-                };
-
-                if (connectedPeer.IsInbound)
-                {
-                    model.InboundPeers.Add(connectedPeer);
+                    Task.Delay(100).Wait();
+                    retries++;
                 }
                 else
                 {
-                    model.OutboundPeers.Add(connectedPeer);
+                    throw new X1WalletException(HttpStatusCode.BadRequest,
+                        "The wallet is not fully synced yet, please retry later.");
                 }
             }
 
-            return model;
+            var response = GetTransactionHandler().BuildTransaction(request.Recipients, request.Sign, request.Passphrase, request.TransactionTimestamp, request.Burns);
+
+            if (request.Send)
+            {
+                if (!this.connectionManager.ConnectedPeers.Any())
+                {
+                    throw new X1WalletException(HttpStatusCode.BadRequest,"Can't send the transactions without connections.");
+                }
+                this.broadcasterManager.BroadcastTransactionAsync(response.Transaction).GetAwaiter().GetResult();
+                TransactionBroadcastEntry transactionBroadCastEntry = this.broadcasterManager.GetTransaction(response.Transaction.GetHash());
+
+                if (transactionBroadCastEntry.State == State.CantBroadcast)
+                {
+                    throw new X1WalletException(HttpStatusCode.InternalServerError,
+                        $"Can't send the transaction: {transactionBroadCastEntry.ErrorMessage}.");
+                }
+
+                response.BroadcastState = transactionBroadCastEntry.State.ToBroadcastState();
+            }
+            else
+            {
+                response.BroadcastState = BroadcastState.NotRequested;
+            }
+            return response;
         }
 
-
-        public GetStakingInfoModel GetStakingInfo()
+        bool CanBuildTx()
         {
-            if (!this.fullNode.Network.Consensus.IsProofOfStake)
-                throw new X1WalletException(HttpStatusCode.MethodNotAllowed, "Consensus is not Proof-of-Stake.", null);
-
-            GetStakingInfoModel model = this.posMinting != null ? this.posMinting.GetGetStakingInfoModel() : new GetStakingInfoModel();
-            return model;
+            try
+            {
+                using var context = GetWalletContext();
+                return context.WalletManager.WalletLastBlockSyncedHash == this.chainIndexer.Tip.HashBlock &&
+                       this.chainIndexer.Tip?.Height > 0;
+            }
+            catch (Exception e)
+            {
+                this.logger.LogError(e.Message);
+                return false;
+            }
         }
+
+        public GetAddressesResponse GetUnusedReceiveAddresses()
+        {
+            using (var context = GetWalletContext())
+            {
+                var p2WpkhAddress = context.WalletManager.GetUnusedAddress();
+                bool isUsed = false;
+                if (p2WpkhAddress == null)
+                {
+                    p2WpkhAddress = context.WalletManager.GetAllAddresses().First().Value;
+                    isUsed = true;
+                }
+
+                var model = new GetAddressesResponse { Addresses = new List<AddressModel>() };
+                model.Addresses.Add(new AddressModel { Address = p2WpkhAddress.Address, IsUsed = isUsed, FullAddress = p2WpkhAddress });
+                return model;
+            }
+        }
+
+
+        public void Repair(RepairRequest date)
+        {
+            var chainedHeader = this.chainIndexer.GetHeader(1);
+            using var context = GetWalletContext();
+            context.WalletManager.RemoveBlocks(chainedHeader);
+        }
+
+        public DaemonInfo GetDaemonInfo()
+        {
+            var process = Process.GetCurrentProcess();
+            var assembly = System.Reflection.Assembly.GetEntryAssembly();
+            Debug.Assert(assembly != null);
+            return new DaemonInfo
+            {
+                ProcessId = process.Id,
+                ProcessName = process.ProcessName,
+                ProcessMemory = process.PrivateMemorySize64,
+                MachineName = Environment.MachineName,
+                CodeBase = new Uri(assembly.GetName().CodeBase).AbsolutePath,
+                AssemblyVersion = assembly.GetShortVersionString(),
+                AgentName = this.connectionManager.ConnectionSettings.Agent,
+                StartupTime = new DateTimeOffset(this.fullNode.StartTime).ToUnixTimeSeconds(),
+                NetworkName = this.network.Name,
+                CoinTicker = this.network.CoinTicker,
+                Testnet = this.network.IsTest(),
+                MinTxFee = this.network.MinTxFee,
+                MinTxRelayFee = this.network.MinRelayTxFee,
+                Features = this.fullNode.Services.Features.Select(x => new StringItem { NamedItem = $"{x.GetType()}, v.{x.GetType().Assembly.GetShortVersionString()}" }).ToArray(),
+                WalletPath = new Uri(this.nodeSettings.DataFolder.WalletPath).AbsolutePath,
+                WalletFiles = Directory.EnumerateFiles(this.nodeSettings.DataFolder.WalletPath, $"*{X1WalletFile.FileExtension}", SearchOption.TopDirectoryOnly)
+                    .Select(x => new StringItem { NamedItem = Path.GetFileName(x) }).ToArray()
+            };
+        }
+
+
+        public WalletInfo GetWalletInfo()
+        {
+            var syncingInfo = new WalletInfo
+            {
+                ConsensusTipHeight = this.chainState.ConsensusTip.Height,
+                ConsensusTipHash = this.chainState.ConsensusTip.HashBlock,
+                ConsensusTipAge = (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - this.chainState.ConsensusTip.Header.Time),
+                MaxTipAge = this.network.MaxTipAge,
+                AssemblyName = typeof(WalletController).Assembly.GetName().Name,
+                AssemblyVersion = typeof(WalletController).Assembly.GetShortVersionString(),
+                IsAtBestChainTip = this.chainState.IsAtBestChainTip
+            };
+
+            if (this.chainState.BlockStoreTip != null)
+            {
+                syncingInfo.BlockStoreHeight = this.chainState.BlockStoreTip.Height;
+                syncingInfo.BlockStoreHash = this.chainState.BlockStoreTip.HashBlock;
+            }
+
+            syncingInfo.ConnectionInfo = GetConnections();
+
+            if (this.walletName != null)
+            {
+                syncingInfo.WalletDetails = GetWalletDetails();
+            }
+
+            return syncingInfo;
+        }
+
+        ConnectionInfo GetConnections()
+        {
+            const string notAvailable = "n/a";
+            var info = new ConnectionInfo { Peers = new List<PeerInfo>() };
+            info.BestPeerHeight = 0;
+
+            foreach (var p in this.connectionManager.ConnectedPeers)
+            {
+                var behavior = p.Behavior<ConsensusManagerBehavior>();
+                var peer = new PeerInfo
+                {
+                    Version = p.PeerVersion != null ? p.PeerVersion.UserAgent : notAvailable,
+                    RemoteSocketEndpoint = p.RemoteSocketEndpoint != null ? p.RemoteSocketEndpoint.ToString() : notAvailable,
+                    BestReceivedTipHeight = behavior != null && behavior.BestReceivedTip != null ? behavior.BestReceivedTip.Height : 0,
+                    BestReceivedTipHash = behavior != null && behavior.BestReceivedTip != null ? behavior.BestReceivedTip.HashBlock : null,
+                    IsInbound = p.Inbound
+                };
+
+                if (peer.BestReceivedTipHeight > info.BestPeerHeight)
+                {
+                    info.BestPeerHeight = peer.BestReceivedTipHeight;
+                    info.BestPeerHash = peer.BestReceivedTipHash;
+                }
+                if (peer.IsInbound)
+                    info.InBound++;
+                else
+                    info.OutBound++;
+                info.Peers.Add(peer);
+            }
+            return info;
+        }
+
+        WalletDetails GetWalletDetails()
+        {
+            using var context = GetWalletContext();
+            return context.WalletManager.GetWalletDetails();
+        }
+
     }
 }

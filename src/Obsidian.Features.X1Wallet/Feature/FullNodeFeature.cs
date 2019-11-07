@@ -1,11 +1,7 @@
 ﻿using System;
 using Microsoft.Extensions.DependencyInjection;
-using NBitcoin.Policy;
-using Obsidian.Features.X1Wallet.Staking;
-using Obsidian.Features.X1Wallet.Transactions;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration.Logging;
-using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Features.BlockStore;
 using Stratis.Bitcoin.Features.ColdStaking;
 using Stratis.Bitcoin.Features.MemoryPool;
@@ -14,7 +10,6 @@ using Stratis.Bitcoin.Features.Miner.Interfaces;
 using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Broadcasting;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
-using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Mining;
 
 namespace Obsidian.Features.X1Wallet.Feature
@@ -44,22 +39,16 @@ namespace Obsidian.Features.X1Wallet.Feature
                     .FeatureServices(services =>
                     {
                         services.AddSingleton<WalletManagerFactory>();
-                        services.AddSingleton<StakingCore>();
                         services.AddSingleton<BlockDefinition, PowBlockDefinition>();
                         services.AddSingleton<BlockDefinition, PosBlockDefinition>();
                         services.AddSingleton<BlockDefinition, PosPowBlockDefinition>();
                         services.AddSingleton<IBlockProvider, BlockProvider>();
-                        services.AddSingleton<MinerSettings>();
                         services.AddSingleton<IPowMining, PowMining>();
-                        services.AddSingleton<IWalletTransactionHandler, TransactionHandler>();
-                        services.AddSingleton<IWalletFeePolicy, WalletFeePolicy>();
                         services.AddSingleton<WalletSettings>();
                         services.AddTransient<WalletController>();
                         services.AddSingleton<IBroadcasterManager, FullNodeBroadcasterManager>();
                         services.AddSingleton<BroadcasterBehavior>();
-                        services.AddSingleton<IScriptAddressReader>(new ScriptAddressReader());
-                        services.AddSingleton<StandardTransactionPolicy>();
-                        services.AddSingleton<IAddressBookManager, AddressBookManager>();
+                        services.AddSingleton<MinerSettings>();
                     });
             });
 

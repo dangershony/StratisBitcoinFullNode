@@ -8,7 +8,7 @@ namespace Obsidian.Features.X1Wallet.Models.Wallet
     {
         public const string FileExtension = ".x1wallet.metadata.json";
 
-        public int MetadataVersion { get; set; }
+        public string X1WalletAssemblyVersion { get; set; }
 
         /// <summary>
         /// The WalletGuid correlates the X1WalletFile and the X1WalletMetadataFile.
@@ -30,6 +30,8 @@ namespace Obsidian.Features.X1Wallet.Models.Wallet
         public int CheckpointHeight { get; set; }
 
         public Dictionary<int, BlockMetadata> Blocks { get; set; }
-        
+
+        public MemoryPoolMetadata MemoryPool { get; set; }
+
     }
 }

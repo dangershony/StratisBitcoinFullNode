@@ -22,7 +22,7 @@ namespace Obsidian.Networks.ObsidianX
             this.RootFolderName = "obsidianx";
             this.DefaultConfigFilename = "obsidianx.conf";
 
-            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX3"), 0); 
+            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX3"), 0);
             this.DefaultPort = 46660;
             this.DefaultRPCPort = 46661;
             this.DefaultAPIPort = 47221;
@@ -91,7 +91,7 @@ namespace Obsidian.Networks.ObsidianX
                 maxMoney: long.MaxValue,
                 coinbaseMaturity: 50,
                 premineHeight: 2,
-                premineReward: Money.Coins(110000000), 
+                premineReward: Money.Coins(110000000),
                 proofOfWorkReward: Money.Coins(5),
                 powTargetTimespan: TimeSpan.FromSeconds(14 * 24 * 60 * 60), // two weeks
                 powTargetSpacing: TimeSpan.FromSeconds(10 * 60),
@@ -104,7 +104,7 @@ namespace Obsidian.Networks.ObsidianX
                 lastPowBlock: 5000,
                 proofOfStakeLimit: new BigInteger(uint256.Parse("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
                 proofOfStakeLimitV2: new BigInteger(uint256.Parse("000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffff").ToBytes(false)),
-                proofOfStakeReward: Money.Coins(20) 
+                proofOfStakeReward: Money.Coins(20)
                 );
 
             this.Consensus.PosEmptyCoinbase = false;
@@ -208,8 +208,8 @@ namespace Obsidian.Networks.ObsidianX
                 .Register<LoadCoinviewRule>()
                 .Register<TransactionDuplicationActivationRule>()
                 .Register<ObsidianXPosCoinviewRule>() // implements BIP68, MaxSigOps and BlockReward calculation
-                                             // Place the PosColdStakingRule after the PosCoinviewRule to ensure that all input scripts have been evaluated
-                                             // and that the "IsColdCoinStake" flag would have been set by the OP_CHECKCOLDSTAKEVERIFY opcode if applicable.
+                                                      // Place the PosColdStakingRule after the PosCoinviewRule to ensure that all input scripts have been evaluated
+                                                      // and that the "IsColdCoinStake" flag would have been set by the OP_CHECKCOLDSTAKEVERIFY opcode if applicable.
                 .Register<PosColdStakingRule>()
                 .Register<SaveCoinviewRule>();
         }

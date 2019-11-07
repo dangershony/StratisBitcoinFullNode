@@ -21,7 +21,7 @@ namespace Obsidian.Features.X1Wallet.Models.Wallet
         /// </summary>
         public string Address { get; set; }
 
-       
+       public AddressType AddressType { get; set; }
 
 
 

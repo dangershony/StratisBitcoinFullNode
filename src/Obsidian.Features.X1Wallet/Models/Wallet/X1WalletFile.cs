@@ -6,6 +6,7 @@ namespace Obsidian.Features.X1Wallet.Models.Wallet
     public class X1WalletFile
     {
         public const string FileExtension = ".x1wallet.json";
+       
 
         public int Version { get; set; }
 
@@ -37,6 +38,8 @@ namespace Obsidian.Features.X1Wallet.Models.Wallet
         public int SyncFromHeight { get; set; }
 
         public byte[] PassphraseChallenge { get; set; }
+
+        public byte[] HdSeed { get; set; }
 
         /// <summary>
         /// The key is the HashHex of an address. The value contains the transaction data for that address.

@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using NBitcoin;
+using Obsidian.Features.X1Wallet.Models;
 using Obsidian.Features.X1Wallet.Models.Api;
+using Obsidian.Features.X1Wallet.Models.Api.Requests;
+using Obsidian.Features.X1Wallet.Models.Api.Responses;
 using Obsidian.Features.X1Wallet.SecureApi.Models;
 using Obsidian.Features.X1Wallet.Staking;
-using Stratis.Bitcoin.Controllers.Models;
-using Stratis.Bitcoin.Features.Wallet.Models;
+using Obsidian.Features.X1Wallet.Transactions;
 using VisualCrypt.VisualCryptLight;
 
 namespace Obsidian.Features.X1Wallet.SecureApi
@@ -36,7 +37,7 @@ namespace Obsidian.Features.X1Wallet.SecureApi
             {
                 if (IsRequestForPublicKey(request))
                     return CreatePublicKey();
-                await Task.Delay(1000);
+
                 DecryptedRequest decryptedRequest = DecryptRequest(request, this.walletController);
                 CheckPermissions(decryptedRequest, this.secureApiSettings);
 
@@ -46,113 +47,78 @@ namespace Obsidian.Features.X1Wallet.SecureApi
                     case "createWallet":
                         {
                             WalletCreateRequest walletCreateRequest = Deserialize<WalletCreateRequest>(decryptedRequest.Payload);
-                            await this.walletController.CreateKeyWalletAsync(walletCreateRequest);
+                            this.walletController.CreateWallet(walletCreateRequest);
                             return CreateOk(request);
-                        }
-                    case "getWalletFiles":
-                        {
-                            WalletFileModel walletFileModel = await this.walletController.ListWalletsFilesAsync();
-                            return CreateOk(walletFileModel, request);
                         }
                     case "loadWallet":
                         {
-                            LoadWalletResponse loadWalletResponse = await this.walletController.LoadAsync();
+                            LoadWalletResponse loadWalletResponse = this.walletController.LoadWallet();
                             return CreateOk(loadWalletResponse, request);
                         }
-                    case "generalInfo":
+                    case "daemonInfo": // one-time information about the running daemon, includes list of wallet files
                         {
-                            WalletGeneralInfoModel walletGeneralInfoModel = await this.walletController.GetGeneralInfoAsync();
-                            return CreateOk(walletGeneralInfoModel, request);
+                            DaemonInfo daemonStatus = this.walletController.GetDaemonInfo();
+                            return CreateOk(daemonStatus, request);
                         }
-                    case "nodeStatus":
+                    case "walletInfo": // does not depend on weather a wallet is loaded, but if a wallet is loaded, it includes all wallet info, including balance and staking info when enabled
                         {
-                            StatusModel nodeStatus = this.walletController.GetNodeStatus();
-                            return CreateOk(nodeStatus, request);
+                            WalletInfo walletInfo = this.walletController.GetWalletInfo();
+                            return CreateOk(walletInfo, request);
                         }
-
-                    case "balance":
+                    case "historyInfo":
                         {
-                            Balance balanceModel = await this.walletController.GetBalanceAsync(decryptedRequest.Target);
-                            return CreateOk(balanceModel, request);
-                        }
-
-                    case "history":
-                        {
-                            // Deprecated
-                            var walletHistoryRequest = Deserialize<WalletHistoryRequest>(decryptedRequest.Payload);
-                            return CreateOk(new WalletHistoryModel(), request);
-                        }
-
-                    case "stakingInfo":
-                        {
-                            GetStakingInfoModel stakingInfo = this.walletController.GetStakingInfo();
-                            return CreateOk(stakingInfo, request);
+                            var historyRequest = Deserialize<HistoryRequest>(decryptedRequest.Payload);
+                            HistoryInfo historyInfo = this.walletController.GetHistoryInfo(historyRequest);
+                            return CreateOk(historyInfo, request);
                         }
 
                     case "getReceiveAddresses":
                         {
                             // this command will only return one unused address or throw if the wallet is out of unused addresses
-                            var addressesModel = await this.walletController.GetUnusedReceiveAddresses();
+                            var addressesModel = this.walletController.GetUnusedReceiveAddresses();
                             return CreateOk(addressesModel, request);
                         }
-
                     case "estimateFee":
                         {
-                            var txFeeEstimateRequest = Deserialize<TxFeeEstimateRequest>(decryptedRequest.Payload);
-                            Money fee = await this.walletController.GetTransactionFeeEstimateAsync(txFeeEstimateRequest);
+                            var txFeeEstimateRequest = Deserialize<TransactionRequest>(decryptedRequest.Payload);
+                            long fee = this.walletController.EstimateFee(txFeeEstimateRequest);
                             return CreateOk(fee, request);
                         }
                     case "buildTransaction":
                         {
-                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
-                            WalletBuildTransactionModel walletBuildTransactionModel = await this.walletController.BuildTransactionAsync(buildTransactionRequest);
-                            return CreateOk(walletBuildTransactionModel, request);
+                            var buildTransactionRequest = Deserialize<TransactionRequest>(decryptedRequest.Payload);
+                            TransactionResponse transactionResponse = this.walletController.BuildTransaction(buildTransactionRequest);
+                            return CreateOk(transactionResponse, request);
                         }
 
-                    case "sendTransaction":
+                    case "repair":
                         {
-                            SendTransactionRequest sendTransactionRequest = Deserialize<SendTransactionRequest>(decryptedRequest.Payload);
-                            await this.walletController.SendTransactionAsync(sendTransactionRequest);
-                            return CreateOk(request);
-                        }
-
-                    case "buildAndSendTransaction":
-                        {
-                            var buildTransactionRequest = Deserialize<BuildTransactionRequest>(decryptedRequest.Payload);
-                            WalletBuildTransactionModel walletBuildTransactionModel = await this.walletController.BuildTransactionAsync(buildTransactionRequest);
-                            var sendTransactionRequest = new SendTransactionRequest { Hex = walletBuildTransactionModel.Hex };
-                            await this.walletController.SendTransactionAsync(sendTransactionRequest);
-                            return CreateOk(walletBuildTransactionModel, request);
-                        }
-
-                    case "syncFromDate":
-                        {
-                            var walletSyncFromDateRequest = Deserialize<WalletSyncFromDateRequest>(decryptedRequest.Payload);
-                            await this.walletController.SyncFromDate(walletSyncFromDateRequest);
+                            var walletSyncFromDateRequest = Deserialize<RepairRequest>(decryptedRequest.Payload);
+                            this.walletController.Repair(walletSyncFromDateRequest);
                             return CreateOk(request);
                         }
 
                     case "importKeys":
                         {
                             var importKeysRequest = Deserialize<ImportKeysRequest>(decryptedRequest.Payload);
-                            var importKeysResponse = await this.walletController.ImportKeysAsync(importKeysRequest);
+                            var importKeysResponse = this.walletController.ImportKeys(importKeysRequest);
                             return CreateOk(importKeysResponse, request);
                         }
                     case "exportKeys":
                         {
                             var exportKeysRequest = Deserialize<ExportKeysRequest>(decryptedRequest.Payload);
-                            var exportKeysResponse = await this.walletController.ExportKeysAsync(exportKeysRequest);
+                            var exportKeysResponse = this.walletController.ExportKeys(exportKeysRequest);
                             return CreateOk(exportKeysResponse, request);
                         }
                     case "startStaking":
                         {
                             var startStakingRequest = Deserialize<StartStakingRequest>(decryptedRequest.Payload);
-                            await this.walletController.StartStaking(startStakingRequest);
+                            this.walletController.StartStaking(startStakingRequest);
                             return CreateOk(request);
                         }
                     case "stopStaking":
                         {
-                            await this.walletController.StopStaking();
+                            this.walletController.StopStaking();
                             return CreateOk(request);
                         }
                     default:

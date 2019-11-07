@@ -1,19 +1,10 @@
 ﻿using System;
-using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
-using NBitcoin;
-using NBitcoin.Protocol;
-using Obsidian.Features.X1Wallet;
 using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.SecureApi;
-using Obsidian.Networks.ObsidianX;
 using Obsidian.x1d.Api;
-using Obsidian.x1d.Cli;
-using Obsidian.x1d.Temp;
-using Stratis.Bitcoin;
+using Obsidian.x1d.Util;
 using Stratis.Bitcoin.Builder;
-using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.BlockStore;
 using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.MemoryPool;
@@ -25,27 +16,14 @@ namespace Obsidian.x1d
     {
         public static void Main(string[] args)
         {
-            if (args != null && args.Length > 0 && args[0] == "cli")
-            {
-                var argList = args.ToList();
-                argList.RemoveAt(0);
-                CliTool.CliMain(argList.ToArray());
-            }
-            else
-            {
-                MainAsync(args).Wait();
-            }
+            MainAsync(args).Wait();
         }
 
         static async Task MainAsync(string[] args)
         {
             try
             {
-                var nodeSettings = new NodeSettings(networksSelector: ObsidianXNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}", args: args)
-                {
-                    MinProtocolVersion = ProtocolVersion.PROVEN_HEADER_VERSION
-                };
+                var nodeSettings = Init.GetNodeSettings(args);
 
                 var builder = new FullNodeBuilder()
                             .UseNodeSettings(nodeSettings)
@@ -58,37 +36,16 @@ namespace Obsidian.x1d
 
                 var node = builder.Build();
 
-//#if DEBUG
-                _ = Task.Run(async () =>
-                  {
-                      await Task.Delay(7500);
-                 TestBench.RunTestCodeAsync((FullNode)node);  // start mining to the wallet
-                  });
-//#endif
+                Init.PrintWelcomeMessage(nodeSettings, node);
+
+                Init.RunIfDebugModeDelayed(node);
 
                 await node.RunAsync();
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"An error occured in {GetName()}: {ex.Message}");
+                Console.WriteLine($"An error occured in {Init.GetName()}: {e.Message}");
             }
         }
-
-        static string GetName()
-        {
-            var assembly = Assembly.GetExecutingAssembly().GetName();
-            var name = assembly.Name;
-            var version = assembly.Version;
-            var compilation = IsDebug ? " (Debug)" : "";
-            return $"{name} {version}{compilation}";
-
-        }
-
-#if DEBUG
-        const bool IsDebug = true;
-#else
-		public const bool IsDebug = false;
-#endif
-
     }
 }

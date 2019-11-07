@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using NBitcoin;
 using NBitcoin.Protocol;
 using Obsidian.Features.X1Wallet;
+using Obsidian.Features.X1Wallet.Feature;
 using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Networks.Obsidian;
 using Obsidian.ObsidianD.Api;
@@ -46,7 +47,7 @@ namespace Obsidian.ObsidianD
         /// <returns><placeholder>A <see cref="Task"/> representing the asynchronous operation.</placeholder></returns>
         static async Task MainAsync(string[] args)
         {
-            PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
+            //TODO: PosBlockHeader.CustomPoWHash = ObsidianHash.GetObsidianPoWHash;
 
             try
             {
