@@ -29,7 +29,7 @@ namespace Obsidian.Features.X1Wallet.Staking
         public string LastException;
 
         // Values in one slot
-        public long WaitMs;
+        public long OutCompeted;
         public long ComputeTimeMs;
         public int KernelsFound;
        

@@ -102,10 +102,32 @@ namespace Obsidian.Features.X1Wallet.Staking
                 }
                 catch (Exception e)
                 {
+                    HandleError(e);
+                }
+            }
+
+            void HandleError(Exception e)
+            {
+                if (e is ConsensusErrorException ce)
+                {
+                    if (ce.ConsensusError == ConsensusErrors.BlockTimestampTooEarly)
+                    {
+                        this.Status.OutCompeted += 1;
+                    }
+                    else
+                    {
+                        this.Status.LastException = $"Consensus Error: {ce.ConsensusError.Message}";
+                        this.Status.Exceptions++;
+                        this.logger.LogWarning(this.Status.LastException);
+                    }
+                }
+                else
+                {
                     this.Status.LastException = e.Message.Replace(":", "-");
                     this.Status.Exceptions++;
-                    this.logger.LogWarning(e.Message);
+                    this.logger.LogError(e.ToString());
                 }
+
             }
         }
 
