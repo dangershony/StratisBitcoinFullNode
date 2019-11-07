@@ -108,7 +108,7 @@ namespace Obsidian.Features.X1Wallet.Staking
 
             void HandleError(Exception e)
             {
-                if (e is ConsensusErrorException ce)
+                if (e is ConsensusRuleException ce)
                 {
                     if (ce.ConsensusError == ConsensusErrors.BlockTimestampTooEarly)
                     {
