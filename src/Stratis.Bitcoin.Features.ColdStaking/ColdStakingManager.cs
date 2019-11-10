@@ -292,11 +292,12 @@ namespace Stratis.Bitcoin.Features.ColdStaking
         /// <param name="amount">The amount to cold stake.</param>
         /// <param name="feeAmount">The fee to pay for the cold staking setup transaction.</param>
         /// <param name="useSegwitChangeAddress">Use a segwit style change address.</param>
+        /// <param name="payToScript">Indicate script staking (P2SH or P2WSH outputs).</param>
         /// <returns>The <see cref="Transaction"/> for setting up cold staking.</returns>
         /// <exception cref="WalletException">Thrown if any of the rules listed in the remarks section of this method are broken.</exception>
         internal Transaction GetColdStakingSetupTransaction(IWalletTransactionHandler walletTransactionHandler,
             string coldWalletAddress, string hotWalletAddress, string walletName, string walletAccount,
-            string walletPassword, Money amount, Money feeAmount, bool useSegwitChangeAddress = false)
+            string walletPassword, Money amount, Money feeAmount, bool useSegwitChangeAddress = false, bool payToScript = false)
         {
             Guard.NotNull(walletTransactionHandler, nameof(walletTransactionHandler));
             Guard.NotEmpty(coldWalletAddress, nameof(coldWalletAddress));
@@ -341,12 +342,26 @@ namespace Stratis.Bitcoin.Features.ColdStaking
                 KeyId hotPubKeyHash = new BitcoinWitPubKeyAddress(hotWalletAddress, wallet.Network).Hash.AsKeyId();
                 KeyId coldPubKeyHash = new BitcoinWitPubKeyAddress(coldWalletAddress, wallet.Network).Hash.AsKeyId();
                 destination = ColdStakingScriptTemplate.Instance.GenerateScriptPubKey(hotPubKeyHash, coldPubKeyHash);
+
+                if(payToScript)
+                {
+                    HdAddress address = coldAddress ?? hotAddress;
+                    address.RedeemScript = destination;
+                    destination = destination.WitHash.ScriptPubKey;
+                }
             }
             else
             {
                 KeyId hotPubKeyHash = new BitcoinPubKeyAddress(hotWalletAddress, wallet.Network).Hash;
                 KeyId coldPubKeyHash = new BitcoinPubKeyAddress(coldWalletAddress, wallet.Network).Hash;
                 destination = ColdStakingScriptTemplate.Instance.GenerateScriptPubKey(hotPubKeyHash, coldPubKeyHash);
+
+                if (payToScript)
+                {
+                    HdAddress address = coldAddress ?? hotAddress;
+                    address.RedeemScript = destination;
+                    destination = destination.Hash.ScriptPubKey;
+                }
             }
 
             // Only normal accounts should be allowed.
