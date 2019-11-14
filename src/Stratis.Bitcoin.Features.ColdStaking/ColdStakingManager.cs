@@ -335,12 +335,14 @@ namespace Stratis.Bitcoin.Features.ColdStaking
             }
 
             Script destination = null;
+            KeyId hotPubKeyHash = null;
+            KeyId coldPubKeyHash = null;
 
             // Check if this is a segwit address
             if (coldAddress?.Bech32Address == coldWalletAddress || hotAddress?.Bech32Address == hotWalletAddress)
             {
-                KeyId hotPubKeyHash = new BitcoinWitPubKeyAddress(hotWalletAddress, wallet.Network).Hash.AsKeyId();
-                KeyId coldPubKeyHash = new BitcoinWitPubKeyAddress(coldWalletAddress, wallet.Network).Hash.AsKeyId();
+                hotPubKeyHash = new BitcoinWitPubKeyAddress(hotWalletAddress, wallet.Network).Hash.AsKeyId();
+                coldPubKeyHash = new BitcoinWitPubKeyAddress(coldWalletAddress, wallet.Network).Hash.AsKeyId();
                 destination = ColdStakingScriptTemplate.Instance.GenerateScriptPubKey(hotPubKeyHash, coldPubKeyHash);
 
                 if(payToScript)
@@ -352,8 +354,8 @@ namespace Stratis.Bitcoin.Features.ColdStaking
             }
             else
             {
-                KeyId hotPubKeyHash = new BitcoinPubKeyAddress(hotWalletAddress, wallet.Network).Hash;
-                KeyId coldPubKeyHash = new BitcoinPubKeyAddress(coldWalletAddress, wallet.Network).Hash;
+                hotPubKeyHash = new BitcoinPubKeyAddress(hotWalletAddress, wallet.Network).Hash;
+                coldPubKeyHash = new BitcoinPubKeyAddress(coldWalletAddress, wallet.Network).Hash;
                 destination = ColdStakingScriptTemplate.Instance.GenerateScriptPubKey(hotPubKeyHash, coldPubKeyHash);
 
                 if (payToScript)
@@ -381,6 +383,30 @@ namespace Stratis.Bitcoin.Features.ColdStaking
                 WalletPassword = walletPassword,
                 Recipients = new List<Recipient>() { new Recipient { Amount = amount, ScriptPubKey = destination } }
             };
+
+            if (payToScript)
+            {
+                // In the case of P2SH and P2WSH, to avoid the possibility of lose of funds
+                // we add an opreturn with the hot and cold key hashes to the setup transaction
+                // this will allow a user to recreate the redeem script of the output in case they lose 
+                // access to one of the keys. 
+                // The special marker will help a wallet that is tracking cold staking accounts to monitor 
+                // the hot and cold keys, if a special marker is found then the keys are in the opreturn are checked 
+                // against the current wallet, if found and validated the wallet will track that ScriptPubKey
+
+                var opreturnKeys = new List<byte>();
+                opreturnKeys.AddRange(hotPubKeyHash.ToBytes());
+                opreturnKeys.AddRange(coldPubKeyHash.ToBytes());
+              
+                context.OpReturnRawData = opreturnKeys.ToArray();
+                context.OpReturnAmount = Money.Satoshis(1); // mandatory fee must be paid.
+                 
+                // The P2SH and P2WSH hide the cold stake keys in the script hash so the wallet cannot track 
+                // the ouputs based on the derived keys when the trx is subbmited to the network.
+                // So we add the output script manually.
+
+                //this.scriptToAddressLookup[destination] = coldAddress ?? hotAddress;
+            }
 
             // Register the cold staking builder extension with the transaction builder.
             context.TransactionBuilder.Extensions.Add(new ColdStakingBuilderExtension(false));
@@ -491,9 +517,21 @@ namespace Stratis.Bitcoin.Features.ColdStaking
             }
 
             // Add keys for signing inputs. This takes time so only add keys for distinct addresses.
-            foreach (HdAddress address in transaction.Inputs.Select(i => mapOutPointToUnspentOutput[i.PrevOut].Address).Distinct())
+            foreach (var item in transaction.Inputs.Select(i => mapOutPointToUnspentOutput[i.PrevOut]).Distinct())
             {
-                context.TransactionBuilder.AddKeys(wallet.GetExtendedPrivateKeyForAddress(walletPassword, address));
+                Script prevscript = item.Transaction.ScriptPubKey;
+
+                if (prevscript.IsScriptType(ScriptType.P2SH) || prevscript.IsScriptType(ScriptType.P2WSH))
+                {
+                    if (item.Address.RedeemScript == null)
+                        throw new WalletException("Missing redeem script");
+
+                    // Provide the redeem script to the builder
+                    var scriptCoin = ScriptCoin.Create(this.network, transaction.Inputs[0].PrevOut, new TxOut(item.Transaction.Amount, prevscript), item.Address.RedeemScript);
+                    context.TransactionBuilder.AddCoins(scriptCoin);
+                }
+
+                context.TransactionBuilder.AddKeys(wallet.GetExtendedPrivateKeyForAddress(walletPassword, item.Address));
             }
 
             // Sign the transaction.
@@ -537,11 +575,85 @@ namespace Stratis.Bitcoin.Features.ColdStaking
             {
                 base.TransactionFoundInternal(hotPubKeyHash.ScriptPubKey, a => a.Index == HotWalletAccountIndex);
                 base.TransactionFoundInternal(coldPubKeyHash.ScriptPubKey, a => a.Index == ColdWalletAccountIndex);
+
+                return;
             }
-            else
+            else if (script.IsScriptType(ScriptType.P2SH) || script.IsScriptType(ScriptType.P2WSH))
             {
-                base.TransactionFoundInternal(script, accountFilter);
+                if (this.scriptToAddressLookup.TryGetValue(script, out HdAddress address))
+                {
+                    if (ColdStakingScriptTemplate.Instance.ExtractScriptPubKeyParameters(address.RedeemScript, out hotPubKeyHash, out coldPubKeyHash))
+                    {
+                        base.TransactionFoundInternal(hotPubKeyHash.ScriptPubKey, a => a.Index == HotWalletAccountIndex);
+                        base.TransactionFoundInternal(coldPubKeyHash.ScriptPubKey, a => a.Index == ColdWalletAccountIndex);
+
+                        return;
+                    }
+                }
             }
+
+            base.TransactionFoundInternal(script, accountFilter);
+        }
+
+        /// <summary>
+        /// The purpose of this method is to try to identify the P2SH and P2WSH that are coldstake outputs for this wallet
+        /// We look for an opreturn script that is created when seting up a P2SH and P2WSH cold stake trx
+        /// if we find any then try to find the keys and track the script before calling in to the main wallet.  
+        /// </summary>
+        /// <inheritdoc/>
+        public override bool ProcessTransaction(Transaction transaction, int? blockHeight = null, Block block = null, bool isPropagated = true)
+        {
+            foreach (TxOut utxo in transaction.Outputs)
+            {
+                Script script = utxo.ScriptPubKey;
+
+                if (script.IsUnspendable)
+                {
+                    var data = TxNullDataTemplate.Instance.ExtractScriptPubKeyParameters(script);
+                    if (data.Length == 1)
+                    {
+                        if (data[0].Length == 40)
+                        {
+                            HdAddress address = null;
+                            
+                            Span<byte> span = data[0].AsSpan();
+                            var hotPubKey = new KeyId(span.Slice(0, 20).ToArray());
+                            var coldPubKey = new KeyId(span.Slice(20, 20).ToArray());
+
+                            if (this.scriptToAddressLookup.TryGetValue(hotPubKey.ScriptPubKey, out address)
+                                || this.scriptToAddressLookup.TryGetValue(coldPubKey.ScriptPubKey, out address))
+                            {
+                                Script destination = ColdStakingScriptTemplate.Instance.GenerateScriptPubKey(hotPubKey, coldPubKey);
+                                address.RedeemScript = destination;
+
+                                // Find the type of script for the opreturn (P2SH or P2WSH)
+                                foreach (TxOut utxoInner in transaction.Outputs)
+                                {
+                                    if(utxoInner.ScriptPubKey == destination.Hash.ScriptPubKey)
+                                    {
+                                        if (!this.scriptToAddressLookup.TryGetValue(destination.Hash.ScriptPubKey,out HdAddress _))
+                                            this.scriptToAddressLookup[destination.Hash.ScriptPubKey] = address;
+                                        
+                                        break;
+                                    }
+
+                                    if (utxoInner.ScriptPubKey == destination.WitHash.ScriptPubKey)
+                                    {
+                                        if (!this.scriptToAddressLookup.TryGetValue(destination.WitHash.ScriptPubKey, out HdAddress _))
+                                            this.scriptToAddressLookup[destination.WitHash.ScriptPubKey] = address;
+
+                                        break;
+                                    }
+                                }
+
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return base.ProcessTransaction(transaction, blockHeight, block, isPropagated);
         }
     }
 }
