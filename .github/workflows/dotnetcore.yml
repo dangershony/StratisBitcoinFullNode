@@ -1,10 +1,9 @@
 name: .NET Core
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -12,6 +11,8 @@ jobs:
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 2.2.108
+        dotnet-version: 3.0
     - name: Build with dotnet
-      run: dotnet build --configuration Release
+      run: | 
+        dotnet build **/Stratis.Bitcoin.FullNode.sln --configuration Release 
+        dotnet test **/Stratis.Bitcoin.FullNode.sln
