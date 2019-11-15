@@ -399,13 +399,11 @@ namespace Stratis.Bitcoin.Features.ColdStaking
                 opreturnKeys.AddRange(coldPubKeyHash.ToBytes());
               
                 context.OpReturnRawData = opreturnKeys.ToArray();
-                context.OpReturnAmount = Money.Satoshis(1); // mandatory fee must be paid.
+                //context.OpReturnAmount = Money.Satoshis(1); // mandatory fee must be paid.
                  
                 // The P2SH and P2WSH hide the cold stake keys in the script hash so the wallet cannot track 
                 // the ouputs based on the derived keys when the trx is subbmited to the network.
                 // So we add the output script manually.
-
-                //this.scriptToAddressLookup[destination] = coldAddress ?? hotAddress;
             }
 
             // Register the cold staking builder extension with the transaction builder.
