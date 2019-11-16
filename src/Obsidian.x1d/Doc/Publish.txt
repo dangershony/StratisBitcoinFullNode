@@ -1,2 +1,0 @@
-﻿cd Obsidian.x1d
-dotnet publish -r win-x64 -c release /p:PublishSingleFile=true /p:Deterministic=false

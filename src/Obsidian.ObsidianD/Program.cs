@@ -4,11 +4,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using NBitcoin;
 using NBitcoin.Protocol;
-using Obsidian.Features.X1Wallet;
-using Obsidian.Features.X1Wallet.Feature;
-using Obsidian.Features.X1Wallet.SecureApi;
 using Obsidian.Networks.Obsidian;
-using Obsidian.ObsidianD.Api;
 using Stratis.Bitcoin.Builder;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Features.Api;
@@ -52,7 +48,7 @@ namespace Obsidian.ObsidianD
             try
             {
                 var nodeSettings = new NodeSettings(networksSelector: ObsidianNetworksSelector.Obsidian,
-                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, agent: $"{GetName()}, Stratis ", args: args)
+                    protocolVersion: ProtocolVersion.PROVEN_HEADER_VERSION, args: args)
                 {
                     MinProtocolVersion = ProtocolVersion.ALT_PROTOCOL_VERSION
                 };
@@ -64,23 +60,11 @@ namespace Obsidian.ObsidianD
                     .UseNodeSettings(nodeSettings)
                     .UseBlockStore()
                     .UsePosConsensus()
-                    .UseMempool();
-
-
-                if (useHDWallet)
-                {
-                    builder
-                        .AddPowPosMining()
-                        .AddRPC()
-                        .UseColdStakingWallet()
-                        .UseApi();
-                }
-                else
-                {
-                    builder.UseX1Wallet()
-                        .UseX1WalletApi()
-                        .UseSecureApiHost();
-                }
+                    .UseMempool()
+                    .AddPowPosMining()
+                    .AddRPC()
+                    .UseColdStakingWallet()
+                    .UseApi();
 
                 var node = builder.Build();
 
@@ -90,15 +74,6 @@ namespace Obsidian.ObsidianD
             {
                 Console.WriteLine(@"There was a problem initializing the node. Details: '{0}'", ex.Message);
             }
-        }
-
-        static string GetName()
-        {
-#if DEBUG
-            return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (D)";
-#else
-			return $"ObsidianD {Assembly.GetEntryAssembly()?.GetName().Version} (R)";
-#endif
         }
     }
 }
