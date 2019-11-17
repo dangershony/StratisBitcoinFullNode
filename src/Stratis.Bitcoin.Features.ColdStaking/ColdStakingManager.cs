@@ -655,5 +655,22 @@ namespace Stratis.Bitcoin.Features.ColdStaking
 
             return base.ProcessTransaction(transaction, blockHeight, block, isPropagated);
         }
+
+        protected override void AddAddressToIndex(HdAddress address)
+        {
+            base.AddAddressToIndex(address);
+
+            if(address.RedeemScript != null)
+            {
+                // The redeem script has no indication on the script type (P2SH or P2WSH), 
+                // so we track both, add both to the indexer then.
+
+                if (!this.scriptToAddressLookup.TryGetValue(address.RedeemScript.Hash.ScriptPubKey, out HdAddress _))
+                    this.scriptToAddressLookup[address.RedeemScript.Hash.ScriptPubKey] = address;
+
+                if (!this.scriptToAddressLookup.TryGetValue(address.RedeemScript.WitHash.ScriptPubKey, out HdAddress _))
+                    this.scriptToAddressLookup[address.RedeemScript.WitHash.ScriptPubKey] = address;
+            }
+        }
     }
 }
