@@ -602,7 +602,7 @@ namespace Stratis.Bitcoin.Features.Wallet
         }
 
         /// <inheritdoc />
-        public IEnumerable<HdAddress> GetUnusedAddresses(WalletAccountReference accountReference, int count, bool isChange = false)
+        public IEnumerable<HdAddress> GetUnusedAddresses(WalletAccountReference accountReference, int count, bool isChange = false, bool alwaysnew = false)
         {
             Guard.NotNull(accountReference, nameof(accountReference));
             Guard.Assert(count > 0);
@@ -611,6 +611,8 @@ namespace Stratis.Bitcoin.Features.Wallet
 
             bool generated = false;
             IEnumerable<HdAddress> addresses;
+            
+            var newAddresses = new List<HdAddress>();
 
             lock (this.lockObject)
             {
@@ -623,8 +625,8 @@ namespace Stratis.Bitcoin.Features.Wallet
                     account.InternalAddresses.Where(acc => !acc.Transactions.Any()).ToList() :
                     account.ExternalAddresses.Where(acc => !acc.Transactions.Any()).ToList();
 
-                int diff = unusedAddresses.Count - count;
-                var newAddresses = new List<HdAddress>();
+                int diff = alwaysnew ? -1 : unusedAddresses.Count - count;
+                
                 if (diff < 0)
                 {
                     newAddresses = account.CreateAddresses(this.network, Math.Abs(diff), isChange: isChange).ToList();
@@ -639,6 +641,8 @@ namespace Stratis.Bitcoin.Features.Wallet
             {
                 // Save the changes to the file.
                 this.SaveWallet(wallet);
+
+                return alwaysnew ? newAddresses : addresses;
             }
 
             return addresses;
