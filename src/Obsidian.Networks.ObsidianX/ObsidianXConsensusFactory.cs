@@ -36,7 +36,7 @@ namespace Obsidian.Networks.ObsidianX
 
             Transaction txNew = CreateTransaction();
             txNew.Version = 1;
-            txNew.Time = genesisTime;
+            ((PosTransaction)txNew).Time = genesisTime;
             txNew.AddInput(new TxIn()
             {
                 ScriptSig = new Script(Op.GetPushOp(0), new Op()
