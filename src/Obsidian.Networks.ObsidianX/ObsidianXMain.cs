@@ -22,7 +22,7 @@ namespace Obsidian.Networks.ObsidianX
             this.RootFolderName = "obsidianx";
             this.DefaultConfigFilename = "obsidianx.conf";
 
-            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX3"), 0);
+            this.Magic = BitConverter.ToUInt32(Encoding.ASCII.GetBytes("ODX4"), 0); // PoS v4 test network
             this.DefaultPort = 46660;
             this.DefaultRPCPort = 46661;
             this.DefaultAPIPort = 47221;
@@ -32,15 +32,15 @@ namespace Obsidian.Networks.ObsidianX
 
             this.DefaultBanTimeSeconds = 16000; // 500 (MaxReorg) * 64 (TargetSpacing) / 2 = 4 hours, 26 minutes and 40 seconds
 
-            this.MaxTipAge = 2 * 60 * 60; // (120 minutes)
-            this.MinTxFee = 100;
-            this.FallbackFee = 500;
-            this.MinRelayTxFee = 100;
+            this.MaxTipAge = 2 * 60 * 60 /* for test net only -> */ * 1000; // (120 minutes)
+            this.MinTxFee = Money.Coins(0.001m).Satoshi;
+            this.FallbackFee = this.MinTxFee;
+            this.MinRelayTxFee = this.MinTxFee;
 
 
             var consensusFactory = new ObsidianXConsensusFactory();
-            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 10, 15, 17, 28, 00, DateTimeKind.Utc));
-            this.GenesisNonce = 18730184;
+            this.GenesisTime = Utils.DateTimeToUnixTime(new DateTime(2019, 11, 7, 21, 54, 00, DateTimeKind.Utc));
+            this.GenesisNonce = 4514328;
             this.GenesisBits = new Target(new uint256("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
             this.GenesisVersion = 1;
             this.GenesisReward = Money.Zero;
@@ -50,7 +50,7 @@ namespace Obsidian.Networks.ObsidianX
             var consensusOptions = new ObsidianXPoSConsensusOptions(
                 maxBlockBaseSize: 1_000_000,
                 maxStandardVersion: 2,
-                maxStandardTxWeight: 100_000,
+                maxStandardTxWeight: 500_000,
                 maxBlockSigopsCost: 20_000,
                 maxStandardTxSigopsCost: 20_000 / 5,
                 witnessScaleFactor: 4
@@ -183,7 +183,7 @@ namespace Obsidian.Networks.ObsidianX
 
                 // rules to prevent legacy script types and force segwit
                 .Register<ObsidianXPreventLegacyRule>()
-                //.Register<ObsidianXRequireNativeSegWitRule>()
+                .Register<ObsidianXEmptyScriptSigRule>()
                 .Register<ObsidianXOutputNotWhitelistedRule>()
 
                 // rules that are inside the method ContextualCheckBlock

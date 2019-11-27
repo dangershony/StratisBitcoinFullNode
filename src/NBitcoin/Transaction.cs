@@ -1441,7 +1441,7 @@ namespace NBitcoin
 
         public virtual bool IsProtocolTransaction()
         {
-            return this.IsCoinBase;
+            return this.IsCoinBase || this.IsCoinStake; // this is now a POS specific check (it will fail for a BTC network)
         }
 
         public static uint CURRENT_VERSION = 2;
