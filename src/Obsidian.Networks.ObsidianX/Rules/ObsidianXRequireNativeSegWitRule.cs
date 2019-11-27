@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Consensus;
 using Stratis.Bitcoin.Consensus.Rules;
-using Stratis.Bitcoin.Features.ColdStaking;
 
 namespace Obsidian.Networks.ObsidianX.Rules
 {
@@ -12,8 +11,6 @@ namespace Obsidian.Networks.ObsidianX.Rules
     /// </summary>
     public class ObsidianXRequireNativeSegWitRule : PartialValidationConsensusRule
     {
-        internal static Network Network; // hack
-
         public override Task RunAsync(RuleContext context)
         {
             var block = context.ValidationContext.BlockToValidate;
@@ -37,11 +34,6 @@ namespace Obsidian.Networks.ObsidianX.Rules
                         // so let's whitelist these.
                         if (txin.ScriptSig.Length == 0)
                             continue;
-
-                        if (ColdStakingScriptTemplate.Instance.CheckScriptSig(Network, txin.ScriptSig,
-                            tx.Outputs[0].ScriptPubKey))
-                            continue;
-
                         // P2WPKH nested in BIP16 P2SH, P2WSH nested in BIP16 P2SH, P2SH, P2PKH
                         // do not have empty ScriptSig, throw!
                         // This also means that only native SegWit outputs are spendable, because spending other outputs would require a ScriptSig.

@@ -212,8 +212,6 @@ namespace Obsidian.Networks.ObsidianX
                                                       // and that the "IsColdCoinStake" flag would have been set by the OP_CHECKCOLDSTAKEVERIFY opcode if applicable.
                 .Register<PosColdStakingRule>()
                 .Register<SaveCoinviewRule>();
-
-            ObsidianXRequireNativeSegWitRule.Network = this;
         }
 
         protected void RegisterMempoolRules(IConsensus consensus)
