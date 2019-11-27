@@ -1,7 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 using NBitcoin;
+using NBitcoin.DataEncoders;
 
 namespace Obsidian.Networks.ObsidianX
 {
@@ -27,16 +29,58 @@ namespace Obsidian.Networks.ObsidianX
             return provenBlockHeader;
         }
 
+        public override Transaction CreateTransaction()
+        {
+            return new Transaction();
+        }
+
+        public override Transaction CreateTransaction(byte[] bytes)
+        {
+            if (bytes == null)
+                throw new ArgumentNullException(nameof(bytes));
+
+            var transaction = new Transaction();
+            transaction.ReadWrite(bytes, this);
+            return transaction;
+        }
+
+        public override Transaction CreateTransaction(string hex)
+        {
+            if (hex == null)
+                throw new ArgumentNullException(nameof(hex));
+
+            return CreateTransaction(Encoders.Hex.DecodeData(hex));
+        }
+
+        public override Block CreateBlock()
+        {
+            return base.CreateBlock(); // TODO: override this as well?
+        }
+
+        public override T TryCreateNew<T>()
+        {
+            return base.TryCreateNew<T>(); // TODO: override this as well?
+        }
+
+        public override ProtocolCapabilities GetProtocolCapabilities(uint protocolVersion)
+        {
+            return base.GetProtocolCapabilities(protocolVersion); // TODO: override this as well?
+        }
+
+
         public Block CreateObsidianGenesisBlock(uint genesisTime, uint genesisNonce, uint genesisBits, int genesisVersion, Money genesisReward, bool? mine = false)
         {
             if (mine == true)
                 MineGenesisBlock(genesisTime, genesisBits, genesisVersion, genesisReward);
 
-            string pszTimestamp = "这是黑曜石和危险的古海神";  // "This is Obsidian" (Chinese)
+            string pszTimestamp = "This is Obsidian!";
 
             Transaction txNew = CreateTransaction();
+            Debug.Assert(txNew.GetType() == typeof(Transaction));
+
             txNew.Version = 1;
-            txNew.Time = genesisTime;
+            //if(txNew is PosTransaction posTransaction)
+            //    posTransaction.Time = genesisTime;
             txNew.AddInput(new TxIn()
             {
                 ScriptSig = new Script(Op.GetPushOp(0), new Op()
@@ -59,8 +103,8 @@ namespace Obsidian.Networks.ObsidianX
             genesis.UpdateMerkleRoot();
 
             if (mine == false)
-                if (genesis.GetHash() != uint256.Parse("0000035b9c5c801af1bd828347d8160ed0237a56dd105967a77212f0c8e70bae") ||
-                    genesis.Header.HashMerkleRoot != uint256.Parse("b5a77bfde3295b5875560c85ea8099e365ddf64639714a7e5f61574567a6ae39"))
+                if (genesis.GetHash() != uint256.Parse("00000a6ac74dce2fee731140408b49178a96b76e21818528bf1113b18ba516f2") ||
+                    genesis.Header.HashMerkleRoot != uint256.Parse("795951e236afb8bee690c51bd6673b84ae3d462806c2d1f15d6b52e40c1f5ae7"))
                     throw new InvalidOperationException("Invalid network");
             return genesis;
         }

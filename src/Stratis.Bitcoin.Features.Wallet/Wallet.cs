@@ -745,7 +745,7 @@ namespace Stratis.Bitcoin.Features.Wallet
                 PubKey pubkey = HdOperations.GeneratePublicKey(this.ExtendedPubKey, i, isChange);
 
                 // Generate the P2PKH address corresponding to the pubkey.
-                BitcoinPubKeyAddress address = pubkey.GetAddress(network);               
+                BitcoinPubKeyAddress address = pubkey.GetAddress(network);
                 BitcoinWitPubKeyAddress witAddress = pubkey.GetSegwitAddress(network);
                 
                // Add the new address details to the list of addresses.
@@ -871,6 +871,13 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// </summary>
         [JsonProperty(PropertyName = "address")]
         public string Address { get; set; }
+
+        /// <summary>
+        /// A script that is used for P2SH and P2WSH scenarios (mostly used for staking).
+        /// </summary>
+        [JsonProperty(PropertyName = "redeemScript")]
+        [JsonConverter(typeof(ScriptJsonConverter))]
+        public Script RedeemScript { get; set; }
 
         /// <summary>
         /// A path to the address as defined in BIP44.

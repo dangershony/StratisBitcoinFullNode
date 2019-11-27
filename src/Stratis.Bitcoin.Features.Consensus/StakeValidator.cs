@@ -223,7 +223,7 @@ namespace Stratis.Bitcoin.Features.Consensus
                 ConsensusErrors.InvalidStakeDepth.Throw();
             }
 
-            if (!this.CheckStakeKernelHash(context, headerBits, prevBlockStake.StakeModifierV2, prevUtxo, txIn.PrevOut, transaction.Time))
+            if (!this.CheckStakeKernelHash(context, headerBits, prevBlockStake.StakeModifierV2, prevUtxo, txIn.PrevOut, context.ValidationContext.ChainedHeaderToValidate.Header.Time))
             {
                 this.logger.LogTrace("(-)[INVALID_STAKE_HASH_TARGET]");
                 ConsensusErrors.StakeHashInvalidTarget.Throw();
@@ -293,6 +293,9 @@ namespace Stratis.Bitcoin.Features.Consensus
             return this.CheckStakeKernelHash(context, headerBits, prevBlockStake.StakeModifierV2, prevUtxo, prevout, (uint)transactionTime);
         }
 
+        // ugly hack until ODN is air droped
+        bool? legacytimefield;
+
         /// <inheritdoc/>
         public bool CheckStakeKernelHash(PosRuleContext context, uint headerBits, uint256 prevStakeModifier, UnspentOutputs stakingCoins, OutPoint prevout, uint transactionTime)
         {
@@ -323,12 +326,16 @@ namespace Stratis.Bitcoin.Features.Consensus
             context.TargetProofOfStake = this.ToUInt256(weightedTarget);
             this.logger.LogDebug("POS target is '{0}', weighted target for {1} coins is '{2}'.", this.ToUInt256(target), valueIn, context.TargetProofOfStake);
 
+            if (this.legacytimefield == null)
+                this.legacytimefield = this.network.Consensus.ConsensusFactory.CreateTransaction() is IPosTransactionWithTime;
+
             // Calculate hash.
             using (var ms = new MemoryStream())
             {
                 var serializer = new BitcoinStream(ms, true);
                 serializer.ReadWrite(prevStakeModifier);
-                serializer.ReadWrite(stakingCoins.Time);
+                if (this.legacytimefield == true) // to stay compatible with legacy ODN
+                    serializer.ReadWrite(stakingCoins.Time);
                 serializer.ReadWrite(prevout.Hash);
                 serializer.ReadWrite(prevout.N);
                 serializer.ReadWrite(transactionTime);

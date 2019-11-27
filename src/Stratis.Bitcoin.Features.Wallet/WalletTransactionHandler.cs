@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.Policy;
+using Stratis.Bitcoin.Features.Wallet;
 using Stratis.Bitcoin.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Utilities;
 
@@ -22,6 +23,11 @@ namespace Stratis.Bitcoin.Features.Wallet
     /// </remarks>
     public class WalletTransactionHandler : IWalletTransactionHandler
     {
+        /// <summary>
+        /// We will assume that we're never going to have a fee over 1 STRAT.
+        /// </summary>
+        private static readonly Money PretendMaxFee = Money.Coins(1);
+
         private readonly ILogger logger;
 
         private readonly Network network;
@@ -298,6 +304,7 @@ namespace Stratis.Bitcoin.Features.Wallet
             if (balance < totalToSend)
                 throw new WalletException("Not enough funds.");
 
+            Money sum = 0;
             var coins = new List<Coin>();
 
             if (context.SelectedInputs != null && context.SelectedInputs.Any())
@@ -326,10 +333,13 @@ namespace Stratis.Bitcoin.Features.Wallet
                     UnspentOutputReference item = availableHashList[outPoint];
 
                     coins.Add(new Coin(item.Transaction.Id, (uint)item.Transaction.Index, item.Transaction.Amount, item.Transaction.ScriptPubKey));
+                    sum += item.Transaction.Amount;
                 }
             }
 
-            foreach (UnspentOutputReference item in context.UnspentOutputs)
+            foreach (UnspentOutputReference item in context.UnspentOutputs
+                .OrderByDescending(a => a.Confirmations > 0)
+                .ThenByDescending(a => a.Transaction.Amount))
             {
                 if (context.SelectedInputs?.Contains(item.ToOutPoint()) ?? false)
                     continue;
@@ -339,7 +349,14 @@ namespace Stratis.Bitcoin.Features.Wallet
                 // The primary goal is to reduce the time it takes to build a trx
                 // when the wallet is bloated with UTXOs.
 
+                // Get to our total, and then check that we're a little bit over to account for tx fees.
+                // If it gets over totalToSend but doesn't hit this break, that's fine too.
+                // The TransactionBuilder will have a go with what we give it, and throw NotEnoughFundsException accurately if it needs to.
+                if (sum > totalToSend + PretendMaxFee)
+                    break;
+
                 coins.Add(new Coin(item.Transaction.Id, (uint)item.Transaction.Index, item.Transaction.Amount, item.Transaction.ScriptPubKey));
+                sum += item.Transaction.Amount;
             }
 
             // All the UTXOs are added to the builder without filtering.
@@ -408,9 +425,11 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// <param name="context">The context associated with the current transaction being built.</param>
         protected void AddOpReturnOutput(TransactionBuildContext context)
         {
-            if (string.IsNullOrEmpty(context.OpReturnData)) return;
-
-            byte[] bytes = Encoding.UTF8.GetBytes(context.OpReturnData);
+            if (string.IsNullOrEmpty(context.OpReturnData) && context.OpReturnRawData == null) 
+                return;
+            
+            byte[] bytes = context.OpReturnRawData ?? Encoding.UTF8.GetBytes(context.OpReturnData);
+          
             // TODO: Get the template from the network standard scripts instead
             Script opReturnScript = TxNullDataTemplate.Instance.GenerateScriptPubKey(bytes);
             context.TransactionBuilder.Send(opReturnScript, context.OpReturnAmount ?? Money.Zero);
@@ -519,6 +538,11 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// Optional data to be added as an extra OP_RETURN transaction output.
         /// </summary>
         public string OpReturnData { get; set; }
+
+        /// <summary>
+        /// The raw data to be added as an extra OP_RETURN transaction output, this will take precedence over <see cref="OpReturnData"/>.
+        /// </summary>
+        public byte[] OpReturnRawData { get; set; }
 
         /// <summary>
         /// Optional amount to add to the OP_RETURN transaction output.
