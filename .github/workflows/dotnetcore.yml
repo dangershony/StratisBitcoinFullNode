@@ -13,6 +13,6 @@ jobs:
       with:
         dotnet-version: 2.2.108
     - name: Build Solution
-      run: dotnet build **/Obsidian-All.sln --configuration Release 
+      run: dotnet build **/ObsidianX.sln --configuration Release 
     - name: Test solution
-      run: dotnet test **/Obsidian-All.sln
+      run: dotnet test **/ObsidianX.sln
