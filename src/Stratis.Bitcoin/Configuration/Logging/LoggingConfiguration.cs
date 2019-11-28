@@ -27,7 +27,7 @@ namespace Stratis.Bitcoin.Configuration.Logging
         public ConsoleLoggerSettings ConsoleSettings { get; set; }
 
         /// <summary>Provider of console logger.</summary>
-        public ConsoleLoggerProvider ConsoleLoggerProvider { get; set; }
+        public ILoggerProvider ConsoleLoggerProvider { get; set; }
 
         /// <summary>Loads the NLog.config file from the <see cref="DataFolder"/>, if it exists.</summary>
         public void LoadNLogConfiguration(DataFolder dataFolder)
@@ -308,7 +308,7 @@ namespace Stratis.Bitcoin.Configuration.Logging
         /// <param name="loggerFactory">Logger factory interface being extended.</param>
         /// <returns>Console logger provider.</returns>
         [NoTrace]
-        public static ConsoleLoggerProvider GetConsoleLoggerProvider(this ILoggerFactory loggerFactory)
+        public static ILoggerProvider GetConsoleLoggerProvider(this ILoggerFactory loggerFactory)
         {
             var extendedLoggerFactory = loggerFactory as ExtendedLoggerFactory;
             Guard.NotNull(extendedLoggerFactory, nameof(extendedLoggerFactory));

@@ -79,8 +79,7 @@ namespace Obsidian.Networks.ObsidianX
             Debug.Assert(txNew.GetType() == typeof(Transaction));
 
             txNew.Version = 1;
-            //if(txNew is PosTransaction posTransaction)
-            //    posTransaction.Time = genesisTime;
+           
             txNew.AddInput(new TxIn()
             {
                 ScriptSig = new Script(Op.GetPushOp(0), new Op()

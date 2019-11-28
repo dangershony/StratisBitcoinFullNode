@@ -39,7 +39,7 @@ namespace Stratis.Bitcoin.Configuration
         public const ProtocolVersion SupportedProtocolVersion = ProtocolVersion.SENDHEADERS_VERSION;
 
         /// <summary>A factory responsible for creating a Full Node logger instance.</summary>
-        public ILoggerFactory LoggerFactory { get; private set; }
+        public ILoggerFactory LoggerFactory { get; protected set; }
 
         /// <summary>An instance of the Full Node logger, which reports on the Full Node's activity.</summary>
         public ILogger Logger { get; private set; }

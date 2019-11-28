@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using NBitcoin.BuilderExtensions;
 using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
 using NBitcoin.Formatters;
@@ -1510,9 +1511,18 @@ namespace NBitcoin
         /// </summary>
         /// <param name="keys">Private keys</param>
         /// <param name="coins">Coins to sign</param>
-        public void Sign(Network network, Key[] keys, ICoin[] coins)
+        /// <param name="builderExtensions">Replace the default builderExtensions with those passed in this parameter</param>
+        public void Sign(Network network, Key[] keys, ICoin[] coins, BuilderExtension[] builderExtensions = null)
         {
             var builder = new TransactionBuilder(network);
+
+            if (builderExtensions != null)
+            {
+                builder.Extensions.Clear();
+                foreach (var extension in builderExtensions)
+                    builder.Extensions.Add(extension);
+            }
+
             builder.AddKeys(keys);
             builder.AddCoins(coins);
             builder.SignTransactionInPlace(this);

@@ -16,20 +16,17 @@ namespace Obsidian.Networks.ObsidianX.Rules
 
             foreach (var tx in block.Transactions)
             {
-                if (tx.IsProtocolTransaction())
+                if (tx.IsCoinBase)
                     continue;
 
                 foreach (var txin in tx.Inputs)
                 {
-                    // according to BIP-0141, P2WPKH and P2WSH transaction have an empty ScriptSig,
-                    // so let's whitelist these.
+                    // According to BIP-0141, P2WPKH and P2WSH transaction must have an empty ScriptSig,
+                    // which is what we require to let a tx pass. The requirement's scope includes
+                    // Coinstake transactions as well as standard transactions.
                     if ((txin.ScriptSig == null || txin.ScriptSig.Length == 0) && tx.HasWitness)
                         continue;
-
-                    // P2WPKH nested in BIP16 P2SH, P2WSH nested in BIP16 P2SH, P2SH, P2PKH
-                    // do not have empty ScriptSig, throw!
-                    // If we did not check the ScriptSig is empty, we'd have transaction malleability. Also, scripts may be as long as 10000 bytes,
-                    // and the ScriptSig field is not intended to be a convenient storage place.
+                   
                     this.Logger.LogTrace("(-)[SCRIPTSIG_NOT_EMPTY]");
                     new ConsensusError("scriptsig-not-empty", "SegWit requires empty ScriptSig fields.").Throw();
                 }
