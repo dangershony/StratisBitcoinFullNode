@@ -181,8 +181,10 @@ namespace Obsidian.Networks.ObsidianX
                 .Register<SetActivationDeploymentsPartialValidationRule>()
                 .Register<PosTimeMaskRule>()
 
-                // rules to prevent legacy script types and force segwit
-                .Register<ObsidianXPreventLegacyRule>()
+                // ObsidianX has additional rules to enforce SegWit exclusively
+                // in Consensus. To catch violations early, these rules are matched
+                // by corresponding memory pool rules (see below).
+                .Register<ObsidianXRequireWitnessRule>()
                 .Register<ObsidianXEmptyScriptSigRule>()
                 .Register<ObsidianXOutputNotWhitelistedRule>()
 
@@ -221,6 +223,8 @@ namespace Obsidian.Networks.ObsidianX
                 typeof(CheckConflictsMempoolRule),
                 typeof(CheckCoinViewMempoolRule),
                 typeof(CreateMempoolEntryMempoolRule),
+                typeof(ObsidianXRequireWitnessMempoolRule),
+                typeof(ObsidianXEmptyScriptSigMempoolRule),
                 typeof(ObsidianXOutputNotWhitelistedMempoolRule),
                 typeof(CheckSigOpsMempoolRule),
                 typeof(CheckFeeMempoolRule),
