@@ -3,7 +3,8 @@
   <PropertyGroup>
     <Description>Stratis Bitcoin Features Miner</Description>
     <AssemblyTitle>Stratis.Bitcoin.Features.Miner</AssemblyTitle>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <RuntimeFrameworkVersion>2.2.7</RuntimeFrameworkVersion>
     <AssemblyName>Stratis.Bitcoin.Features.Miner</AssemblyName>
     <PackageId>Blockcore.Features.Miner</PackageId>
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>

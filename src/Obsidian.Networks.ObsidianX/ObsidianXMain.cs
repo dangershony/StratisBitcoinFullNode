@@ -85,7 +85,7 @@ namespace Obsidian.Networks.ObsidianX
                 bip34Hash: this.Genesis.GetHash(), // always active
                 ruleChangeActivationThreshold: 1916, // 95% of 2016
                 minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
-                maxReorgLength: 125, // hack
+                maxReorgLength: 125,
                 // defaultAssumeValid: new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b"),  
                 defaultAssumeValid: uint256.Zero,  // verify all for now!
                 maxMoney: long.MaxValue,
