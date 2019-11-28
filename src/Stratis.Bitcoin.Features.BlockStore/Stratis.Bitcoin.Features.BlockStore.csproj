@@ -3,8 +3,7 @@
   <PropertyGroup>
     <Description>Stratis Bitcoin Features BlockStore</Description>
     <AssemblyTitle>Stratis.Bitcoin.Features.BlockStore</AssemblyTitle>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
-    <RuntimeFrameworkVersion>2.2.7</RuntimeFrameworkVersion>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>Stratis.Bitcoin.Features.BlockStore</AssemblyName>
     <PackageId>Blockcore.Features.BlockStore</PackageId>
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>

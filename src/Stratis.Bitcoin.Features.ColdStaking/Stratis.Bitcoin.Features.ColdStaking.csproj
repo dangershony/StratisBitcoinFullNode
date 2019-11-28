@@ -1,8 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	  <TargetFramework>netcoreapp2.2</TargetFramework>
-    <RuntimeFrameworkVersion>2.2.7</RuntimeFrameworkVersion>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>Stratis.Bitcoin.Features.ColdStaking</AssemblyName>
     <PackageId>Blockcore.Features.ColdStaking</PackageId>
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>

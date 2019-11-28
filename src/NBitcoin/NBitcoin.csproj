@@ -9,8 +9,7 @@
 
   
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
-    <RuntimeFrameworkVersion>2.2.7</RuntimeFrameworkVersion>
+    <TargetFramework>netstandard2.0</TargetFramework>
     
     <VersionPrefix>1.0.0</VersionPrefix>
     <PackageId>Blockcore.NBitcoin</PackageId>

@@ -3,8 +3,7 @@
   <PropertyGroup>
     <Description>Stratis Bitcoin FullNode</Description>
     <AssemblyTitle>Stratis.Bitcoin</AssemblyTitle>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
-    <RuntimeFrameworkVersion>2.2.7</RuntimeFrameworkVersion>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>Stratis.Bitcoin</AssemblyName>
     <PackageId>Blockcore.Core</PackageId>
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
