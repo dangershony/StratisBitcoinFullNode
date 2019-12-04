@@ -2,7 +2,7 @@
   "profiles": {
     "Obsidian.OxD": {
       "commandName": "Project",
-      "commandLineArgs": "-addnode=165.22.90.248"
+      "commandLineArgs": ""
     }
   }
 }

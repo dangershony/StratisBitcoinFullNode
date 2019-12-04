@@ -4,10 +4,10 @@ dotnet_runtime="linux-x64"
 warp_runtime="linux-x64"
 configuration="release"
 git_commit=$(git log --format=%h --abbrev=7 -n 1)
-publish_directory="../src/Stratis.StratisD/bin/${configuration}/netcoreapp2.1/${dotnet_runtime}/publish"
+publish_directory="../src/Obsidian.OxD/bin/${configuration}/netcoreapp2.2/${dotnet_runtime}/publish"
 download_directory="/tmp"
 warp="${warp_runtime}.warp-packer"
-project_path="../src/Stratis.StratisD/Stratis.StratisD.csproj"
+project_path="../src/Obsidian.OxD/Obsidian.OxD.csproj"
 
 echo warp is ${warp}
 echo "Download directory is:" $download_directory
@@ -34,6 +34,6 @@ ls $publish_directory
 
 echo "Packaging the daemon..."
 chmod +x "${download_directory}/${warp}"
-"${download_directory}/./${warp}" --arch $warp_runtime --input_dir $publish_directory --exec Stratis.StratisD --output ${publish_directory}/Stratis-$git_commit
+"${download_directory}/./${warp}" --arch $warp_runtime --input_dir $publish_directory --exec Obsidian.OxD --output ${publish_directory}/oxd-$git_commit
 
 echo "Done."

@@ -107,6 +107,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Obsidian.OxD", "Obsidian.Ox
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Stratis", "Stratis", "{1DE152AD-3D2F-4CA0-A157-1CAC68EF4FCA}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{178450CF-D5F3-48F0-A10E-A560827D9E8E}"
+	ProjectSection(SolutionItems) = preProject
+		..\Scripts\linux-x64.package.sh = ..\Scripts\linux-x64.package.sh
+		..\Scripts\osx-x64.package.sh = ..\Scripts\osx-x64.package.sh
+		..\Scripts\windows-x64.package.ps1 = ..\Scripts\windows-x64.package.ps1
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
