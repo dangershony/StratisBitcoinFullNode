@@ -84,7 +84,6 @@ namespace Obsidian.Networks.Obsidian
 				},
 				bip9Deployments: new NoBIP9Deployments(), // ODN: no BIP9Deployments
 				bip34Hash: new uint256("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8"), // ??
-				ruleChangeActivationThreshold: 1916, // 95% of 2016
 				minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
 				maxReorgLength: 500,
 				// defaultAssumeValid: new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b"),  // ODN: Block 32100 hash

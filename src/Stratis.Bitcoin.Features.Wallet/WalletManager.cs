@@ -63,7 +63,7 @@ namespace Stratis.Bitcoin.Features.Wallet
         public ConcurrentBag<Wallet> Wallets { get; }
 
         /// <summary>The type of coin used in this manager.</summary>
-        protected readonly CoinType coinType;
+        protected readonly int coinType;
 
         /// <summary>Specification of the network the node runs on - regtest/testnet/mainnet.</summary>
         protected readonly Network network;
@@ -137,7 +137,7 @@ namespace Stratis.Bitcoin.Features.Wallet
             this.Wallets = new ConcurrentBag<Wallet>();
 
             this.network = network;
-            this.coinType = (CoinType)network.Consensus.CoinType;
+            this.coinType = network.Consensus.CoinType;
             this.ChainIndexer = chainIndexer;
             this.asyncProvider = asyncProvider;
             this.nodeLifetime = nodeLifetime;
@@ -266,7 +266,7 @@ namespace Stratis.Bitcoin.Features.Wallet
         }
 
         /// <inheritdoc />
-        public Mnemonic CreateWallet(string password, string name, string passphrase, Mnemonic mnemonic = null)
+        public Mnemonic CreateWallet(string password, string name, string passphrase, Mnemonic mnemonic = null, int? coinType = null)
         {
             Guard.NotEmpty(password, nameof(password));
             Guard.NotEmpty(name, nameof(name));
@@ -280,7 +280,7 @@ namespace Stratis.Bitcoin.Features.Wallet
 
             // Create a wallet file.
             string encryptedSeed = extendedKey.PrivateKey.GetEncryptedBitcoinSecret(password, this.network).ToWif();
-            Wallet wallet = this.GenerateWalletFile(name, encryptedSeed, extendedKey.ChainCode);
+            Wallet wallet = this.GenerateWalletFile(name, encryptedSeed, extendedKey.ChainCode, coinType: coinType);
 
             // Generate multiple accounts and addresses from the get-go.
             for (int i = 0; i < WalletCreationAccountsCount; i++)
@@ -416,7 +416,7 @@ namespace Stratis.Bitcoin.Features.Wallet
         }
 
         /// <inheritdoc />
-        public Wallet RecoverWallet(string password, string name, string mnemonic, DateTime creationTime, string passphrase)
+        public virtual Wallet RecoverWallet(string password, string name, string mnemonic, DateTime creationTime, string passphrase, int? coinType = null)
         {
             Guard.NotEmpty(password, nameof(password));
             Guard.NotEmpty(name, nameof(name));
@@ -442,7 +442,7 @@ namespace Stratis.Bitcoin.Features.Wallet
 
             // Create a wallet file.
             string encryptedSeed = extendedKey.PrivateKey.GetEncryptedBitcoinSecret(password, this.network).ToWif();
-            Wallet wallet = this.GenerateWalletFile(name, encryptedSeed, extendedKey.ChainCode, creationTime);
+            Wallet wallet = this.GenerateWalletFile(name, encryptedSeed, extendedKey.ChainCode, creationTime, coinType);
 
             // Generate multiple accounts and addresses from the get-go.
             for (int i = 0; i < WalletRecoveryAccountsCount; i++)
@@ -889,7 +889,22 @@ namespace Stratis.Bitcoin.Features.Wallet
 
         public virtual IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
         {
-            return this.GetSpendableTransactionsInWallet(walletName, confirmations);
+            return this.GetUnspentTransactionsInWallet(walletName, confirmations, Wallet.NormalAccounts);
+        }
+
+        /// <inheritdoc />
+        public IEnumerable<UnspentOutputReference> GetUnspentTransactionsInWallet(string walletName, int confirmations, Func<HdAccount, bool> accountFilter)
+        {
+            Guard.NotEmpty(walletName, nameof(walletName));
+
+            Wallet wallet = this.GetWalletByName(walletName);
+            UnspentOutputReference[] res = null;
+            lock (this.lockObject)
+            {
+                res = wallet.GetAllUnspentTransactions(this.ChainIndexer.Tip.Height, confirmations, accountFilter).ToArray();
+            }
+
+            return res;
         }
 
         public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWallet(string walletName, int confirmations, Func<HdAccount, bool> accountFilter)
@@ -1391,9 +1406,10 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// <param name="encryptedSeed">The seed for this wallet, password encrypted.</param>
         /// <param name="chainCode">The chain code.</param>
         /// <param name="creationTime">The time this wallet was created.</param>
+        /// <param name="coinType">A BIP44 coin type, this will allow to overwrite the default network coin type.</param>
         /// <returns>The wallet object that was saved into the file system.</returns>
         /// <exception cref="WalletException">Thrown if wallet cannot be created.</exception>
-        private Wallet GenerateWalletFile(string name, string encryptedSeed, byte[] chainCode, DateTimeOffset? creationTime = null)
+        private Wallet GenerateWalletFile(string name, string encryptedSeed, byte[] chainCode, DateTimeOffset? creationTime = null, int? coinType = null)
         {
             Guard.NotEmpty(name, nameof(name));
             Guard.NotEmpty(encryptedSeed, nameof(encryptedSeed));
@@ -1422,7 +1438,7 @@ namespace Stratis.Bitcoin.Features.Wallet
                 ChainCode = chainCode,
                 CreationTime = creationTime ?? this.dateTimeProvider.GetTimeOffset(),
                 Network = this.network,
-                AccountsRoot = new List<AccountRoot> { new AccountRoot() { Accounts = new List<HdAccount>(), CoinType = this.coinType } },
+                AccountsRoot = new List<AccountRoot> { new AccountRoot() { Accounts = new List<HdAccount>(), CoinType = coinType ?? this.coinType } },
             };
 
             // Create a folder if none exists and persist the file.

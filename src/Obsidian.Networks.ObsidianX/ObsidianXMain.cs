@@ -65,9 +65,9 @@ namespace Obsidian.Networks.ObsidianX
 
             var bip9Deployments = new ObsidianXBIP9DeploymentsArray
             {
-                [ObsidianXBIP9DeploymentsArray.ColdStaking] = new BIP9DeploymentsParameters("ColdStaking", 27, BIP9DeploymentsParameters.AlwaysActive, 999999999),  // use a high bit for ColdStaking
-                [ObsidianXBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters("CSV", 0, BIP9DeploymentsParameters.AlwaysActive, 999999999),           // BTC main uses bit 0 for CSV
-                [ObsidianXBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters("Segwit", 1, BIP9DeploymentsParameters.AlwaysActive, 999999999)         // BTC main uses bit 1 for SegWit
+                [ObsidianXBIP9DeploymentsArray.ColdStaking] = new BIP9DeploymentsParameters("ColdStaking", 27, BIP9DeploymentsParameters.AlwaysActive, 999999999, BIP9DeploymentsParameters.AlwaysActive),  // use a high bit for ColdStaking
+                [ObsidianXBIP9DeploymentsArray.CSV] = new BIP9DeploymentsParameters("CSV", 0, BIP9DeploymentsParameters.AlwaysActive, 999999999, BIP9DeploymentsParameters.AlwaysActive),           // BTC main uses bit 0 for CSV
+                [ObsidianXBIP9DeploymentsArray.Segwit] = new BIP9DeploymentsParameters("Segwit", 1, BIP9DeploymentsParameters.AlwaysActive, 999999999, BIP9DeploymentsParameters.AlwaysActive)         // BTC main uses bit 1 for SegWit
             };
 
 
@@ -83,7 +83,6 @@ namespace Obsidian.Networks.ObsidianX
                 buriedDeployments: buriedDeployments,
                 bip9Deployments: bip9Deployments,
                 bip34Hash: this.Genesis.GetHash(), // always active
-                ruleChangeActivationThreshold: 1916, // 95% of 2016
                 minerConfirmationWindow: 2016, // nPowTargetTimespan / nPowTargetSpacing
                 maxReorgLength: 125,
                 // defaultAssumeValid: new uint256("0x15a792c680bf348b2a73be99adaf6cd9890be4f1a3895a800f212a43c0232c8b"),  

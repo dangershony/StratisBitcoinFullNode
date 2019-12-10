@@ -124,14 +124,14 @@ namespace Stratis.Bitcoin.Features.ColdStaking
         }
 
         /// <summary>
-        /// Gets all the spendable transactions in a wallet from the accounts participating in staking.
+        /// Gets all the unspent transactions in a wallet from the accounts participating in staking.
         /// </summary>
         /// <param name="walletName">Name of the wallet to get the transactions from.</param>
         /// <param name="confirmations">Number of confirmation required.</param>
         /// <returns>An enumeration of <see cref="UnspentOutputReference"/> objects.</returns>
         public override IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0)
         {
-            return this.GetSpendableTransactionsInWallet(walletName, confirmations,
+            return this.GetUnspentTransactionsInWallet(walletName, confirmations,
                 a => (a.Index < Wallet.Wallet.SpecialPurposeAccountIndexesStart) || (a.Index == ColdStakingManager.HotWalletAccountIndex));
         }
 
@@ -170,7 +170,7 @@ namespace Stratis.Bitcoin.Features.ColdStaking
         /// <returns>The cold staking account or <c>null</c> if the account does not exist.</returns>
         internal HdAccount GetColdStakingAccount(Wallet.Wallet wallet, bool isColdWalletAccount)
         {
-            var coinType = (CoinType)wallet.Network.Consensus.CoinType;
+            var coinType = wallet.Network.Consensus.CoinType;
             HdAccount account = wallet.GetAccount(isColdWalletAccount ? ColdWalletAccountName : HotWalletAccountName);
             if (account == null)
             {
@@ -236,6 +236,21 @@ namespace Stratis.Bitcoin.Features.ColdStaking
 
             this.logger.LogTrace("(-):'{0}'", account.Name);
             return account;
+        }
+
+        /// <summary>
+        /// Add cold staking cold account when a wallet is recovered, this means every recovered wallet will automatical
+        /// track addresses under the <see cref="ColdWalletAccountIndex"/> HD account.
+        /// </summary>
+        /// <inheritdoc />
+        public override Wallet.Wallet RecoverWallet(string password, string name, string mnemonic, DateTime creationTime, string passphrase, int? coinType = null)
+        {
+            Wallet.Wallet wallet = base.RecoverWallet(password, name, mnemonic, creationTime, passphrase, coinType);
+
+            this.GetOrCreateColdStakingAccount(wallet.Name, false, password);
+            this.GetOrCreateColdStakingAccount(wallet.Name, true, password);
+
+            return wallet;
         }
 
         /// <summary>
