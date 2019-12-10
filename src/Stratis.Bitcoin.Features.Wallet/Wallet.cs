@@ -287,6 +287,22 @@ namespace Stratis.Bitcoin.Features.Wallet
         }
 
         /// <summary>
+        /// Lists all unspent transactions from all accounts in the wallet.
+        /// This is distinct from the list of spendable transactions. A transaction can be unspent but not yet spendable due to coinbase/stake maturity, for example.
+        /// </summary>
+        /// <param name="currentChainHeight">Height of the current chain, used in calculating the number of confirmations.</param>
+        /// <param name="confirmations">The number of confirmations required to consider a transaction spendable.</param>
+        /// <param name="accountFilter">An optional filter for filtering the accounts being returned.</param>
+        /// <returns>A collection of spendable outputs.</returns>
+        public IEnumerable<UnspentOutputReference> GetAllUnspentTransactions(int currentChainHeight, int confirmations = 0, Func<HdAccount, bool> accountFilter = null)
+        {
+            IEnumerable<HdAccount> accounts = this.GetAccounts(accountFilter);
+
+            // The logic for retrieving unspent transactions is almost identical to determining spendable transactions, we just don't take coinbase/stake maturity into consideration.
+            return accounts.SelectMany(x => x.GetSpendableTransactions(currentChainHeight, 0, confirmations));
+        }
+
+        /// <summary>
         /// Calculates the fee paid by the user on a transaction sent.
         /// </summary>
         /// <param name="transactionId">The transaction id to look for.</param>
@@ -349,7 +365,7 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// The type of coin, Bitcoin or Stratis.
         /// </summary>
         [JsonProperty(PropertyName = "coinType")]
-        public CoinType CoinType { get; set; }
+        public int CoinType { get; set; }
 
         /// <summary>
         /// The height of the last block that was synced.
@@ -586,10 +602,10 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// <summary>
         /// Gets the type of coin this account is for.
         /// </summary>
-        /// <returns>A <see cref="CoinType"/>.</returns>
-        public CoinType GetCoinType()
+        /// <returns>A BIP44 CoinType.</returns>
+        public int GetCoinType()
         {
-            return (CoinType)HdOperations.GetCoinType(this.HdPath);
+            return HdOperations.GetCoinType(this.HdPath);
         }
 
         /// <summary>
@@ -890,6 +906,12 @@ namespace Stratis.Bitcoin.Features.Wallet
         /// </summary>
         [JsonProperty(PropertyName = "transactions")]
         public ICollection<TransactionData> Transactions { get; set; }
+
+        /// <summary>
+        /// Specify whether UTXOs associated with this address can stake. 
+        /// </summary>
+        [JsonProperty(PropertyName = "stakingEnabled")]
+        public bool? StakingEnabled { get; set; }
 
         /// <summary>
         /// Determines whether this is a change address or a receive address.
