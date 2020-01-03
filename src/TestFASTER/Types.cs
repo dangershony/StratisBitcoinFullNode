@@ -53,12 +53,16 @@ namespace TestFASTER
         {
             // obj.k = this.reader.ReadInt64();
 
-            var sizet = this.reader.ReadInt32();
+            var bytesr = new byte[4];
+            this.reader.Read(bytesr, 0, 4);
+            var sizet = BitConverter.ToInt32(bytesr); // this.reader.ReadInt32();
             var bytes = new byte[sizet];
             this.reader.Read(bytes, 0, sizet);
             obj.tableType = System.Text.Encoding.UTF8.GetString(bytes);
 
-            var size = this.reader.ReadInt32();
+            bytesr = new byte[4];
+            this.reader.Read(bytesr, 0, 4);
+            var size = BitConverter.ToInt32(bytesr); // this.reader.ReadInt32();
             obj.key = new byte[size];
             this.reader.Read(obj.key, 0, size);
 
@@ -74,10 +78,13 @@ namespace TestFASTER
         {
             //this.writer.Write(obj.k);
             var bytes = System.Text.Encoding.UTF8.GetBytes(obj.tableType);
-            this.writer.Write(bytes.Length);
+            var len = BitConverter.GetBytes(bytes.Length);
+
+            this.writer.Write(len);
             this.writer.Write(bytes);
 
-            this.writer.Write(obj.key.Length);
+            len = BitConverter.GetBytes(obj.key.Length);
+            this.writer.Write(len);
             this.writer.Write(obj.key);
         }
     }
@@ -96,13 +103,18 @@ namespace TestFASTER
         public override void Deserialize(ref CoinviewValue obj)
         {
             //obj.value = this.reader.ReadInt64();
-             int size = this.reader.ReadInt32();
+            var bytesr = new byte[4];
+            this.reader.Read(bytesr, 0, 4);
+            var sizet = BitConverter.ToInt32(bytesr); // this.reader.ReadInt32();
+
+            int size = BitConverter.ToInt32(bytesr); ; // this.reader.ReadInt32();
              obj.value = this.reader.ReadBytes(size);
         }
 
         public override void Serialize(ref CoinviewValue obj)
         {
-            this.writer.Write(obj.value.Length);
+            var len = BitConverter.GetBytes(obj.value.Length);
+            this.writer.Write(len);
             this.writer.Write(obj.value);
             //this.writer.Write(obj.value);
 
@@ -111,7 +123,7 @@ namespace TestFASTER
 
     public class CoinviewInput
     {
-        public int value;
+        public byte[] value;
     }
 
     public class CoinviewOutput
@@ -119,22 +131,41 @@ namespace TestFASTER
         public CoinviewValue value;
     }
 
-    public class CoinviewFunctions : IFunctions<CoinviewKey, CoinviewValue, CoinviewInput, CoinviewOutput, Empty>
+    public class CoinviewContext
     {
-        public void RMWCompletionCallback(ref CoinviewKey key, ref CoinviewInput input, Empty ctx, Status status)
+        private Status status;
+        private CoinviewOutput output;
+
+        internal void Populate(ref Status status, ref CoinviewOutput output)
+        {
+            this.status = status;
+            this.output = output;
+        }
+
+        internal void FinalizeRead(ref Status status, ref CoinviewOutput output)
+        {
+            status = this.status;
+            output = this.output;
+        }
+    }
+
+    public class CoinviewFunctions : IFunctions<CoinviewKey, CoinviewValue, CoinviewInput, CoinviewOutput, CoinviewContext>
+    {
+        public void RMWCompletionCallback(ref CoinviewKey key, ref CoinviewInput input, CoinviewContext ctx, Status status)
         {
         }
 
-        public void ReadCompletionCallback(ref CoinviewKey key, ref CoinviewInput input, ref CoinviewOutput output, Empty ctx, Status status)
+        public void ReadCompletionCallback(ref CoinviewKey key, ref CoinviewInput input, ref CoinviewOutput output, CoinviewContext ctx, Status status)
         {
+            ctx.Populate(ref status, ref output);
         }
 
 
-        public void UpsertCompletionCallback(ref CoinviewKey key, ref CoinviewValue value, Empty ctx)
+        public void UpsertCompletionCallback(ref CoinviewKey key, ref CoinviewValue value, CoinviewContext ctx)
         {
         }
 
-        public void DeleteCompletionCallback(ref CoinviewKey key, Empty ctx)
+        public void DeleteCompletionCallback(ref CoinviewKey key, CoinviewContext ctx)
         {
         }
 
@@ -148,6 +179,10 @@ namespace TestFASTER
 
         public bool InPlaceUpdater(ref CoinviewKey key, ref CoinviewInput input, ref CoinviewValue value)
         {
+            if (value.value.Length < input.value.Length)
+                return false;
+
+            value.value = input.value;
             return true;
         }
 
@@ -163,6 +198,12 @@ namespace TestFASTER
 
         public bool ConcurrentWriter(ref CoinviewKey key, ref CoinviewValue src, ref CoinviewValue dst)
         {
+            if (src == null)
+                return false;
+
+            if (dst.value.Length != src.value.Length)
+                return false;
+
             dst = src;
             return true;
         }

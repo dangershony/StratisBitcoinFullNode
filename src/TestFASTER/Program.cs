@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using FASTER.core;
 using NBitcoin;
@@ -16,7 +17,7 @@ namespace TestFASTER
         {
             Task.Run(() => 
             {
-                Console.WriteLine("Press anykey to stop");
+                Console.WriteLine("Press any key to stop");
                 Console.ReadKey();
                 stop = true;
             });
@@ -36,17 +37,94 @@ namespace TestFASTER
             {
                 var ss = store.db.NewSession();
 
-                lastBlockvalue = new CoinviewValue { value = Utils.ToBytes(0, false) }; // genesis
+                lastBlockvalue = new CoinviewValue { value = Utils.ToBytes(0, true) }; // genesis
                 //lastBlockvalue = new CoinviewValue { value = 0 };
-
-                ss.Upsert(ref lastblockKey, ref lastBlockvalue, Empty.Default, 1);
+                CoinviewContext context1 = new CoinviewContext();
+                ss.Upsert(ref lastblockKey, ref lastBlockvalue, context1, 1);
               
                 ss.CompletePending(true);
                 ss.Dispose();
 
                 store.Checkpoint();
-               // store.db.Recover();
             }
+
+            Task.Run(() => 
+            {
+                var session = store.db.NewSession();
+
+                // test all data up to now.
+                CoinviewInput input = new CoinviewInput();
+                CoinviewOutput output = new CoinviewOutput();
+                lastblockKey = new CoinviewKey { tableType = "L", key = new byte[1] { 0 } };
+               // lastblockKey = new CoinviewKey { k = 1 };
+                CoinviewContext context1 = new CoinviewContext();
+                var blkStatus = session.Read(ref lastblockKey, ref input, ref output, context1, 1);
+                var blockHeight = Utils.ToUInt32(output.value.value, true);
+
+                var from = 1;
+
+                while (from <= blockHeight)
+                {
+                    var start = from;
+                    var toadd = start * 10000000;
+                    for (long i = toadd; i < toadd + 1000; i++)
+                    {
+                        var data = Generate(i);
+
+                        CoinviewInput input1 = new CoinviewInput();
+                        CoinviewOutput output1 = new CoinviewOutput();
+                        CoinviewContext context = new CoinviewContext();
+                        var readKey = new CoinviewKey { tableType = "C", key = data.outPoint.ToBytes(), outPoint = data.outPoint };
+                       // var readKey = new CoinviewKey { k = i };
+                        var addStatus = session.Read(ref readKey, ref input1, ref output1, context, 1);
+                        if (addStatus == Status.PENDING)
+                        {
+                            session.CompletePending(true);
+                            context.FinalizeRead(ref addStatus, ref output1);
+                        }
+
+                        if (addStatus != Status.OK)
+                            throw new Exception();
+                       // if (output1.value.value.SequenceEqual(data.data) == false)
+                         //   throw new Exception();
+                    }
+
+                    if (from > 150)
+                    {
+                        toadd = (start - 5) * 10000000;
+
+                        for (long i = toadd; i < toadd + 1000; i++)
+                        {
+                            if (i % 100 == 0)
+                            {
+                                var data = Generate(i);
+
+                                CoinviewInput input1 = new CoinviewInput();
+                                CoinviewOutput output1 = new CoinviewOutput();
+                                CoinviewContext context = new CoinviewContext();
+                                var readKey = new CoinviewKey { tableType = "C", key = data.outPoint.ToBytes(), outPoint = data.outPoint };
+                                //var readKey = new CoinviewKey { k = i };
+
+                                var deleteStatus = session.Read(ref readKey, ref input1, ref output1, context, 1);
+
+                                if (deleteStatus == Status.PENDING)
+                                {
+                                    session.CompletePending(true);
+                                    context.FinalizeRead(ref deleteStatus, ref output1);
+                                }
+
+                                if (deleteStatus != Status.NOTFOUND)
+                                    throw new Exception();
+                            }
+                        }
+                    }
+
+                    from++;
+                }
+
+                session.Dispose();
+
+            }).Wait();
 
             Task.Run(() =>
             {
@@ -59,8 +137,9 @@ namespace TestFASTER
                     CoinviewOutput output = new CoinviewOutput();
                     lastblockKey = new CoinviewKey { tableType = "L", key = new byte[1] { 0 } };
                     //lastblockKey = new CoinviewKey { k = 1 };
-                    var blkStatus = session.Read(ref lastblockKey, ref input, ref output, Empty.Default, 1);
-                    var blockHeight = Utils.ToUInt32(output.value.value, false);
+                    CoinviewContext context1 = new CoinviewContext();
+                    var blkStatus = session.Read(ref lastblockKey, ref input, ref output, context1, 1);
+                    var blockHeight = Utils.ToUInt32(output.value.value, true);
                     //var blockHeight = output.value.value;
                     blockHeight += 1;
 
@@ -71,12 +150,15 @@ namespace TestFASTER
                     {
                         var data = Generate(i);
 
-                        var upsertKey = new CoinviewKey { tableType = "C", key = data.outPoint.ToBytes(), outPoint = data.outPoint }; 
-                        //var upsertKey = new CoinviewKey { k = i };
+                        var upsertKey = new CoinviewKey { tableType = "C", key = data.outPoint.ToBytes(), outPoint = data.outPoint };
+                       // var upsertKey = new CoinviewKey { k = i };
                         var upsertValue = new CoinviewValue { value = data.data };
                         //var upsertValue = new CoinviewValue { value = i };
 
-                        var addStatus = session.Upsert(ref upsertKey, ref upsertValue, Empty.Default, 1);
+                        CoinviewContext context2 = new CoinviewContext();
+                        var addStatus = session.Upsert(ref upsertKey, ref upsertValue, context2, 1);
+                        if(addStatus != Status.OK)
+                            throw new Exception();
                     }
 
                     if (blockHeight > 150)
@@ -91,21 +173,25 @@ namespace TestFASTER
 
                                 var deteletKey = new CoinviewKey { tableType = "C", key = data.outPoint.ToBytes(), outPoint = data.outPoint };
                                 //var deteletKey = new CoinviewKey { k = i };
-                                var upsertValue = new CoinviewValue { value = data.data };
+                                //var upsertValue = new CoinviewValue { value = data.data };
                                 //var upsertValue = new CoinviewValue { value = i };
 
-                                var deleteStatus = session.Delete(ref deteletKey, Empty.Default, 1);
+                                CoinviewContext context2 = new CoinviewContext();
+                                var deleteStatus = session.Delete(ref deteletKey, context2, 1);
+                                if (deleteStatus != Status.OK)
+                                    throw new Exception();
                             }
                         }
                     }
 
                     Console.WriteLine(blockHeight + " processed");
 
-                    lastBlockvalue = new CoinviewValue { value = Utils.ToBytes(blockHeight, false) };
+                    lastBlockvalue = new CoinviewValue { value = Utils.ToBytes(blockHeight, true) };
                     //lastBlockvalue = new CoinviewValue { value = blockHeight };
                     lastblockKey = new CoinviewKey { tableType = "L", key = new byte[1] { 0 } };
-                    //lastblockKey = new CoinviewKey { k = 1 };
-                    session.Upsert(ref lastblockKey, ref lastBlockvalue, Empty.Default, 1);
+                   // lastblockKey = new CoinviewKey { k = 1 };
+                    CoinviewContext context = new CoinviewContext();
+                    session.Upsert(ref lastblockKey, ref lastBlockvalue, context, 1);
                     session.CompletePending(true);
 
                     if (blockHeight % 1000 == 0)
@@ -119,6 +205,8 @@ namespace TestFASTER
                         store.Checkpoint();
                         Console.WriteLine(blockHeight + " checkpoint done" + blockHeight);
                     }
+
+                    stop = true;
                 }
 
                 session.Dispose();
@@ -126,7 +214,7 @@ namespace TestFASTER
             }).Wait();
          
             store.Checkpoint();
-            store.db.Dispose();
+            store.Dispose();
 
         }
 

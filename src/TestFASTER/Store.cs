@@ -11,7 +11,9 @@ namespace TestFASTER
     {
         private string dataFolder;
 
-        public FasterKV<CoinviewKey, CoinviewValue, CoinviewInput, CoinviewOutput, Empty, CoinviewFunctions> db;
+        public FasterKV<CoinviewKey, CoinviewValue, CoinviewInput, CoinviewOutput, CoinviewContext, CoinviewFunctions> db;
+        public IDevice log;
+        public IDevice objLog;
 
         public Coinviewdb(string folder)
         {
@@ -21,24 +23,24 @@ namespace TestFASTER
         public bool InitAndRecover()
         {
             var logSize = 1L << 20;
-            var log = Devices.CreateLogDevice(@$"{this.dataFolder}\data\coinview-hlog.log", preallocateFile: false);
-            var logObg = Devices.CreateLogDevice(@$"{this.dataFolder}\data\coinview-hlog-obj.log", preallocateFile: false);
+            this.log = Devices.CreateLogDevice(@$"{this.dataFolder}\data\coinview-hlog.log", preallocateFile: false);
+            this.objLog = Devices.CreateLogDevice(@$"{this.dataFolder}\data\coinview-hlog-obj.log", preallocateFile: false);
 
             this.db = new FasterKV
-                <CoinviewKey, CoinviewValue, CoinviewInput, CoinviewOutput, Empty, CoinviewFunctions>(
+                <CoinviewKey, CoinviewValue, CoinviewInput, CoinviewOutput, CoinviewContext, CoinviewFunctions>(
                     logSize, 
                     new CoinviewFunctions(), 
                     new LogSettings 
                     { 
-                        LogDevice = log, 
-                        ObjectLogDevice = logObg,
+                        LogDevice = this.log, 
+                        ObjectLogDevice = this.objLog,
                         MutableFraction = 0.3,
                         PageSizeBits = 15,
                         MemorySizeBits = 20
                     },
                     new CheckpointSettings 
                     { 
-                        CheckpointDir = $"{this.dataFolder}/data/checkpoints" 
+                        CheckpointDir = $"{this.dataFolder}/data/checkpoints"
                     },
                     new SerializerSettings<CoinviewKey, CoinviewValue> 
                     { 
@@ -71,6 +73,13 @@ namespace TestFASTER
             }).Wait(); ;
 
             return token;
+        }
+
+        public void Dispose()
+        {
+            this.db.Dispose();
+            this.log.Close();
+            this.objLog.Close();
         }
     }
 }
