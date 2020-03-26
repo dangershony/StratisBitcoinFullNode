@@ -41,18 +41,7 @@ namespace NBitcoin
             }
             set
             {
-                try
-                {
-                    var hspan = this.header.AsSpan(68, 4);
-
-                    var bytes = BitConverter.GetBytes(value);
-                    var bspn = bytes.AsSpan();
-                    bspn.CopyTo(hspan);
-                }
-                catch (Exception e)
-                {
-                    throw;
-                }
+                BitConverter.GetBytes(value).AsSpan().CopyTo(this.header.AsSpan(68, 4));
             }
         }
 
@@ -82,8 +71,14 @@ namespace NBitcoin
 
         public uint Nonce
         {
-            get { return BitConverter.ToUInt32(this.header.AsSpan().Slice(76, 4)); }
-            set { BitConverter.GetBytes(value).AsSpan().CopyTo(this.header.AsSpan(76, 4)); }
+            get
+            {
+                return BitConverter.ToUInt32(this.header.AsSpan().Slice(76, 4));
+            }
+            set
+            {
+                BitConverter.GetBytes(value).AsSpan().CopyTo(this.header.AsSpan(76, 4));
+            }
         }
 
         public uint256 HashMerkleRoot
