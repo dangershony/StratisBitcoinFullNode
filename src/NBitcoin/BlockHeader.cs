@@ -21,52 +21,100 @@ namespace NBitcoin
 
         private static BigInteger Pow256 = BigInteger.ValueOf(2).Pow(256);
 
-        private uint256 hashPrevBlock;
-        public uint256 HashPrevBlock { get { return this.hashPrevBlock; } set { this.hashPrevBlock = value; } }
+        public uint256 HashPrevBlock
+        {
+            get
+            {
+                return new uint256(this.header.AsSpan().Slice(4, 32));
+            }
+            set
+            {
+                value.ToBytes().AsSpan().CopyTo(this.header.AsSpan(4, 32));
+            }
+        }
 
-        private uint time;
-        public uint Time { get { return this.time; } set { this.time = value; } }
+        public uint Time
+        {
+            get
+            {
+                return BitConverter.ToUInt32(this.header.AsSpan().Slice(68, 4));
+            }
+            set
+            {
+                try
+                {
+                    var hspan = this.header.AsSpan(68, 4);
 
-        private uint bits;
-        public Target Bits { get { return this.bits; } set { this.bits = value; } }
+                    var bytes = BitConverter.GetBytes(value);
+                    var bspn = bytes.AsSpan();
+                    bspn.CopyTo(hspan);
+                }
+                catch (Exception e)
+                {
+                    throw;
+                }
+            }
+        }
 
-        protected int version;
+        public Target Bits
+        {
+            get
+            {
+                return BitConverter.ToUInt32(this.header.AsSpan().Slice(72, 4));
+            }
+            set
+            {
+                BitConverter.GetBytes(value).AsSpan().CopyTo(this.header.AsSpan(72, 4));
+            }
+        }
 
-        public int Version { get { return this.version; } set { this.version = value; } }
+        public int Version
+        {
+            get
+            {
+                return BitConverter.ToInt32(this.header.AsSpan().Slice(0, 4));
+            }
+            set
+            {
+                BitConverter.GetBytes(value).AsSpan().CopyTo(this.header.AsSpan(0, 4));
+            }
+        }
 
-        private uint nonce;
-        public uint Nonce { get { return this.nonce; } set { this.nonce = value; } }
+        public uint Nonce
+        {
+            get { return BitConverter.ToUInt32(this.header.AsSpan().Slice(76, 4)); }
+            set { BitConverter.GetBytes(value).AsSpan().CopyTo(this.header.AsSpan(76, 4)); }
+        }
 
-        private uint256 hashMerkleRoot;
-        public uint256 HashMerkleRoot { get { return this.hashMerkleRoot; } set { this.hashMerkleRoot = value; } }
+        public uint256 HashMerkleRoot
+        {
+            get
+            {
+                return new uint256(this.header.AsSpan().Slice(36, 32));
+            }
+            set
+            {
+                value.ToBytes().AsSpan().CopyTo(this.header.AsSpan(36, 32));
+            }
+        }
 
-        public bool IsNull { get { return (this.bits == 0); } }
+        public bool IsNull { get { return (this.Bits == 0); } }
 
+        protected byte[] header;
         protected uint256[] hashes;
 
         public virtual long HeaderSize => Size;
 
         public DateTimeOffset BlockTime
         {
-            get
-            {
-                return Utils.UnixTimeToDateTime(this.time);
-            }
-            set
-            {
-                this.time = Utils.DateTimeToUnixTime(value);
-            }
+            get { return Utils.UnixTimeToDateTime(this.Time); }
+            set { this.Time = Utils.DateTimeToUnixTime(value); }
         }
 
         [Obsolete("Please use the Load method outside of consensus.")]
         public BlockHeader()
         {
-            this.version = this.CurrentVersion;
-            this.hashPrevBlock = 0;
-            this.hashMerkleRoot = 0;
-            this.time = 0;
-            this.bits = 0;
-            this.nonce = 0;
+            this.header = new byte[Size];
         }
 
         public static BlockHeader Load(byte[] bytes, Network network)
@@ -87,25 +135,29 @@ namespace NBitcoin
 
         public virtual void ReadWrite(BitcoinStream stream)
         {
-            stream.ReadWrite(ref this.version);
-            stream.ReadWrite(ref this.hashPrevBlock);
-            stream.ReadWrite(ref this.hashMerkleRoot);
-            stream.ReadWrite(ref this.time);
-            stream.ReadWrite(ref this.bits);
-            stream.ReadWrite(ref this.nonce);
+            stream.ReadWrite(ref this.header);
+
+            //stream.ReadWrite(ref this.version); 0 - 3
+            //stream.ReadWrite(ref this.hashPrevBlock); 4 - 35
+            //stream.ReadWrite(ref this.hashMerkleRoot); 36 - 67
+            //stream.ReadWrite(ref this.time);  68 - 71
+            //stream.ReadWrite(ref this.bits); 72 - 75
+            //stream.ReadWrite(ref this.nonce); 76 - 79
         }
 
-        #endregion
+        #endregion IBitcoinSerializable Members
 
         /// <summary>Populates stream with items that will be used during hash calculation.</summary>
         protected virtual void ReadWriteHashingStream(BitcoinStream stream)
         {
-            stream.ReadWrite(ref this.version);
-            stream.ReadWrite(ref this.hashPrevBlock);
-            stream.ReadWrite(ref this.hashMerkleRoot);
-            stream.ReadWrite(ref this.time);
-            stream.ReadWrite(ref this.bits);
-            stream.ReadWrite(ref this.nonce);
+            stream.ReadWrite(ref this.header);
+
+            //stream.ReadWrite(ref this.version);
+            //stream.ReadWrite(ref this.hashPrevBlock);
+            //stream.ReadWrite(ref this.hashMerkleRoot);
+            //stream.ReadWrite(ref this.time);
+            //stream.ReadWrite(ref this.bits);
+            //stream.ReadWrite(ref this.nonce);
         }
 
         /// <summary>
